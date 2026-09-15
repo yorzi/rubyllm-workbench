@@ -1,0 +1,42 @@
+<% content_for :title, "New chat · #{@project.name}" %>
+<% content_for :inspector do %>
+  <div class="sticky top-0">
+    <p class="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Chat setup</p>
+    <div class="mt-5 rounded-xl border border-line bg-panel p-4 text-xs leading-5">
+      <p class="font-medium text-ink">Choose one model</p>
+      <p class="mt-2 text-muted">The selected provider and canonical model id are persisted with the chat and every later Run.</p>
+      <p class="mt-4 border-t border-line pt-3 text-muted">Models marked setup can be inspected, but cannot run until their provider credentials are present.</p>
+    </div>
+  </div>
+<% end %>
+
+<%= render "shared/shell", active: "models", project: @project do %>
+  <div class="mx-auto max-w-4xl px-5 py-8 sm:px-8 lg:px-10">
+    <%= render "shared/flash" %>
+    <%= link_to "← #{@project.name}", project_path(@project), class: "text-xs font-medium text-accent hover:underline" %>
+    <h1 class="mt-3 text-3xl font-semibold tracking-tight text-ink">Open a chat</h1>
+    <p class="mt-2 text-sm leading-6 text-muted">Start with a model selection. The first message creates an inspectable Run.</p>
+
+    <%= form_with model: [@project, @chat], class: "mt-8 rounded-2xl border border-line bg-panel p-5 shadow-sm sm:p-6" do |form| %>
+      <% if @chat.errors.any? %>
+        <div class="mb-5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"><%= @chat.errors.full_messages.to_sentence %></div>
+      <% end %>
+
+      <div>
+        <%= form.label :title, "Chat title (optional)", class: "text-xs font-medium text-ink" %>
+        <%= form.text_field :title, placeholder: "e.g. Compare streaming behavior", class: "mt-2 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm outline-none ring-accent/20 placeholder:text-slate-400 focus:border-accent focus:ring-4" %>
+      </div>
+
+      <div class="mt-6">
+        <%= label_tag "chat_model", "Model", class: "text-xs font-medium text-ink" %>
+        <%= select_tag "chat[model]", options_for_select(@models.map { |entry| ["#{entry.provider_name} · #{entry.name} — #{entry.configured ? 'ready' : 'setup'}", "#{entry.provider}|#{entry.id}"] }, @selected_model && "#{@selected_model.provider}|#{@selected_model.id}"), required: true, id: "chat_model", class: "mt-2 w-full rounded-lg border border-line bg-white px-3 py-3 text-sm focus:border-accent focus:outline-none" %>
+        <p class="mt-2 text-xs leading-5 text-muted">The provider is part of the selection because the same canonical model id can exist across multiple providers.</p>
+      </div>
+
+      <div class="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
+        <%= link_to "Cancel", project_path(@project), class: "text-sm text-muted hover:text-ink" %>
+        <%= form.submit "Create chat", class: "inline-flex cursor-pointer items-center rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700" %>
+      </div>
+    <% end %>
+  </div>
+<% end %>

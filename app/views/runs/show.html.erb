@@ -1,0 +1,85 @@
+<% content_for :title, "Run ##{@run.id} · RubyLLM Workbench" %>
+<% content_for :inspector do %>
+  <div class="sticky top-0">
+    <div class="flex items-center justify-between gap-3">
+      <p class="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Run inspector</p>
+      <%= render "runs/status", run: @run %>
+    </div>
+    <div class="mt-5 rounded-xl border border-line bg-panel p-4">
+      <dl class="divide-y divide-line text-xs">
+        <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Project</dt><dd class="max-w-[10rem] truncate text-right text-ink"><%= @run.project.name %></dd></div>
+        <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Operation</dt><dd class="font-mono text-ink"><%= @run.operation %></dd></div>
+        <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Requested by</dt><dd class="font-mono text-ink"><%= @run.requested_by %></dd></div>
+        <div class="flex justify-between gap-3 py-3"><dt class="text-muted">App</dt><dd class="font-mono text-ink"><%= @run.app_version %></dd></div>
+        <div class="flex justify-between gap-3 py-3"><dt class="text-muted">RubyLLM</dt><dd class="font-mono text-ink"><%= @run.ruby_llm_version %></dd></div>
+      </dl>
+    </div>
+  </div>
+<% end %>
+
+<%= render "shared/shell", active: "projects", project: @run.project do %>
+  <div class="mx-auto max-w-5xl px-5 py-8 sm:px-8 lg:px-10">
+    <%= render "shared/flash" %>
+    <%= link_to "← #{@run.project.name}", project_path(@run.project), class: "text-xs font-medium text-accent hover:underline" %>
+    <div class="mt-3 flex flex-col justify-between gap-4 border-b border-line pb-5 sm:flex-row sm:items-end">
+      <div>
+        <div class="flex items-center gap-3"><h1 class="font-mono text-2xl font-semibold tracking-tight text-ink">Run #<%= @run.id %></h1><%= render "runs/status", run: @run %></div>
+        <p class="mt-2 break-all font-mono text-xs text-muted"><%= @run.chat.provider %> / <%= @run.chat.model_id %> · <%= @run.operation %></p>
+      </div>
+      <%= link_to "Return to chat", project_chat_path(@run.project, @run.chat), class: "inline-flex items-center justify-center rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
+    </div>
+
+    <section class="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Run metrics">
+      <div class="rounded-xl border border-line bg-panel p-4"><p class="text-[10px] uppercase tracking-[0.14em] text-muted">Duration</p><p class="mt-2 font-mono text-lg font-semibold text-ink"><%= format_duration(@run.duration_ms) %></p></div>
+      <div class="rounded-xl border border-line bg-panel p-4"><p class="text-[10px] uppercase tracking-[0.14em] text-muted">First output</p><p class="mt-2 font-mono text-lg font-semibold text-ink"><%= format_duration(@run.time_to_first_output_ms) %></p></div>
+      <div class="rounded-xl border border-line bg-panel p-4"><p class="text-[10px] uppercase tracking-[0.14em] text-muted">Input / output</p><p class="mt-2 font-mono text-lg font-semibold text-ink"><%= format_tokens(@run.total_tokens[:input]) %> / <%= format_tokens(@run.total_tokens[:output]) %></p></div>
+      <div class="rounded-xl border border-line bg-panel p-4"><p class="text-[10px] uppercase tracking-[0.14em] text-muted">Cost</p><p class="mt-2 text-sm font-semibold text-ink"><%= format_cost(@run.total_cost, status: @run.cost_status) %></p></div>
+    </section>
+
+    <% if @run.error_summary.present? %>
+      <section class="mt-6 rounded-xl border border-rose-200 bg-rose-50 p-4" aria-labelledby="diagnostic-heading">
+        <h2 id="diagnostic-heading" class="text-sm font-semibold text-rose-700">Diagnostic</h2>
+        <p class="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-rose-700"><%= @run.error_summary %></p>
+      </section>
+    <% end %>
+
+    <section class="mt-8" aria-labelledby="attempts-heading">
+      <div class="flex items-center justify-between gap-3"><h2 id="attempts-heading" class="text-sm font-semibold text-ink">Attempts</h2><span class="font-mono text-xs text-muted"><%= @run.attempts.size %> recorded</span></div>
+      <div class="mt-3 overflow-x-auto rounded-xl border border-line bg-panel">
+        <table class="min-w-full text-left text-xs">
+          <thead class="border-b border-line bg-canvas text-[10px] uppercase tracking-[0.12em] text-muted">
+            <tr><th class="px-4 py-3 font-semibold">#</th><th class="px-4 py-3 font-semibold">Provider / model</th><th class="px-4 py-3 font-semibold">Status</th><th class="px-4 py-3 font-semibold">Tokens</th><th class="px-4 py-3 font-semibold">Cost</th><th class="px-4 py-3 font-semibold">Duration</th></tr>
+          </thead>
+          <tbody class="divide-y divide-line">
+            <% @run.attempts.each do |attempt| %>
+              <tr>
+                <td class="px-4 py-3 font-mono text-muted"><%= attempt.sequence %></td>
+                <td class="px-4 py-3"><span class="block font-medium text-ink"><%= attempt.provider %></span><span class="mt-1 block max-w-[18rem] truncate font-mono text-muted"><%= attempt.model_id %></span></td>
+                <td class="px-4 py-3"><span class="inline-flex rounded-full px-2 py-1 text-[11px] font-medium <%= status_classes(attempt.status) %>"><%= attempt.status.to_s.capitalize %></span></td>
+                <td class="whitespace-nowrap px-4 py-3 font-mono text-muted"><%= format_tokens(attempt.input_tokens) %> / <%= format_tokens(attempt.output_tokens) %></td>
+                <td class="whitespace-nowrap px-4 py-3 text-muted"><%= format_cost(attempt.cost, status: attempt.cost_status) %></td>
+                <td class="whitespace-nowrap px-4 py-3 text-muted"><%= format_duration(attempt.duration_ms) %></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="mt-8 grid gap-6 xl:grid-cols-2">
+      <div class="rounded-xl border border-line bg-panel p-5">
+        <h2 class="text-sm font-semibold text-ink">Input snapshot</h2>
+        <pre class="mt-4 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-canvas p-4 font-mono text-xs leading-5 text-muted"><%= JSON.pretty_generate(@run.input_snapshot) %></pre>
+      </div>
+      <div class="rounded-xl border border-line bg-panel p-5">
+        <h2 class="text-sm font-semibold text-ink">Result</h2>
+        <% result_text = @latest_assistant_message&.content.presence || @run.result_summary["partial_output"] %>
+        <% if result_text.present? %>
+          <div class="mt-4 whitespace-pre-wrap break-words rounded-lg bg-canvas p-4 text-sm leading-6 text-ink"><%= result_text %></div>
+        <% else %>
+          <p class="mt-4 rounded-lg bg-canvas p-4 text-sm text-muted">No durable output recorded yet.</p>
+        <% end %>
+      </div>
+    </section>
+  </div>
+<% end %>

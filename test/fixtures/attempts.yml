@@ -1,0 +1,55 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  run: one
+  sequence: 1
+  provider: MyString
+  model_id: MyString
+  status: MyString
+  started_at: 2026-09-15 21:54:36
+  finished_at: 2026-09-15 21:54:36
+  duration_ms: 1
+  time_to_first_output_ms: 1
+  input_tokens: 1
+  output_tokens: 1
+  cache_read_tokens: 1
+  cache_write_tokens: 1
+  thinking_tokens: 1
+  reported_cost: 9.99
+  estimated_cost: 9.99
+  currency: MyString
+  cost_status: MyString
+  request_id: MyString
+  finish_reason: MyString
+  error_class: MyString
+  error_code: MyString
+  error_message: MyText
+  metadata_json: 
+  ruby_llm_usage_ids_json: 
+
+two:
+  run: two
+  sequence: 1
+  provider: MyString
+  model_id: MyString
+  status: MyString
+  started_at: 2026-09-15 21:54:36
+  finished_at: 2026-09-15 21:54:36
+  duration_ms: 1
+  time_to_first_output_ms: 1
+  input_tokens: 1
+  output_tokens: 1
+  cache_read_tokens: 1
+  cache_write_tokens: 1
+  thinking_tokens: 1
+  reported_cost: 9.99
+  estimated_cost: 9.99
+  currency: MyString
+  cost_status: MyString
+  request_id: MyString
+  finish_reason: MyString
+  error_class: MyString
+  error_code: MyString
+  error_message: MyText
+  metadata_json: 
+  ruby_llm_usage_ids_json: 

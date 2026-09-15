@@ -1,0 +1,9 @@
+<article id="message_<%= message.id %>" class="flex justify-start">
+  <div class="max-w-3xl rounded-2xl rounded-bl-md border border-line bg-panel px-4 py-3 text-sm leading-6 text-ink shadow-sm">
+    <div class="mb-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-accent"><span>Assistant</span><span class="font-normal text-muted">streamed</span></div>
+    <div id="message_<%= message.id %>_content" class="whitespace-pre-wrap break-words"><%= message.content %></div>
+    <% if message.thinking_text.present? %>
+      <details class="mt-3 border-t border-line pt-2 text-xs text-muted"><summary class="cursor-pointer">Thinking</summary><p class="mt-2 whitespace-pre-wrap"><%= message.thinking_text %></p></details>
+    <% end %>
+  </div>
+</article>

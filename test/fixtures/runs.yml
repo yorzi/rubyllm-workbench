@@ -1,0 +1,31 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  project: one
+  chat: one
+  operation: MyString
+  status: MyString
+  started_at: 2026-09-15 21:54:28
+  finished_at: 2026-09-15 21:54:28
+  requested_by: MyString
+  input_snapshot_json: 
+  result_summary_json: 
+  error_summary: MyText
+  app_version: MyString
+  ruby_llm_version: MyString
+  time_to_first_output_ms: 1
+
+two:
+  project: two
+  chat: two
+  operation: MyString
+  status: MyString
+  started_at: 2026-09-15 21:54:28
+  finished_at: 2026-09-15 21:54:28
+  requested_by: MyString
+  input_snapshot_json: 
+  result_summary_json: 
+  error_summary: MyText
+  app_version: MyString
+  ruby_llm_version: MyString
+  time_to_first_output_ms: 1
