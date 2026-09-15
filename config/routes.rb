@@ -9,6 +9,6 @@ Rails.application.routes.draw do
     end
   end
 
-  resources :runs, only: :show
+  resources :runs, only: %i[index show]
   get "models", to: "models#index", as: :models
 end

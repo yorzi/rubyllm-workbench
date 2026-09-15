@@ -20,6 +20,10 @@
         <span>Model Explorer</span>
         <span class="font-mono text-[11px]">M</span>
       <% end %>
+      <%= link_to runs_path, class: "flex items-center justify-between rounded-lg px-3 py-2 #{active == 'runs' ? 'bg-accent-soft font-medium text-accent' : 'text-muted hover:bg-slate-50 hover:text-ink'}" do %>
+        <span>Runs</span>
+        <span class="font-mono text-[11px]">R</span>
+      <% end %>
     </nav>
 
     <div class="mt-8">

@@ -36,6 +36,8 @@ loop is usable and has been dogfooded.
    finalizing/succeeded/failed states, and reload durable history.
 5. Run inspector: stable `/runs/:id` URL showing status, provider/model,
    timing, usage, cost provenance, attempts, output and safe diagnostic data.
+6. Global Run history: searchable/filterable local execution ledger linking each
+   result back to its Project and stable Run inspector.
 
 ## Data and service boundaries
 
@@ -86,4 +88,3 @@ keyboard-friendly.
 - Verification: unit/service tests, request/system coverage for project/chat/
   inspector, `zeitwerk:check`, asset build and manual desktop/narrow-screen
   acceptance.
-

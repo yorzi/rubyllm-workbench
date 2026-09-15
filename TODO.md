@@ -19,6 +19,8 @@
       paid-provider smoke testing remains opt-in.
 - [x] Implement the Run/Attempt inspector with usage, cost provenance,
       latency, partial output, and safe error details.
+- [x] Add a global Run history with status/provider/search filters and stable
+      inspector links.
 - [x] Add deterministic fake-provider tests and keep paid-provider tests
       opt-in.
 - [x] Verify Rails boot, migrations, Zeitwerk, tests, assets, and key screens

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_15_140500) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_16_090000) do
   create_table "active_storage_attachments", force: :cascade do |t|
     t.bigint "blob_id", null: false
     t.datetime "created_at", null: false
@@ -212,6 +212,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_15_140500) do
     t.datetime "updated_at", null: false
     t.index ["chat_id"], name: "index_runs_on_chat_id"
     t.index ["project_id"], name: "index_runs_on_project_id"
+    t.index ["status", "created_at"], name: "index_runs_on_status_and_created_at"
   end
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"

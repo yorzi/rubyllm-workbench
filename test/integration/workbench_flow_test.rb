@@ -74,4 +74,31 @@ class WorkbenchFlowTest < ActionDispatch::IntegrationTest
   ensure
     previous_values&.each { |requirement, value| RubyLLM.config.public_send("#{requirement}=", value) }
   end
+
+  test "browses and filters the global Run history" do
+    project = create_project(name: "History project")
+    chat = create_chat(project)
+    failed_run = chat.runs.create!(project: project, operation: "chat", status: :failed, requested_by: "test")
+    succeeded_run = chat.runs.create!(project: project, operation: "chat", status: :succeeded, requested_by: "test")
+
+    get runs_path
+    assert_response :success
+    assert_includes response.body, "Run ##{failed_run.id}"
+    assert_includes response.body, "Run ##{succeeded_run.id}"
+    assert_includes response.body, "History project"
+
+    get runs_path, params: { status: "failed" }
+    assert_response :success
+    assert_includes response.body, "Run ##{failed_run.id}"
+    refute_includes response.body, "Run ##{succeeded_run.id}"
+
+    get runs_path, params: { provider: chat.provider }
+    assert_response :success
+    assert_includes response.body, "Run ##{failed_run.id}"
+    assert_includes response.body, chat.provider
+
+    get runs_path, params: { q: "History project" }
+    assert_response :success
+    assert_includes response.body, "2 matching runs"
+  end
 end
