@@ -5,10 +5,10 @@
 迁移、测试和运行证据为准。
 
 更新时间：2026-09-16
-当前实现：M0–M3 核心闭环、本地 LifecycleEvent 目录和并行策略切片 `IMPLEMENTED`
+当前实现：M0–M3 核心闭环、本地 LifecycleEvent 目录、并行策略切片和 M4 本地文本基础 `IMPLEMENTED`
 当前图表范围：已验证的本地运行路径；未来节点全部显式标为 `PLANNED`
-校准依据：routes、models、migrations、jobs、services、测试，以及 M3 OpenRouter
-dogfood（Run #11、Run #13）
+校准依据：routes、models、migrations、jobs、services、测试、M3 OpenRouter
+dogfood（Run #11、Run #13）和 M4 Knowledge 本地回归
 
 ## 读图规则
 
@@ -30,7 +30,7 @@ dogfood（Run #11、Run #13）
 flowchart LR
     Human["人 / 本地开发者"] --> UI["Rails HTML / Turbo UI"]
     UI --> App["Rails Workbench"]
-    App --> DB[("SQLite\nrecords + lifecycle events")]
+    App --> DB[("SQLite\nrecords + knowledge chunks + lifecycle events")]
     App --> Queue["Solid Queue\nChatResponseJob"]
     Queue --> RubyLLM["RubyLLM boundary"]
     App --> RubyLLM
@@ -39,7 +39,7 @@ flowchart LR
 ```
 
 当前含义：provider 操作从 RubyLLM 边界进入；Run、Message、Attempt、Artifact、工具
-调用、审批和 LifecycleEvent 等证据落在本地持久化层；队列负责 Chat continuation。远程部署、账号、
+调用、审批、KnowledgeItem/KnowledgeChunk 和 LifecycleEvent 等证据落在本地持久化层；队列负责 Chat continuation。远程部署、账号、
 外部数据库和公开访问不属于这张当前实现图。
 
 ## 2. L1 — 已实现组件如何连接
@@ -53,6 +53,7 @@ flowchart TD
         ChatUI["Project Chat"]
         ExperimentUI["Experiment workspace"]
         ToolUI["Tool Lab"]
+        KnowledgeUI["Knowledge workspace"]
         RunUI["Run history / inspector"]
     end
 
@@ -63,14 +64,16 @@ flowchart TD
     StructuredJob["StructuredResponseJob"]
     ChatExecutor["Ai::ChatExecutor"]
     Tooling["ToolRegistry + ChatTooling\n+ ToolExecutionPolicy"]
+    KnowledgeServices["Ai::Knowledge::Chunker\n+ Ingestor + Retriever"]
     Audit["ToolInvocationRecorder + ApprovalService"]
     Events["LifecycleEventRecorder\nActiveSupport Notifications"]
-    Records["Project / Chat / Run / Attempt\n/ Artifact / tool records / LifecycleEvent"]
+    Records["Project / Chat / Run / Attempt\n/ Artifact / tool / Knowledge records / LifecycleEvent"]
     RubyLLM["RubyLLM Chat + provider boundary"]
 
     ChatUI --> RunExecutor
     ExperimentUI --> ExperimentExecutor
     ToolUI --> Tooling
+    KnowledgeUI --> KnowledgeServices
     RunUI --> Records
     RunExecutor --> ChatJob
     ExperimentExecutor --> StructuredJob
@@ -86,6 +89,7 @@ flowchart TD
     Tooling --> ChatExecutor
     RunExecutor --> Records
     StructuredExecutor --> Records
+    KnowledgeServices --> Records
 ```
 
 代码职责的简化记忆：
@@ -108,6 +112,7 @@ erDiagram
     PROJECT ||--o{ CHAT : owns
     PROJECT ||--o{ EXPERIMENT : defines
     PROJECT ||--o{ TOOL_DEFINITION : enables
+    PROJECT ||--o{ KNOWLEDGE_COLLECTION : owns
     PROJECT ||--o{ RUN : contains
     CHAT ||--o{ MESSAGE : persists
     CHAT ||--o{ RUN : starts
@@ -126,6 +131,8 @@ erDiagram
     APPROVAL ||--o{ LIFECYCLE_EVENT : annotates
     TOOL_DEFINITION ||--o{ TOOL_INVOCATION : describes
     TOOL_INVOCATION ||--o| APPROVAL : requests
+    KNOWLEDGE_COLLECTION ||--o{ KNOWLEDGE_ITEM : contains
+    KNOWLEDGE_ITEM ||--o{ KNOWLEDGE_CHUNK : splits
 
     PROJECT {
         bigint id
@@ -218,6 +225,29 @@ erDiagram
         datetime requested_at
         datetime decided_at
     }
+    KNOWLEDGE_COLLECTION {
+        bigint project_id
+        string name
+        text description
+    }
+    KNOWLEDGE_ITEM {
+        bigint knowledge_collection_id
+        string title
+        string source_kind
+        string source_reference
+        text content_text
+        string checksum
+        string ingestion_status
+        json metadata_json
+    }
+    KNOWLEDGE_CHUNK {
+        bigint knowledge_item_id
+        integer position
+        text content_text
+        integer char_start
+        integer char_end
+        json metadata_json
+    }
 ```
 
 读取关系时记住：
@@ -230,11 +260,15 @@ erDiagram
   prompt、工具参数、工具结果和 Artifact 内容仍由原始记录负责。`event_key` 用于
   幂等去重，旧 Run 不做迁移后的合成回填。
 
+KnowledgeItem 保存规范化后的文本与 checksum；KnowledgeChunk 保存可重复生成的
+内容窗口、位置和字符 offset。当前没有 EmbeddingRecord，避免把未使用的假向量
+伪装成 M4 语义检索能力。
+
 ### 仍未进入当前关系图的扩展
 
 ```mermaid
 flowchart LR
-    Current["当前 Run / Artifact 证据"] -. "未来扩展" .-> Knowledge["PLANNED: Knowledge / RAG"]
+    Current["当前 Run / Artifact / Knowledge 证据"]
     Current -. "未来扩展" .-> Agent["PLANNED: Agent / durable research"]
     Current -. "未来扩展" .-> Media["PLANNED: Media / batch / export"]
 ```
@@ -349,6 +383,30 @@ Artifact，因此声明为 sequential-only。若使用 parallel 模式但启用�
 串行结果。此图有本地 deterministic tests 的证据；尚无 live provider 返回多个并行
 调用的验收证据。
 
+## 4.2 Runtime — M4 本地文本知识检索
+
+Knowledge collection 是 Project 下独立的产品数据流，不是一次 Chat Run。用户粘贴
+文本后，应用先规范化并计算 SHA-256，再在一个事务内替换该来源的 chunks；查询只读
+`ready` 来源并返回可检查的词法证据。
+
+```mermaid
+flowchart TD
+    Human["人"] --> CollectionUI["Knowledge workspace"]
+    CollectionUI --> Collection["KnowledgeCollection"]
+    CollectionUI --> Item["KnowledgeItem\nnormalized text + checksum"]
+    Item --> Ingestor["Ai::Knowledge::Ingestor"]
+    Ingestor --> Chunker["Ai::Knowledge::Chunker\n800 chars / 120 overlap"]
+    Chunker --> Chunks[("SQLite KnowledgeChunk\nposition + char offsets")]
+    CollectionUI --> Query["query"]
+    Query --> Retriever["Ai::Knowledge::Retriever\nexact-token lexical score"]
+    Chunks --> Retriever
+    Retriever --> Evidence["matched terms + score + source chunk"]
+```
+
+当前路径不创建 `Run`/`Attempt`，不调用 RubyLLM，不生成 EmbeddingRecord，也不宣称
+semantic RAG、rerank、文件上传或 OCR。这样可以先验证“来源能否稳定入库、检索结果能否
+被人复核”，再为 provider-specific embedding 和文档提取增加独立的 evidence boundary。
+
 ## 5. Runtime — 状态如何推进
 
 ```mermaid
@@ -411,15 +469,16 @@ flowchart LR
     M1 --> M2["M2 Structured Compare\nIMPLEMENTED"]
     M2 --> M3["M3 Tools + Approval\nIMPLEMENTED"]
     M3 --> M3P["M3 Parallel Calls\nAPP PATH IMPLEMENTED"]
-    M3P --> M4["M4 Knowledge + RAG\nPLANNED"]
+    M3P --> M4["M4 Knowledge\nLOCAL TEXT PARTIAL"]
     M4 --> M5["M5 Agents + Research\nPLANNED"]
     M5 --> M6["M6+ Media / Batch / Ops\nPLANNED"]
 ```
 
 `APP PATH IMPLEMENTED` 的含义是：Project opt-in、能力/安全门控、Run snapshot 和
 多调用本地审计路径已经存在并通过 deterministic tests；live provider 的并行返回和
-跨 provider 兼容性仍是 `PARTIAL`，不能被简化成 M3 全部完成，也不能被误写为 M4/M5
-已开始。
+跨 provider 兼容性仍是 `PARTIAL`。M4 当前只实现本地 text collection、chunk 和 lexical
+evidence；embedding、semantic retrieval、rerank、file/OCR ingestion 仍未完成，不能
+被简化成完整 M4，也不能把当前本地检索误写成 provider RAG。
 
 ## 8. 如何保持图表可信
 

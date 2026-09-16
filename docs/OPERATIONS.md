@@ -112,6 +112,25 @@ Run 时检查当前模型是否声明 `parallel_tool_calls`，并检查所有 en
 sequential-only，避免把 SQLite 写入和本地副作用未经专门验证地并行化。此策略并不等于
 某个 provider 已经承诺会返回多个调用。
 
+## Knowledge workspace：本地文本基础切片
+
+从 Project 打开 **Knowledge**，按下面的顺序做一次最小验证：
+
+1. 创建一个 collection；collection 始终属于当前 Project。
+2. 粘贴一段有明确来源边界的文本，填写 title，可选填写 source reference。
+3. 点击 **Ingest source**。应用会规范化换行和首尾空白，计算 SHA-256，并在事务中
+   用确定性的 800-character window / 120-character overlap 生成 chunks。
+4. 在 Sources 区域检查 `ready`、chunk 数量和 checksum 前缀；打开 Search evidence，
+   输入 query，查看每个结果的 lexical score、matched terms、source title 和
+   `char_start`/`char_end`。
+
+这个页面是独立的同步产品数据流，不会创建 `Run`/`Attempt`，也不会调用 provider。当前
+`lexical-v1` 是精确 token 的 coverage/frequency 评分，只能回答“哪些已存 chunk 包含
+查询词”，不能回答语义相似度、rerank 结果或模型生成答案。
+
+当前 M4 尚未开放远程 URL 抓取、文件上传、Active Storage 文档处理、OCR、provider
+embedding 或 rerank；这些能力进入时必须补充各自的 provenance、失败状态和兼容性证据。
+
 ## 当前可观测性边界
 
 M3 当前切片已经把应用侧生命周期写入 `LifecycleEvent` 目录，并在 Run inspector 中
@@ -158,6 +177,7 @@ payload 只保留 ID、状态、provider/model、时长、错误类别等允许�
 | Run 进入 failed | Run diagnostic、Attempt error、provider/model | 不要只看页面异常，也不要重写失败历史 |
 | Run waiting for approval | Chat 的 Tool approvals、Approval status | 不要把等待当成功，也不要重复点击触发多个 continuation |
 | 页面刷新后消息仍在 | RubyLLM Message 和 Run inspector | 不要把浏览器 DOM 当唯一数据源 |
+| Knowledge 搜不到结果 | source 是否为 `ready`、query token、chunk offsets | 不要把 lexical-v1 当成 semantic embedding 或 rerank |
 | Tool 参数不完整 | ToolInvocation 的 secret filtering | 不要为“调试方便”恢复 secret |
 | 390px 出现横向滚动 | 页面实际 `scrollWidth/clientWidth`、长 JSON/table | 不要用截图裁剪掩盖布局问题 |
 | live test 失败 | 网络、provider availability、model capability、credentials | 不要把一次网络失败改写成代码永远错误 |
@@ -172,6 +192,8 @@ payload 只保留 ID、状态、provider/model、时长、错误类别等允许�
   或文件内容加入事件通知。
 - provider-hosted/server tools 是远程执行能力，未来如果加入必须单独标注；它们
   不等于本地工具，也不应被隐含为安全。
+- Knowledge source 当前只接受用户粘贴的 text；不要把任意 URL、上传文件或 OCR
+  输出当成已经存在的来源 provenance。
 - 任何新建的长期进程都要记录 PID、端口和停止方式；任务结束时清理。
 
 ## 变更后最小检查清单
@@ -180,7 +202,7 @@ payload 只保留 ID、状态、provider/model、时长、错误类别等允许�
 [ ] 代码/迁移已通过针对性测试
 [ ] 全量测试、Zeitwerk、RuboCop 或对应静态检查已运行
 [ ] 关键页面在桌面和 390px 检查过
-[ ] Run/Attempt/ToolInvocation/Approval 的证据边界没有被改写
+[ ] Run/Attempt/ToolInvocation/Approval/Knowledge 的证据边界没有被改写
 [ ] 文档的当前能力、图表和 changelog 已同步
 [ ] 未把 credentials、token 或内部敏感数据加入 staged diff
 [ ] commit 只包含一个清晰主题

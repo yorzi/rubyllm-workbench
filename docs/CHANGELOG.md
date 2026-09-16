@@ -6,6 +6,51 @@
 原则上只追加，不静默改写历史。代码细节回到对应 commit 和
 [IMPLEMENTATION_MAP.md](../IMPLEMENTATION_MAP.md)。
 
+## 2026-09-16 — M4 本地文本 Knowledge 基础切片
+
+### 为什么做
+
+M4 Specs 的完整目标同时包含 embedding、检索、rerank、文件引用和 OCR/extraction。
+如果先接 provider 或上传链路，容易把“能搜到”和“语义检索已验证”混为一谈。本次先
+建立一个 SQLite-first、可复核的最小闭环：来源能入库，chunk 能重复生成，检索能返回
+原始证据。
+
+### 人能看到的变化
+
+- Project 新增 Knowledge workspace，可以创建 collection、粘贴 bounded text 并
+  查看 source、`ready/failed` 状态、chunk 数量和 checksum 前缀。
+- Source 会生成带 position 和 `char_start`/`char_end` 的 deterministic chunks；
+  Search evidence 会显示 lexical score、matched terms、source title 和原始 chunk。
+- Knowledge 查询是 Project-scoped 的同步产品流，不会创建 Chat Run/Attempt，不会
+  偷用 provider，也不把结果包装成 LLM answer。
+
+### 实现地图
+
+- 迁移和模型：`KnowledgeCollection`、`KnowledgeItem`、`KnowledgeChunk`。
+- 服务：`Ai::Knowledge::Chunker`（800/120 字符窗口）、`Ingestor`（checksum、事务性
+  chunk replacement、状态）和 `Retriever`（精确 token lexical scoring）。
+- 页面：`KnowledgeCollectionsController`、`KnowledgeItemsController`、Project
+  navigation、collection/source/search views。
+- 保护：source 只能通过当前 Project 的 nested route 访问；浏览器没有 URL fetch、
+  file upload 或任意代码执行入口。
+
+### 验证证据
+
+- SQLite migration 已应用，定向回归覆盖模型、chunk offset、ingestion replacement、
+  ready filtering、retrieval evidence、完整 token 匹配和 Project boundary：11 tests、73 assertions、
+  0 failures、0 errors。
+- 浏览器 QA 验证了 collection 创建、text ingestion、证据查询和 390px 窄屏；窄屏检查
+  的 `scrollWidth` 与 `clientWidth` 相等，原有根页面和默认视口已恢复，临时 loopback
+  服务已停止。
+- 当前条目状态：本地文本基础 `IMPLEMENTED` · `LOCAL_VERIFIED`；完整 M4 仍为
+  `PARTIAL`。
+
+### 还没有证明什么
+
+- 没有 provider embedding、vector similarity、rerank、文件/Active Storage ingestion、
+  OCR/extraction 或 provenance Artifact；这些仍是 M4 后续工作。
+- 本地 lexical score 不代表语义质量、provider 兼容性、部署结果、公众可用性或业务收益。
+
 ## 2026-09-16 — M3 并行 tool-call 应用侧策略与多调用审计
 
 ### 为什么做

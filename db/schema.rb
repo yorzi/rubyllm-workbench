@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_16_123000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_16_140000) do
   create_table "active_storage_attachments", force: :cascade do |t|
     t.bigint "blob_id", null: false
     t.datetime "created_at", null: false
@@ -143,6 +143,46 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_123000) do
     t.datetime "updated_at", null: false
     t.index ["project_id", "status", "updated_at"], name: "index_experiments_on_project_id_and_status_and_updated_at"
     t.index ["project_id"], name: "index_experiments_on_project_id"
+  end
+
+  create_table "knowledge_chunks", force: :cascade do |t|
+    t.integer "char_end", null: false
+    t.integer "char_start", null: false
+    t.text "content_text", null: false
+    t.datetime "created_at", null: false
+    t.integer "knowledge_item_id", null: false
+    t.json "metadata_json", default: {}, null: false
+    t.integer "position", null: false
+    t.datetime "updated_at", null: false
+    t.index ["knowledge_item_id", "position"], name: "index_knowledge_chunks_on_knowledge_item_id_and_position", unique: true
+    t.index ["knowledge_item_id"], name: "index_knowledge_chunks_on_knowledge_item_id"
+  end
+
+  create_table "knowledge_collections", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.text "description"
+    t.string "name", null: false
+    t.integer "project_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["project_id", "name"], name: "index_knowledge_collections_on_project_id_and_name"
+    t.index ["project_id"], name: "index_knowledge_collections_on_project_id"
+  end
+
+  create_table "knowledge_items", force: :cascade do |t|
+    t.string "checksum", null: false
+    t.text "content_text", null: false
+    t.datetime "created_at", null: false
+    t.text "error_summary"
+    t.string "ingestion_status", default: "pending", null: false
+    t.integer "knowledge_collection_id", null: false
+    t.json "metadata_json", default: {}, null: false
+    t.string "source_kind", default: "text", null: false
+    t.string "source_reference"
+    t.string "title", null: false
+    t.datetime "updated_at", null: false
+    t.index ["knowledge_collection_id", "checksum"], name: "index_knowledge_items_on_knowledge_collection_id_and_checksum"
+    t.index ["knowledge_collection_id", "ingestion_status"], name: "idx_on_knowledge_collection_id_ingestion_status_6361f5fa8c"
+    t.index ["knowledge_collection_id"], name: "index_knowledge_items_on_knowledge_collection_id"
   end
 
   create_table "lifecycle_events", force: :cascade do |t|
@@ -357,6 +397,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_123000) do
   add_foreign_key "experiment_executions", "experiments"
   add_foreign_key "experiment_executions", "projects"
   add_foreign_key "experiments", "projects"
+  add_foreign_key "knowledge_chunks", "knowledge_items"
+  add_foreign_key "knowledge_collections", "projects"
+  add_foreign_key "knowledge_items", "knowledge_collections"
   add_foreign_key "lifecycle_events", "approvals", on_delete: :nullify
   add_foreign_key "lifecycle_events", "artifacts", on_delete: :nullify
   add_foreign_key "lifecycle_events", "attempts", on_delete: :nullify

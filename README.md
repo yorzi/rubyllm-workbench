@@ -19,17 +19,20 @@ constraints. Current runtime changes must not silently rewrite the Specs baselin
 
 ## Current slice
 
-The implemented gate is M0–M3 core: Projects, Model Explorer, model selection,
+The implemented gates are M0–M3 core plus an M4 local-text foundation (`PARTIAL`): Projects, Model Explorer, model selection,
 persisted Chats and Messages, RubyLLM-backed streaming execution, a
 code-defined Tool Lab, durable tool approvals, Run/Attempt/ToolInvocation
-records, a searchable Run history, a token/cost/latency inspector, and a local
-LifecycleEvent timeline for each Run.
+records, a searchable Run history, a token/cost/latency inspector, a local
+LifecycleEvent timeline for each Run, and Project-scoped Knowledge collections
+with inline text ingestion, deterministic chunks, checksums, and explainable
+lexical evidence search.
 Tool execution is sequential by default; Tool Lab has an explicit parallel mode that is
 frozen into each new Run and only takes effect for a model advertising
 `parallel_tool_calls` when every enabled tool is marked parallel-safe. The local application
 path and multiple-call inspection are verified; real provider compatibility remains `PARTIAL`.
-Agents, provider-hosted tools, RAG, media, batch evaluation, billing, and deployment remain
-`PLANNED`.
+Provider embeddings, semantic retrieval, rerank, file references, OCR/extraction,
+Agents, provider-hosted tools, media, batch evaluation, billing, and deployment remain
+`PLANNED` or explicitly deferred within M4.
 
 If you are returning to the project after a pause, read
 [docs/SYSTEM_GUIDE.md](docs/SYSTEM_GUIDE.md) first, then the diagrams and

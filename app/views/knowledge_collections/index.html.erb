@@ -1,0 +1,75 @@
+<% content_for :title, "Knowledge · #{@project.name}" %>
+<% content_for :inspector do %>
+  <div class="sticky top-0">
+    <p class="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Knowledge workspace</p>
+    <div class="mt-5 rounded-xl border border-line bg-panel p-4 text-xs leading-5">
+      <p class="font-medium text-ink">M4 foundation · local text</p>
+      <p class="mt-2 text-muted">This slice stores source text in SQLite, records deterministic character offsets, and searches ready chunks with an explainable lexical score.</p>
+      <dl class="mt-4 divide-y divide-line border-t border-line text-xs">
+        <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Collections</dt><dd class="font-mono text-ink"><%= @collections.size %></dd></div>
+        <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Project</dt><dd class="max-w-[9rem] truncate text-right text-ink"><%= @project.name %></dd></div>
+      </dl>
+    </div>
+    <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-800">
+      <p class="font-medium">Boundary</p>
+      <p class="mt-1">No remote fetch, file upload, OCR, provider embedding, or rerank is performed here.</p>
+    </div>
+  </div>
+<% end %>
+
+<%= render "shared/shell", active: "knowledge", project: @project do %>
+  <div class="mx-auto max-w-6xl px-5 py-8 sm:px-8 lg:px-10">
+    <%= render "shared/flash" %>
+    <div class="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+      <div>
+        <%= link_to "← #{@project.name}", project_path(@project), class: "text-xs font-medium text-accent hover:underline" %>
+        <h1 class="mt-3 text-3xl font-semibold tracking-tight text-ink">Knowledge</h1>
+        <p class="mt-2 max-w-2xl text-sm leading-6 text-muted">Build a small, local text collection and inspect exactly which chunks lexical search returns.</p>
+      </div>
+    </div>
+
+    <section class="mt-8 rounded-2xl border border-line bg-panel p-5 shadow-sm sm:p-6" aria-labelledby="new-collection-heading">
+      <h2 id="new-collection-heading" class="text-sm font-semibold text-ink">New collection</h2>
+      <p class="mt-1 text-xs leading-5 text-muted">A collection is scoped to this Project. You can add pasted text after creating it.</p>
+      <%= form_with model: [@project, @collection], class: "mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_auto] md:items-end" do |form| %>
+        <% if @collection.errors.any? %>
+          <div class="md:col-span-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm leading-5 text-rose-700"><%= @collection.errors.full_messages.to_sentence %></div>
+        <% end %>
+        <div>
+          <%= form.label :name, "Collection name", class: "text-xs font-medium text-ink" %>
+          <%= form.text_field :name, required: true, placeholder: "e.g. Product notes", class: "mt-2 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm outline-none ring-accent/20 placeholder:text-slate-400 focus:border-accent focus:ring-4" %>
+        </div>
+        <div>
+          <%= form.label :description, "Description (optional)", class: "text-xs font-medium text-ink" %>
+          <%= form.text_field :description, placeholder: "What should this collection help answer?", class: "mt-2 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm outline-none ring-accent/20 placeholder:text-slate-400 focus:border-accent focus:ring-4" %>
+        </div>
+        <%= form.submit "Create collection", class: "inline-flex cursor-pointer items-center justify-center rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700" %>
+      <% end %>
+    </section>
+
+    <section class="mt-10" aria-labelledby="collections-heading">
+      <div class="flex items-center justify-between gap-3">
+        <h2 id="collections-heading" class="text-sm font-semibold text-ink">Collections</h2>
+        <span class="font-mono text-xs text-muted"><%= @collections.size %> total</span>
+      </div>
+      <div class="mt-3 grid gap-3 md:grid-cols-2">
+        <% @collections.each do |collection| %>
+          <%= link_to project_knowledge_collection_path(@project, collection), class: "block rounded-xl border border-line bg-panel p-5 shadow-sm hover:border-accent" do %>
+            <div class="flex items-start justify-between gap-3">
+              <h3 class="truncate text-base font-semibold text-ink"><%= collection.name %></h3>
+              <span class="shrink-0 rounded-full bg-accent-soft px-2 py-1 text-[10px] font-medium text-accent">local</span>
+            </div>
+            <p class="mt-2 line-clamp-2 text-sm leading-6 text-muted"><%= collection.description.presence || "No description yet." %></p>
+            <p class="mt-4 font-mono text-xs text-muted"><%= collection.knowledge_items.count %> sources · <%= collection.knowledge_chunks.count %> chunks</p>
+          <% end %>
+        <% end %>
+        <% if @collections.empty? %>
+          <div class="rounded-xl border border-dashed border-line bg-panel p-8 text-center md:col-span-2">
+            <p class="text-sm font-medium text-ink">No collections yet.</p>
+            <p class="mt-2 text-sm leading-5 text-muted">Create one above, then add a source to make the first evidence chunk.</p>
+          </div>
+        <% end %>
+      </div>
+    </section>
+  </div>
+<% end %>

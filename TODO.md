@@ -1,4 +1,4 @@
-# TODO — M0/M1/M2 and M3 core complete; compatibility and later milestones pending
+# TODO — M0/M1/M2/M3 core complete; M4 foundation partial; later milestones pending
 
 ## Human understanding layer
 
@@ -94,6 +94,27 @@
 - [x] Make the recorder idempotently retain separate audit rows and lifecycle
       request/completion events for multiple tool calls.
 
+## M4 foundation — 2026-09-16
+
+- [x] Add Project-owned Knowledge collections and inline text sources in SQLite.
+- [x] Normalize and checksum source text before persistence.
+- [x] Add deterministic character-window chunking with overlap, position, and
+      inspectable source offsets.
+- [x] Add synchronous ingestion with replaceable chunks, ready/failed status,
+      and chunker metadata.
+- [x] Add bounded lexical retrieval that returns score, matched terms, source,
+      and chunk evidence rather than hiding an answer behind an LLM call.
+- [x] Add Knowledge workspace routes, navigation, collection/source forms, and
+      evidence search UI with project-boundary integration coverage.
+- [x] Verify the local text path with targeted model/service/integration tests;
+      provider credentials are not required.
+
+### M4 gate status: `PARTIAL` · local text slice `LOCAL_VERIFIED`
+
+This slice satisfies the small local document-set ingestion/search foundation
+without claiming the complete M4 Specs gate. It does not yet create embedding
+records or call a provider for embeddings/reranking.
+
 ## Known implementation gap
 
 - [x] Add a unified local lifecycle event catalog for `ai.run`, `ai.attempt`,
@@ -108,7 +129,11 @@
 - [ ] M3 parallel tool calls and deeper provider/tool compatibility dogfooding;
       the explicit local path and multiple-call recorder are verified, but live
       provider behavior is still not accepted.
+- [ ] M4 provider embeddings and a SQLite-compatible vector retrieval adapter;
+      application-side lexical retrieval is the current bounded fallback slice.
+- [ ] M4 compatible-provider rerank with explicit capability checks and evidence.
+- [ ] M4 file references, Active Storage ingestion, OCR/extraction jobs, and
+      provenance artifacts.
 - [ ] M5 agents, durable research, and provider-hosted/server tools.
-- [ ] M4 knowledge, RAG, rerank, and document/OCR flows.
 - [ ] M6-M8 media, batch/evals, exports, deployment, and
       public-reference polish.

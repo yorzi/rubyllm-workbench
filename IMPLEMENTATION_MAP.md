@@ -2,16 +2,18 @@
 
 ## Scope
 
-This implementation covers the M0, M1, M2 and current M3 slice:
+This implementation covers the M0, M1, M2, M3 and current M4 foundation slice:
 
-`Project -> Chat/Tool Lab -> persisted Run/Attempt/ToolInvocation/Approval/Artifact/LifecycleEvent -> inspector`
+`Project -> Chat/Tool Lab/Knowledge -> persisted execution and evidence records -> inspectors`
 
-Later milestones (knowledge, agents, media, batch/evals and operational polish)
-stay deferred until this loop is extended deliberately.
+The M4 foundation currently covers local text collections, deterministic chunks,
+checksums and explainable lexical retrieval. Provider embeddings, semantic
+retrieval, rerank, file/OCR ingestion, agents, media, batch/evals and operational
+polish stay deferred until each boundary is extended deliberately.
 
-Current status: M0–M3 core, the local lifecycle-event catalog and the opt-in
-application parallel-tool path `IMPLEMENTED`; live M3 parallel provider
-compatibility `PARTIAL`; M4–M8 `PLANNED`.
+Current status: M0–M3 core and the M4 local-text foundation are `IMPLEMENTED` for
+their verified slices; live M3 parallel provider compatibility is `PARTIAL`; full
+M4 semantic/document acceptance and M5–M8 remain `PLANNED`.
 
 ## Human understanding layer
 
@@ -63,6 +65,11 @@ look complete.
 - **Tool execution policy:** a Project setting requests sequential or parallel
   execution. Each new Run freezes the requested mode, model capability result,
   effective mode, and any sequential fallback reason in its input snapshot.
+- **KnowledgeCollection:** a Project-owned local text corpus boundary.
+- **KnowledgeItem:** one normalized, checksummed text source with ingestion status
+  and optional source reference.
+- **KnowledgeChunk:** one deterministic searchable slice with position, character
+  offsets and chunker metadata. It is evidence, not an LLM answer.
 
 ## Core flows and pages
 
@@ -83,12 +90,14 @@ look complete.
    grouped Runs and JSON Artifacts.
 8. Run lifecycle timeline: inspect the ordered local event catalog alongside the
    Run's original records.
+9. Knowledge workspace: create a local collection, paste bounded text, ingest
+   deterministic chunks, and search ready chunks with matched terms and offsets.
 
 ## Data and service boundaries
 
 - Rails application records: `Project`, `Chat`, `Run`, `Attempt`, `Artifact`,
-  `LifecycleEvent` and the minimum message association needed to preserve
-  durable history.
+  `LifecycleEvent`, `KnowledgeCollection`, `KnowledgeItem`, `KnowledgeChunk` and
+  the minimum message association needed to preserve durable history.
 - RubyLLM remains responsible for provider abstraction and conversation
   semantics where its Rails persistence helpers fit.
 - `Ai::ModelCatalog` queries RubyLLM model metadata and provider configuration.
@@ -114,11 +123,16 @@ look complete.
 - `Ai::LifecycleEventRecorder` subscribes to application lifecycle
   notifications, filters payloads to safe metadata, persists `LifecycleEvent`
   rows and deduplicates repeated notifications by `event_key`.
+- `Ai::Knowledge::Chunker` normalizes text into deterministic character windows;
+  `Ai::Knowledge::Ingestor` replaces a source's chunks transactionally and keeps
+  checksum/status/error metadata; `Ai::Knowledge::Retriever` performs bounded
+  exact-token lexical scoring and returns inspectable evidence.
 
 The current M3 inspector records application lifecycle events for Run, Attempt,
-ToolInvocation, Approval and Artifact transitions. This is a local event catalog,
-not provider-native tracing, a complete distributed event stream, a cost dashboard
-or a historical backfill system.
+ToolInvocation, Approval and Artifact transitions. The M4 Knowledge workspace is
+a separate synchronous product flow and does not create a Run/Attempt for a local
+collection search. This is a local event catalog, not provider-native tracing, a
+complete distributed event stream, a cost dashboard or a historical backfill system.
 
 ## Integrations and constraints
 
@@ -129,6 +143,9 @@ or a historical backfill system.
   are never rendered, persisted as plaintext or copied into logs.
 - Provider capability differences are runtime-visible. Unsupported actions are
   disabled/explained rather than simulated.
+- M4 local retrieval is intentionally lexical and SQLite-bounded. No fake
+  embedding vectors, universal semantic score, rerank claim, remote URL fetch,
+  file upload or OCR result is created by this slice.
 - No direct provider SDK/HTTP calls, arbitrary shell execution, auth, billing,
   PostgreSQL, pgvector, Redis, batch endpoints or remote deployment in this
   slice. Registry models marked `:batch` are excluded from interactive M2 runs.
@@ -142,9 +159,10 @@ keyboard-friendly.
 
 ## Pre-flight record
 
-- Milestone: M0 + M1 + M2 + M3 current slice.
-- Scope: local chat, structured experiment comparison, code-defined tools and
-  durable approval continuation; M4-M8 remain explicitly deferred.
+- Milestone: M0 + M1 + M2 + M3 plus M4 local-text foundation.
+- Scope: local chat, structured experiment comparison, code-defined tools,
+  durable approval continuation, and Project-scoped text evidence retrieval;
+  full M4 semantic/document work and M5-M8 remain explicitly deferred.
 - Runtime verified: Ruby 4.0.2 and Rails 8.1.3.1.
 - Baseline difference: RubyLLM 2.0.0.rc3 is not installed globally; RubyLLM
   1.16.0 is currently available. The Gemfile must target 2.0.0.rc3 and the

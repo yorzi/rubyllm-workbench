@@ -5,8 +5,8 @@ AI agent 持续修改系统之后，仍能快速回答：系统为什么存在�
 操作如何完成、数据在哪里、哪些能力还不能宣称已经存在。
 
 更新时间：2026-09-16
-当前实现：M0–M3 核心闭环
-当前代码基线：`main` 上的 M3 生命周期与并行策略切片
+当前实现：M0–M3 核心闭环和 M4 本地文本基础切片
+当前代码基线：`main` 上的 M3 生命周期/并行策略与 M4 Knowledge foundation
 
 ## 两套文档体系：先确认你正在读哪一种“真相”
 
@@ -25,8 +25,9 @@ Specs 中的 `PLANNED` 可能仍然是正确的基线状态，而本页可以记
 ## 一句话理解
 
 RubyLLM Workbench 是一个 local-first 的 Rails 工作台：人在一个 Project 中选择
-RubyLLM 能力，发起 Chat 或 Experiment，系统把每次执行保存成可检查的 Run、
-Attempt、Message、ToolInvocation、Approval 和 Artifact。
+RubyLLM 能力，发起 Chat 或 Experiment，或建立一个本地 Knowledge collection，
+系统把执行保存成可检查的 Run、Attempt、Message、ToolInvocation、Approval 和
+Artifact，并把文本来源保存为可追溯的 KnowledgeItem/KnowledgeChunk。
 
 它的核心价值不是“替人自动完成一切”，而是让 AI 能力的调用、延迟、成本、失败、
 工具副作用和人的决定都留下可追溯证据。
@@ -39,13 +40,16 @@ Attempt、Message、ToolInvocation、Approval 和 Artifact。
 - 让一次 AI 执行在刷新页面、失败或需要审批后仍然可解释、可恢复。
 - 让实验结果和工具副作用成为耐久 Artifact，而不是只存在于一次页面响应里。
 - 让人能够看到模型做了什么、系统替它记录了什么、哪里需要人介入。
+- 先用本地、可检查的文本证据验证 Knowledge 工作流，再决定 provider embedding、
+  rerank 和文档提取的边界。
 
 ### 当前不做什么
 
 - 不是已经部署给公众使用的 SaaS，也没有账号、团队、计费或多租户。
 - 不是 M5 Agent/Deep Research 平台；Agent、工作流和 provider-hosted/server tools
   仍然延期。
-- 不是 M4 知识库/RAG/文档 OCR 系统；这些能力尚未实现。
+- 不是完整的 M4 知识库/RAG/文档 OCR 系统：当前只有本地文本 collection、chunk
+  和词法证据检索；embedding、语义检索、rerank、文件/OCR 仍未实现。
 - 不接受浏览器上传的任意 Ruby，也不执行任意本地 shell/code。
 - 本地测试通过、OpenRouter dogfood 成功、Git commit 存在，都不等于生产部署、
   公众可用、业务结果或 provider 长期稳定。
@@ -60,7 +64,8 @@ Attempt、Message、ToolInvocation、Approval 和 Artifact。
 | M3 核心 | 在 Tool Lab 启用代码定义工具，查看调用，审批或拒绝副作用 | ToolDefinition、ToolInvocation、Approval、工具参数/结果/时长/错误 | `IMPLEMENTED` · `LOCAL_VERIFIED` + `OPENROUTER_DOGFOOD` |
 | M3 观测切片 | 在 Run inspector 查看执行时间线 | LifecycleEvent、事件名称、关联记录、脱敏元数据和去重 key | `IMPLEMENTED` · `LOCAL_VERIFIED` |
 | M3 并行 tool calls | 通过显式策略验证多个调用的应用侧记录和安全降级 | 冻结的 calls/concurrency 选项、多调用 ToolInvocation 和生命周期事件 | `IMPLEMENTED` · `LOCAL_VERIFIED`；live provider 兼容性仍 `PARTIAL` |
-| M4 | 知识集合、摄取、chunk、embedding、检索、rerank、文档提取 | Knowledge*、引用和来源 Artifact | `PLANNED` |
+| M4 本地文本基础 | 创建知识集合、摄取文本、chunk、checksum、词法检索和证据查看 | KnowledgeCollection、KnowledgeItem、KnowledgeChunk、来源引用与 offset | `IMPLEMENTED` · `LOCAL_VERIFIED` |
+| M4 完整目标 | embedding、语义检索、rerank、文件/OCR 提取和引用 Artifact | embedding metadata、rerank evidence、provenance artifacts | `PARTIAL`；其余 `PLANNED` |
 | M5 | Agent、Durable Research、远程工具和可恢复长任务 | AgentDefinition、AgentRunStep、citation/research Artifact | `PLANNED` |
 
 这里的状态是项目当前实现层的判断；Specs 人类基线中的 `PLANNED` 状态仍保留其
@@ -121,6 +126,15 @@ Tool Lab 为 Project 保存一个新 Chat Run 的默认执行模式，默认为 
 - **Artifact**：耐久产物，例如 JSON、文本、报告或未来的引用/媒体；Artifact 不
   取代原始 Run/Attempt，而是和原始证据并存。
 
+### KnowledgeCollection / KnowledgeItem / KnowledgeChunk
+
+- **KnowledgeCollection**：Project 之下的本地知识边界；它不跨 Project 共享来源。
+- **KnowledgeItem**：一条规范化后的文本来源，保存 `source_kind`、可选的
+  `source_reference`、SHA-256 checksum 和 `pending/ingesting/ready/failed` 状态。
+- **KnowledgeChunk**：由 `Ai::Knowledge::Chunker` 生成的确定性字符窗口，保存
+  position、`char_start`/`char_end` 和 chunker metadata。当前 Retriever 使用精确
+  token 的词法 coverage/frequency 评分；结果是证据片段，不是模型答案。
+
 ### ToolDefinition / ToolInvocation / Approval
 
 - **ToolDefinition**：Project 允许使用的代码注册表条目。现在有
@@ -173,6 +187,9 @@ Tool Lab 只管理代码中已注册的 allowlist 条目。它不是在线执行
   执行究竟发生了什么”。
 - **Tool Lab**：查看 registry schema、approval policy、并行安全标记和 enabled 状态，
   还可以为新 Chat Run 选择串行/并行默认模式；开关和模式都只影响新 Run。
+- **Knowledge workspace**：创建 Project-scoped collection，粘贴 bounded text，
+  同步生成可替换的 chunks，并按 query 查看匹配词、分数、来源和字符 offset。该产品
+  页面不会创建 Chat Run/Attempt，也不会偷偷调用 provider。
 - **Run inspector**：稳定查看单次证据。即使页面不是当前 Chat，也可以从全局 Runs
   回到同一个执行；Lifecycle events 时间线展示状态、流式首字节、工具/审批和
   Artifact 事件的本地顺序。
@@ -213,8 +230,10 @@ Agent 定义、多步运行、远程/provider-hosted 工具、研究引用和更
   continuation 的新 Attempt；Run inspector 也展示这条时间线。
 - 当前本地回归覆盖并行策略的能力门控、side-effect 工具串行降级、冻结的 RubyLLM
   options，以及多个 tool calls 的独立 ToolInvocation/request/completion 事件。
-- 当前仍没有 live provider 返回多个 parallel tool calls 的兼容性结论，也没有 M4/M5
-  的实现证据。
+- 当前本地回归覆盖 Knowledge collection、文本 checksum、确定性 chunk offset、ready
+  状态和词法检索证据；这只证明 M4 本地文本基础切片。
+- 当前仍没有 live provider 返回多个 parallel tool calls 的兼容性结论，也没有 M4
+  provider embedding/rerank/OCR 或 M5 的实现证据。
 
 这些是本地、点时的验证，不是生产承诺。
 

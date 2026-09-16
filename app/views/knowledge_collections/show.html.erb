@@ -1,0 +1,141 @@
+<% content_for :title, "#{@collection.name} · Knowledge" %>
+<% content_for :inspector do %>
+  <div class="sticky top-0">
+    <div class="flex items-center justify-between gap-3">
+      <p class="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Knowledge inspector</p>
+      <span class="rounded-full bg-accent-soft px-2 py-1 text-[10px] font-medium text-accent">lexical-v1</span>
+    </div>
+    <div class="mt-5 rounded-xl border border-line bg-panel p-4">
+      <p class="font-mono text-xs text-muted">/<%= @project.slug %>/knowledge/<%= @collection.id %></p>
+      <h2 class="mt-2 text-base font-semibold text-ink"><%= @collection.name %></h2>
+      <p class="mt-2 text-xs leading-5 text-muted"><%= @collection.description.presence || "No collection description yet." %></p>
+      <dl class="mt-4 divide-y divide-line border-t border-line text-xs">
+        <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Sources</dt><dd class="font-mono text-ink"><%= @items.size %></dd></div>
+        <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Chunks</dt><dd class="font-mono text-ink"><%= @collection.knowledge_chunks.count %></dd></div>
+        <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Matches</dt><dd class="font-mono text-ink"><%= @results.size %></dd></div>
+      </dl>
+    </div>
+    <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-800">
+      <p class="font-medium">Evidence boundary</p>
+      <p class="mt-1">Scores are lexical coverage/frequency signals. They are not embedding similarity, rerank output, or an LLM answer.</p>
+    </div>
+  </div>
+<% end %>
+
+<%= render "shared/shell", active: "knowledge", project: @project do %>
+  <div class="mx-auto max-w-6xl px-5 py-8 sm:px-8 lg:px-10">
+    <%= render "shared/flash" %>
+    <%= link_to "← Knowledge", project_knowledge_collections_path(@project), class: "text-xs font-medium text-accent hover:underline" %>
+    <div class="mt-3 flex flex-col justify-between gap-5 border-b border-line pb-6 sm:flex-row sm:items-start">
+      <div class="min-w-0">
+        <div class="flex flex-wrap items-center gap-2">
+          <h1 class="text-3xl font-semibold tracking-tight text-ink"><%= @collection.name %></h1>
+          <span class="rounded-full bg-slate-100 px-2 py-1 font-mono text-[10px] text-muted">local text</span>
+        </div>
+        <p class="mt-2 max-w-3xl text-sm leading-6 text-muted"><%= @collection.description.presence || "Searchable local source material for this Project." %></p>
+      </div>
+    </div>
+
+    <section class="mt-8 rounded-2xl border border-line bg-panel p-5 shadow-sm sm:p-6" aria-labelledby="add-source-heading">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <h2 id="add-source-heading" class="text-sm font-semibold text-ink">Add text source</h2>
+          <p class="mt-1 text-xs leading-5 text-muted">Text is normalized, checksummed, synchronously chunked, and stored with character offsets.</p>
+        </div>
+        <span class="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-muted">source_kind: text</span>
+      </div>
+      <%= form_with url: project_knowledge_collection_items_path(@project, @collection), scope: :knowledge_item, class: "mt-5 space-y-4" do |form| %>
+        <div class="grid gap-4 md:grid-cols-2">
+          <div>
+            <%= form.label :title, "Source title", class: "text-xs font-medium text-ink" %>
+            <%= form.text_field :title, required: true, placeholder: "e.g. Product architecture notes", class: "mt-2 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm outline-none ring-accent/20 placeholder:text-slate-400 focus:border-accent focus:ring-4" %>
+          </div>
+          <div>
+            <%= form.label :source_reference, "Source reference (optional)", class: "text-xs font-medium text-ink" %>
+            <%= form.text_field :source_reference, placeholder: "e.g. meeting-notes-2026-09-16", class: "mt-2 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm outline-none ring-accent/20 placeholder:text-slate-400 focus:border-accent focus:ring-4" %>
+          </div>
+        </div>
+        <div>
+          <%= form.label :content_text, "Source text", class: "text-xs font-medium text-ink" %>
+          <%= form.text_area :content_text, rows: 10, required: true, placeholder: "Paste a bounded text source here…", class: "mt-2 w-full resize-y rounded-lg border border-line bg-white px-3 py-3 text-sm leading-6 outline-none ring-accent/20 placeholder:text-slate-400 focus:border-accent focus:ring-4" %>
+        </div>
+        <div class="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+          <p class="text-xs leading-5 text-muted">Current chunker: 800-character windows with 120-character overlap.</p>
+          <%= form.submit "Ingest source", class: "inline-flex cursor-pointer items-center rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700" %>
+        </div>
+      <% end %>
+    </section>
+
+    <section class="mt-10 rounded-2xl border border-line bg-panel p-5 shadow-sm sm:p-6" aria-labelledby="search-heading">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <h2 id="search-heading" class="text-sm font-semibold text-ink">Search evidence</h2>
+          <p class="mt-1 text-xs leading-5 text-muted">Search ready chunks only. Each match shows score, matched terms, source, and offsets.</p>
+        </div>
+        <span class="rounded-full bg-accent-soft px-2 py-1 text-[10px] font-medium text-accent">bounded · top 8</span>
+      </div>
+      <%= form_with url: project_knowledge_collection_path(@project, @collection), method: :get, class: "mt-5 flex flex-col gap-3 sm:flex-row" do |form| %>
+        <%= form.search_field :q, value: @query, placeholder: "e.g. SQLite retrieval", class: "min-w-0 flex-1 rounded-lg border border-line bg-white px-3 py-2.5 text-sm outline-none ring-accent/20 placeholder:text-slate-400 focus:border-accent focus:ring-4" %>
+        <%= form.submit "Search", class: "inline-flex cursor-pointer items-center justify-center rounded-lg border border-line bg-white px-4 py-2.5 text-sm font-medium text-ink hover:border-accent hover:text-accent" %>
+      <% end %>
+
+      <% if @query.present? %>
+        <div class="mt-6 flex items-center justify-between gap-3 border-b border-line pb-3">
+          <h3 class="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Results for “<%= @query %>”</h3>
+          <span class="font-mono text-xs text-muted"><%= @results.size %> matches</span>
+        </div>
+        <div class="mt-3 space-y-3">
+          <% @results.each do |result| %>
+            <article class="rounded-xl border border-line bg-canvas p-4">
+              <div class="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
+                <div class="min-w-0">
+                  <h4 class="truncate text-sm font-semibold text-ink"><%= result.chunk.knowledge_item.title %></h4>
+                  <p class="mt-1 text-xs text-muted">Chunk <%= result.chunk.position + 1 %> · chars <%= result.chunk.char_start %>–<%= result.chunk.char_end %></p>
+                </div>
+                <div class="shrink-0 text-left text-xs sm:text-right">
+                  <p class="font-mono font-semibold text-accent">score <%= result.score %></p>
+                  <p class="mt-1 text-muted">terms: <%= result.matched_terms.join(", ") %></p>
+                </div>
+              </div>
+              <pre class="mt-3 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-line bg-white p-3 font-mono text-xs leading-5 text-ink"><%= result.chunk.content_text %></pre>
+            </article>
+          <% end %>
+          <% if @results.empty? %>
+            <div class="rounded-xl border border-dashed border-line bg-canvas p-5 text-sm text-muted">No ready chunk matched this query.</div>
+          <% end %>
+        </div>
+      <% else %>
+        <div class="mt-5 rounded-xl border border-dashed border-line bg-canvas p-5 text-sm text-muted">Enter a query to inspect lexical evidence from this collection.</div>
+      <% end %>
+    </section>
+
+    <section class="mt-10" aria-labelledby="sources-heading">
+      <div class="flex items-center justify-between gap-3">
+        <h2 id="sources-heading" class="text-sm font-semibold text-ink">Sources</h2>
+        <span class="font-mono text-xs text-muted"><%= @items.size %> recorded</span>
+      </div>
+      <div class="mt-3 space-y-3">
+        <% @items.each do |item| %>
+          <article class="rounded-xl border border-line bg-panel p-4">
+            <div class="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <h3 class="truncate text-sm font-semibold text-ink"><%= item.title %></h3>
+                  <span class="rounded-full px-2 py-1 text-[10px] font-medium <%= item.ready? ? 'bg-emerald-50 text-success' : item.failed? ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-warning' %>"><%= item.ingestion_status %></span>
+                </div>
+                <p class="mt-2 text-xs text-muted"><%= item.source_reference.presence || "Inline text source" %> · <%= item.chunk_count %> chunks</p>
+              </div>
+              <p class="shrink-0 font-mono text-[10px] text-muted">sha256:<%= item.checksum.first(12) %></p>
+            </div>
+            <% if item.error_summary.present? %>
+              <p class="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700"><%= item.error_summary %></p>
+            <% end %>
+          </article>
+        <% end %>
+        <% if @items.empty? %>
+          <div class="rounded-xl border border-dashed border-line bg-panel p-5 text-sm text-muted">No sources yet. Add local text above to create inspectable chunks.</div>
+        <% end %>
+      </div>
+    </section>
+  </div>
+<% end %>

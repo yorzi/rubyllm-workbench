@@ -4,6 +4,7 @@ class Project < ApplicationRecord
   has_many :chats, dependent: :destroy
   has_many :experiments, dependent: :destroy
   has_many :experiment_executions, dependent: :destroy
+  has_many :knowledge_collections, dependent: :destroy
   has_many :runs, dependent: :destroy
   has_many :tool_definitions, dependent: :destroy
   has_many :tool_invocations, through: :runs
