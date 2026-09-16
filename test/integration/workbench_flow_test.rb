@@ -47,6 +47,19 @@ class WorkbenchFlowTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "Input snapshot"
   end
 
+  test "renders persisted chat messages with their message local" do
+    project = create_project(name: "Message rendering project")
+    chat = create_chat(project)
+    chat.messages.create!(role: "user", content: "A persisted prompt")
+    chat.messages.create!(role: "assistant", content: "A persisted answer")
+
+    get project_chat_path(project, chat)
+
+    assert_response :success
+    assert_includes response.body, "A persisted prompt"
+    assert_includes response.body, "A persisted answer"
+  end
+
   test "turns a provider configuration failure into a diagnostic Run" do
     project = create_project(name: "Failure project")
     chat = create_chat(project)

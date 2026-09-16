@@ -51,7 +51,7 @@
 
     <div id="messages" class="flex-1 space-y-4 py-6" aria-live="polite">
       <% @messages.each do |message| %>
-        <%= render message %>
+        <%= render partial: message.to_partial_path, locals: { message: message } %>
       <% end %>
       <% if @messages.empty? %>
         <div class="rounded-2xl border border-dashed border-line bg-panel p-8 text-center">
