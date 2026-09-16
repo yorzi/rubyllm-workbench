@@ -23,8 +23,9 @@ class RunsController < ApplicationController
   end
 
   def show
-    @run = Run.includes(:project, :chat, :attempts).find(params[:id])
+    @run = Run.includes(:project, :chat, :attempts, :artifacts, :experiment, :experiment_execution).find(params[:id])
     @messages = @run.chat.messages
     @latest_assistant_message = @messages.reverse.find { |message| message.role.to_s == "assistant" }
+    @structured_artifact = @run.artifacts.reverse.find { |artifact| artifact.kind == "json" }
   end
 end

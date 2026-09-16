@@ -1,0 +1,36 @@
+<%= form_with model: [@project, @experiment], class: "mt-8 rounded-2xl border border-line bg-panel p-5 shadow-sm sm:p-6" do |form| %>
+  <% if @experiment.errors.any? %>
+    <div class="mb-5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm leading-5 text-rose-700"><%= @experiment.errors.full_messages.to_sentence %></div>
+  <% end %>
+
+  <div>
+    <%= form.label :name, "Experiment name", class: "text-xs font-medium text-ink" %>
+    <%= form.text_field :name, required: true, placeholder: "e.g. Extract a product brief", class: "mt-2 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm outline-none ring-accent/20 placeholder:text-slate-400 focus:border-accent focus:ring-4" %>
+  </div>
+
+  <div class="mt-5">
+    <%= form.label :description, "Description (optional)", class: "text-xs font-medium text-ink" %>
+    <%= form.text_area :description, rows: 2, placeholder: "What decision does this experiment support?", class: "mt-2 w-full resize-y rounded-lg border border-line bg-white px-3 py-2.5 text-sm leading-6 outline-none ring-accent/20 placeholder:text-slate-400 focus:border-accent focus:ring-4" %>
+  </div>
+
+  <div class="mt-5">
+    <%= form.label :system_prompt, "System instructions (optional)", class: "text-xs font-medium text-ink" %>
+    <%= form.text_area :system_prompt, rows: 3, placeholder: "Be concise and return only the requested structure.", class: "mt-2 w-full resize-y rounded-lg border border-line bg-white px-3 py-2.5 text-sm leading-6 outline-none ring-accent/20 placeholder:text-slate-400 focus:border-accent focus:ring-4" %>
+  </div>
+
+  <div class="mt-5">
+    <%= form.label :input_prompt, "User prompt", class: "text-xs font-medium text-ink" %>
+    <%= form.text_area :input_prompt, rows: 5, required: true, placeholder: "Describe the task the selected models should answer.", class: "mt-2 w-full resize-y rounded-lg border border-line bg-white px-3 py-2.5 text-sm leading-6 outline-none ring-accent/20 placeholder:text-slate-400 focus:border-accent focus:ring-4" %>
+  </div>
+
+  <div class="mt-5">
+    <%= label_tag "experiment_schema_json", "Structured output schema", class: "text-xs font-medium text-ink" %>
+    <%= text_area_tag "experiment[schema_json]", @schema_text, id: "experiment_schema_json", rows: 18, required: true, spellcheck: false, class: "mt-2 w-full resize-y rounded-lg border border-line bg-slate-950 px-3 py-3 font-mono text-xs leading-5 text-slate-100 outline-none ring-accent/20 focus:border-accent focus:ring-4" %>
+    <p class="mt-2 text-xs leading-5 text-muted">Safe subset only: object, array, string, number, integer, boolean, properties, required, enum, description, and additionalProperties. Ruby code and unsupported JSON Schema keywords are rejected.</p>
+  </div>
+
+  <div class="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
+    <%= link_to "Cancel", @experiment.persisted? ? project_experiment_path(@project, @experiment) : project_experiments_path(@project), class: "text-sm text-muted hover:text-ink" %>
+    <%= form.submit @experiment.persisted? ? "Save new revision" : "Create experiment", class: "inline-flex cursor-pointer items-center rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700" %>
+  </div>
+<% end %>

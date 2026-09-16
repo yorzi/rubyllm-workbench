@@ -30,10 +30,14 @@ module WorkbenchTestHelpers
   end
 
   def with_configured_provider(chat)
-    provider_class = RubyLLM::Provider.resolve(chat.provider)
+    with_provider_configuration(chat.provider) { yield }
+  end
+
+  def with_provider_configuration(provider, value: "test-only-key")
+    provider_class = RubyLLM::Provider.resolve(provider)
     requirements = provider_class.configuration_requirements
     previous_values = requirements.to_h { |requirement| [ requirement, RubyLLM.config.public_send(requirement) ] }
-    requirements.each { |requirement| RubyLLM.config.public_send("#{requirement}=", "test-only-key") }
+    requirements.each { |requirement| RubyLLM.config.public_send("#{requirement}=", value) }
     yield
   ensure
     previous_values&.each { |requirement, value| RubyLLM.config.public_send("#{requirement}=", value) }

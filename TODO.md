@@ -1,4 +1,4 @@
-# TODO — M0/M1
+# TODO — M0/M1/M2 current slice complete, M3 next
 
 ## Foundation
 
@@ -29,12 +29,42 @@
       at desktop and narrow widths.
 - [x] Record the current boundary: provider-specific behavior still needs
       real-key dogfooding before the next milestone.
-- [ ] Dogfood the complete M1 path with an explicitly configured provider and
+- [x] Dogfood the complete M1 path with an explicitly configured provider and
       record any RubyLLM/provider gaps before starting M2.
+
+## M1 gate record — 2026-09-16
+
+- [x] OpenRouter configuration was verified without printing the credential.
+- [x] Real `openrouter/free` execution completed Run #6 with persisted
+      streamed output, Attempt metrics, and estimated zero cost.
+- [x] No RubyLLM/OpenRouter gap was found; the default sandbox DNS failure and
+      the free route's roughly 12-second TTFO are recorded in the
+      implementation map.
+
+## M2 — Experiments + Structured Output + Compare
+
+- [x] Add versioned Project-owned Experiment definitions with a constrained
+      JSON Schema input.
+- [x] Add grouped Experiment executions with one independent Run/Attempt per
+      selected model.
+- [x] Add RubyLLM structured output execution, JSON validation, and durable
+      JSON Artifacts.
+- [x] Distinguish schema-validation failures from transport/provider failures.
+- [x] Add comparison UI, rerun behavior, and request/service coverage.
+- [x] Dogfood structured output and a two-model comparison through OpenRouter
+      before starting M3.
+
+## M2 gate record — 2026-09-16
+
+- [x] Execution #1 retained one successful Artifact and one independent
+      OpenRouter `provider_error` child Run.
+- [x] Execution #2 reran the unchanged revision against two free OpenRouter
+      targets; both Runs succeeded with valid JSON Artifacts.
+- [x] Desktop and 390px browser checks passed; no horizontal overflow was
+      observed and the original browser page was restored.
 
 ## Explicitly deferred
 
-- [ ] M2 experiments, structured output, and comparisons.
 - [ ] M3 tools, approvals, and agents.
 - [ ] M4 knowledge, RAG, rerank, and document/OCR flows.
 - [ ] M5-M8 research, media, batch/evals, exports, deployment, and

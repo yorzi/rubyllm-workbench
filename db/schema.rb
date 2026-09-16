@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_16_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_16_100000) do
   create_table "active_storage_attachments", force: :cascade do |t|
     t.bigint "blob_id", null: false
     t.datetime "created_at", null: false
@@ -37,6 +37,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_090000) do
     t.bigint "blob_id", null: false
     t.string "variation_digest", null: false
     t.index ["blob_id", "variation_digest"], name: "index_active_storage_variant_records_uniqueness", unique: true
+  end
+
+  create_table "artifacts", force: :cascade do |t|
+    t.integer "attempt_id"
+    t.json "content_json"
+    t.text "content_text"
+    t.datetime "created_at", null: false
+    t.string "kind", null: false
+    t.json "metadata_json", default: {}, null: false
+    t.string "name"
+    t.integer "run_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["attempt_id"], name: "index_artifacts_on_attempt_id"
+    t.index ["run_id", "kind"], name: "index_artifacts_on_run_id_and_kind"
+    t.index ["run_id"], name: "index_artifacts_on_run_id"
   end
 
   create_table "attempts", force: :cascade do |t|
@@ -80,6 +95,41 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_090000) do
     t.index ["project_id", "created_at"], name: "index_chats_on_project_id_and_created_at"
     t.index ["project_id"], name: "index_chats_on_project_id"
     t.index ["ruby_llm_model_id"], name: "index_chats_on_ruby_llm_model_id"
+  end
+
+  create_table "experiment_executions", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.text "error_summary"
+    t.integer "experiment_id", null: false
+    t.datetime "finished_at"
+    t.json "input_snapshot_json", null: false
+    t.integer "project_id", null: false
+    t.string "requested_by", null: false
+    t.datetime "started_at"
+    t.string "status", default: "queued", null: false
+    t.integer "target_count", null: false
+    t.datetime "updated_at", null: false
+    t.index ["experiment_id", "created_at"], name: "index_experiment_executions_on_experiment_id_and_created_at"
+    t.index ["experiment_id"], name: "index_experiment_executions_on_experiment_id"
+    t.index ["project_id", "created_at"], name: "index_experiment_executions_on_project_id_and_created_at"
+    t.index ["project_id"], name: "index_experiment_executions_on_project_id"
+  end
+
+  create_table "experiments", force: :cascade do |t|
+    t.datetime "archived_at"
+    t.datetime "created_at", null: false
+    t.text "description"
+    t.json "generation_options_json", default: {}, null: false
+    t.text "input_prompt", null: false
+    t.string "name", null: false
+    t.integer "project_id", null: false
+    t.integer "revision", default: 1, null: false
+    t.json "schema_json", null: false
+    t.string "status", default: "runnable", null: false
+    t.text "system_prompt"
+    t.datetime "updated_at", null: false
+    t.index ["project_id", "status", "updated_at"], name: "index_experiments_on_project_id_and_status_and_updated_at"
+    t.index ["project_id"], name: "index_experiments_on_project_id"
   end
 
   create_table "messages", force: :cascade do |t|
@@ -199,6 +249,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_090000) do
     t.integer "chat_id", null: false
     t.datetime "created_at", null: false
     t.text "error_summary"
+    t.integer "experiment_execution_id"
+    t.integer "experiment_id"
     t.datetime "finished_at"
     t.json "input_snapshot_json"
     t.string "operation"
@@ -211,16 +263,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_090000) do
     t.integer "time_to_first_output_ms"
     t.datetime "updated_at", null: false
     t.index ["chat_id"], name: "index_runs_on_chat_id"
+    t.index ["experiment_execution_id"], name: "index_runs_on_experiment_execution_id"
+    t.index ["experiment_id"], name: "index_runs_on_experiment_id"
     t.index ["project_id"], name: "index_runs_on_project_id"
     t.index ["status", "created_at"], name: "index_runs_on_status_and_created_at"
   end
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "artifacts", "attempts"
+  add_foreign_key "artifacts", "runs"
   add_foreign_key "attempts", "runs"
   add_foreign_key "chats", "projects"
   add_foreign_key "chats", "ruby_llm_models"
+  add_foreign_key "experiment_executions", "experiments"
+  add_foreign_key "experiment_executions", "projects"
+  add_foreign_key "experiments", "projects"
   add_foreign_key "messages", "chats"
   add_foreign_key "runs", "chats"
+  add_foreign_key "runs", "experiment_executions"
+  add_foreign_key "runs", "experiments"
   add_foreign_key "runs", "projects"
 end

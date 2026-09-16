@@ -3,7 +3,10 @@ class Run < ApplicationRecord
 
   belongs_to :project
   belongs_to :chat
+  belongs_to :experiment, optional: true
+  belongs_to :experiment_execution, optional: true
   has_many :attempts, -> { order(:sequence, :id) }, dependent: :destroy
+  has_many :artifacts, dependent: :destroy
 
   after_create_commit :broadcast_status
   after_update_commit :broadcast_status
@@ -21,6 +24,10 @@ class Run < ApplicationRecord
 
   def result_summary
     result_summary_json || {}
+  end
+
+  def experiment?
+    experiment.present?
   end
 
   def duration_ms
@@ -69,11 +76,12 @@ class Run < ApplicationRecord
   end
 
   def fail!(error, summary: {})
+    failure_summary = { "failure_kind" => Ai::ErrorClassifier.code(error) }
     update!(
       status: :failed,
       finished_at: Time.current,
       error_summary: error_message_for(error),
-      result_summary_json: result_summary.merge(summary)
+      result_summary_json: result_summary.merge(failure_summary).merge(summary)
     )
   end
 

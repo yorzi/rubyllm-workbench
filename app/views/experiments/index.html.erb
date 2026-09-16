@@ -1,0 +1,54 @@
+<% content_for :title, "Experiments · #{@project.name}" %>
+<% content_for :inspector do %>
+  <div class="sticky top-0">
+    <p class="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Experiment workspace</p>
+    <div class="mt-5 rounded-xl border border-line bg-panel p-4 text-xs leading-5">
+      <p class="font-medium text-ink">Freeze once, compare repeatedly</p>
+      <p class="mt-2 text-muted">Each execution snapshots the prompt and schema, then records one independent Run per selected model.</p>
+      <dl class="mt-4 divide-y divide-line border-t border-line text-xs">
+        <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Experiments</dt><dd class="font-mono text-ink"><%= @experiments.size %></dd></div>
+        <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Project</dt><dd class="max-w-[9rem] truncate text-right text-ink"><%= @project.name %></dd></div>
+      </dl>
+    </div>
+  </div>
+<% end %>
+
+<%= render "shared/shell", active: "experiments", project: @project do %>
+  <div class="mx-auto max-w-6xl px-5 py-8 sm:px-8 lg:px-10">
+    <%= render "shared/flash" %>
+    <div class="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+      <div>
+        <%= link_to "← #{@project.name}", project_path(@project), class: "text-xs font-medium text-accent hover:underline" %>
+        <h1 class="mt-3 text-3xl font-semibold tracking-tight text-ink">Experiments</h1>
+        <p class="mt-2 max-w-2xl text-sm leading-6 text-muted">Save a structured prompt once, then compare compatible models without losing the raw evidence.</p>
+      </div>
+      <%= link_to "New experiment", new_project_experiment_path(@project), class: "inline-flex items-center justify-center rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700" %>
+    </div>
+
+    <div class="mt-8 space-y-3">
+      <% @experiments.each do |experiment| %>
+        <%= link_to project_experiment_path(@project, experiment), class: "block rounded-xl border border-line bg-panel p-5 shadow-sm hover:border-accent" do %>
+          <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <h2 class="truncate text-base font-semibold text-ink"><%= experiment.name %></h2>
+                <span class="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-medium text-success"><%= experiment.status %></span>
+              </div>
+              <p class="mt-2 line-clamp-2 text-sm leading-6 text-muted"><%= experiment.description.presence || experiment.input_prompt %></p>
+            </div>
+            <div class="shrink-0 text-left text-xs text-muted sm:text-right">
+              <p class="font-mono">v<%= experiment.revision %></p>
+              <p class="mt-1"><%= experiment.experiment_executions.size %> executions</p>
+            </div>
+          </div>
+        <% end %>
+      <% end %>
+      <% if @experiments.empty? %>
+        <div class="rounded-xl border border-dashed border-line bg-panel p-8 text-center">
+          <p class="text-sm font-medium text-ink">No experiments yet.</p>
+          <p class="mt-2 text-sm leading-5 text-muted">Create a schema-backed prompt to start comparing models.</p>
+        </div>
+      <% end %>
+    </div>
+  </div>
+<% end %>

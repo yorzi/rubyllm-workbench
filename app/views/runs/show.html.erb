@@ -25,6 +25,7 @@
       <div>
         <div class="flex items-center gap-3"><h1 class="font-mono text-2xl font-semibold tracking-tight text-ink">Run #<%= @run.id %></h1><%= render "runs/status", run: @run %></div>
         <p class="mt-2 break-all font-mono text-xs text-muted"><%= @run.chat.provider %> / <%= @run.chat.model_id %> · <%= @run.operation %></p>
+        <% if @run.experiment? %><p class="mt-2 text-xs text-muted">Experiment: <%= link_to @run.experiment.name, project_experiment_path(@run.project, @run.experiment), class: "font-medium text-accent hover:underline" %> · revision <%= @run.input_snapshot.dig("experiment", "revision") || @run.experiment.revision %></p><% end %>
       </div>
       <%= link_to "Return to chat", project_chat_path(@run.project, @run.chat), class: "inline-flex items-center justify-center rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
     </div>
@@ -40,6 +41,7 @@
       <section class="mt-6 rounded-xl border border-rose-200 bg-rose-50 p-4" aria-labelledby="diagnostic-heading">
         <h2 id="diagnostic-heading" class="text-sm font-semibold text-rose-700">Diagnostic</h2>
         <p class="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-rose-700"><%= @run.error_summary %></p>
+        <% if @run.result_summary["failure_kind"].present? %><p class="mt-2 font-mono text-[11px] text-rose-700">failure_kind: <%= @run.result_summary["failure_kind"] %></p><% end %>
       </section>
     <% end %>
 
@@ -73,11 +75,16 @@
       </div>
       <div class="rounded-xl border border-line bg-panel p-5">
         <h2 class="text-sm font-semibold text-ink">Result</h2>
-        <% result_text = @latest_assistant_message&.content.presence || @run.result_summary["partial_output"] %>
-        <% if result_text.present? %>
-          <div class="mt-4 whitespace-pre-wrap break-words rounded-lg bg-canvas p-4 text-sm leading-6 text-ink"><%= result_text %></div>
+        <% if @structured_artifact %>
+          <div class="mt-4 flex items-center justify-between gap-3"><span class="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-medium text-success">JSON artifact · valid</span><span class="font-mono text-[10px] text-muted"><%= @structured_artifact.name %></span></div>
+          <pre class="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-canvas p-4 font-mono text-xs leading-5 text-ink"><%= JSON.pretty_generate(@structured_artifact.parsed_content) %></pre>
         <% else %>
-          <p class="mt-4 rounded-lg bg-canvas p-4 text-sm text-muted">No durable output recorded yet.</p>
+          <% result_text = @latest_assistant_message&.content.presence || @run.result_summary["partial_output"] %>
+          <% if result_text.present? %>
+            <div class="mt-4 whitespace-pre-wrap break-words rounded-lg bg-canvas p-4 text-sm leading-6 text-ink"><%= result_text %></div>
+          <% else %>
+            <p class="mt-4 rounded-lg bg-canvas p-4 text-sm text-muted">No durable output recorded yet.</p>
+          <% end %>
         <% end %>
       </div>
     </section>

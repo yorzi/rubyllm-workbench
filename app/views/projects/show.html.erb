@@ -32,11 +32,30 @@
       <%= link_to "New chat", new_project_chat_path(@project), class: "inline-flex items-center justify-center rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700" %>
     </div>
 
-    <div class="mt-8 grid gap-4 sm:grid-cols-3">
+    <div class="mt-8 grid gap-4 sm:grid-cols-4">
       <div class="rounded-xl border border-line bg-panel p-4"><p class="text-[10px] uppercase tracking-[0.14em] text-muted">Chats</p><p class="mt-2 text-2xl font-semibold text-ink"><%= @project.chats.count %></p></div>
+      <div class="rounded-xl border border-line bg-panel p-4"><p class="text-[10px] uppercase tracking-[0.14em] text-muted">Experiments</p><p class="mt-2 text-2xl font-semibold text-ink"><%= @project.experiments.count %></p></div>
       <div class="rounded-xl border border-line bg-panel p-4"><p class="text-[10px] uppercase tracking-[0.14em] text-muted">Runs</p><p class="mt-2 text-2xl font-semibold text-ink"><%= @project.runs.count %></p></div>
-      <div class="rounded-xl border border-line bg-panel p-4"><p class="text-[10px] uppercase tracking-[0.14em] text-muted">Mode</p><p class="mt-2 text-2xl font-semibold text-ink">M1</p></div>
+      <div class="rounded-xl border border-line bg-panel p-4"><p class="text-[10px] uppercase tracking-[0.14em] text-muted">Mode</p><p class="mt-2 text-2xl font-semibold text-ink">M2</p></div>
     </div>
+
+    <section class="mt-10" aria-labelledby="experiments-heading">
+      <div class="flex items-center justify-between gap-3">
+        <h2 id="experiments-heading" class="text-sm font-semibold text-ink">Experiments</h2>
+        <%= link_to "Open workspace", project_experiments_path(@project), class: "text-xs font-medium text-accent hover:underline" %>
+      </div>
+      <div class="mt-3 grid gap-3 md:grid-cols-2">
+        <% @project.experiments.order(updated_at: :desc).limit(4).each do |experiment| %>
+          <%= link_to project_experiment_path(@project, experiment), class: "rounded-xl border border-line bg-panel p-4 hover:border-accent" do %>
+            <div class="flex items-center justify-between gap-3"><h3 class="truncate text-sm font-medium text-ink"><%= experiment.name %></h3><span class="font-mono text-[10px] text-muted">v<%= experiment.revision %></span></div>
+            <p class="mt-2 truncate text-xs text-muted"><%= experiment.input_prompt %></p>
+          <% end %>
+        <% end %>
+        <% if @project.experiments.none? %>
+          <%= link_to "Create a schema-backed experiment", new_project_experiment_path(@project), class: "rounded-xl border border-dashed border-line bg-panel p-5 text-sm text-muted hover:border-accent hover:text-accent" %>
+        <% end %>
+      </div>
+    </section>
 
     <div class="mt-10 grid gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <section aria-labelledby="recent-chats-heading">

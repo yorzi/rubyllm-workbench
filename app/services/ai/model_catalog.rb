@@ -10,6 +10,10 @@ module Ai
       delegate :id, :name, :provider, :capabilities, :modalities, :context_window,
         :max_output_tokens, :pricing, :unlisted?, :supports?, to: :model
 
+      def interactive?
+        !id.to_s.end_with?(":batch")
+      end
+
       def status
         configured ? "configured" : "needs configuration"
       end

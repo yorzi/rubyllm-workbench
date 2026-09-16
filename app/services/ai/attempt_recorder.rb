@@ -45,7 +45,7 @@ module Ai
       @attempt.update!(time_to_first_output_ms: first_output_ms)
     end
 
-    def succeed!(response, usage_ids_before: [])
+    def succeed!(response, usage_ids_before: [], result_summary: {})
       usage_records = new_usage_records(usage_ids_before)
       if usage_records.any?
         sync_usage_records!(usage_records, fallback_status: :succeeded)
@@ -53,7 +53,7 @@ module Ai
         update_from_response!(response, status: :succeeded)
       end
 
-      summary = response_summary(response).merge("partial_output" => @partial_output.presence)
+      summary = response_summary(response).merge(result_summary).merge("partial_output" => @partial_output.presence)
       summary.delete("partial_output") if summary["partial_output"].nil?
       @run.succeed!(summary)
       @run
@@ -107,7 +107,7 @@ module Ai
         attempt.assign_attributes(
           provider: usage.provider,
           model_id: usage.model,
-          status: normalized_status(usage.status, fallback_status),
+          status: error ? :failed : normalized_status(usage.status, fallback_status),
           started_at: attempt.started_at || @run.started_at || Time.current,
           finished_at: Time.current,
           duration_ms: elapsed_ms(@clock.call(Process::CLOCK_MONOTONIC)),
@@ -116,7 +116,7 @@ module Ai
         )
         attempt.assign_attributes(token_attributes(usage.tokens))
         attempt.assign_attributes(Ai::CostNormalizer.for(usage, model: model_for(usage)))
-        attempt.assign_attributes(error_attributes(error)) if error && attempt.failed?
+        attempt.assign_attributes(error_attributes(error)) if error
         attempt.save!
       end
     end
@@ -176,6 +176,7 @@ module Ai
     def error_attributes(error)
       {
         error_class: error.class.name,
+        error_code: Ai::ErrorClassifier.code(error),
         error_message: redact(error.message).to_s.truncate(2_000)
       }
     end
