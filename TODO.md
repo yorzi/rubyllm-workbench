@@ -17,6 +17,8 @@
 - [x] Implement durable project chats and model selection.
 - [x] Implement streaming states and durable completion/failure persistence;
       paid-provider smoke testing remains opt-in.
+- [x] Make Run/Attempt creation atomic and exercise the ChatExecutor streaming
+      success/failure lifecycle with deterministic provider doubles.
 - [x] Implement the Run/Attempt inspector with usage, cost provenance,
       latency, partial output, and safe error details.
 - [x] Add a global Run history with status/provider/search filters and stable

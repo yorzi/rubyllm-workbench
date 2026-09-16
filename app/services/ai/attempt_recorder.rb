@@ -8,8 +8,9 @@ module Ai
       thinking_tokens: :thinking
     }.freeze
 
-    def initialize(run, attempt: nil, clock: Process.method(:clock_gettime))
+    def initialize(run, attempt: nil, clock: Process.method(:clock_gettime), chat: nil)
       @run = run
+      @chat = chat || @run.chat
       @attempt = attempt
       @clock = clock
       @started_monotonic = @clock.call(Process::CLOCK_MONOTONIC)
@@ -22,8 +23,8 @@ module Ai
     def start!
       @attempt ||= @run.attempts.order(:sequence, :id).first || @run.attempts.create!(
         sequence: next_sequence,
-        provider: @run.chat.provider.to_s,
-        model_id: @run.chat.model_id.to_s,
+        provider: @chat.provider.to_s,
+        model_id: @chat.model_id.to_s,
         status: :queued
       )
 
@@ -91,7 +92,7 @@ module Ai
     private
 
     def new_usage_records(usage_ids_before)
-      relation = @run.chat.ruby_llm_usages
+      relation = @chat.ruby_llm_usages
       records = if usage_ids_before.empty?
         relation.to_a
       else
@@ -137,7 +138,7 @@ module Ai
 
     def update_from_response!(response, status:)
       model = begin
-        Ai::ModelCatalog.new.find!(@run.chat.model_id, provider: @run.chat.provider)
+        Ai::ModelCatalog.new.find!(@chat.model_id, provider: @chat.provider)
       rescue StandardError
         nil
       end
@@ -168,7 +169,7 @@ module Ai
       summary = {}
       summary["finish_reason"] = response.finish_reason.to_s if response.respond_to?(:finish_reason) && response.finish_reason
       summary["message_id"] = response.id if response.respond_to?(:id) && response.id
-      summary["usage_ids"] = @run.chat.ruby_llm_usages.chronological.pluck(:id)
+      summary["usage_ids"] = @chat.ruby_llm_usages.chronological.pluck(:id)
       summary
     end
 
