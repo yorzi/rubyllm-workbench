@@ -1,5 +1,12 @@
 # TODO — M0/M1/M2 complete, M3 tools and approvals in progress
 
+## Human understanding layer
+
+- [x] Establish `docs/README.md`, `SYSTEM_GUIDE.md`, `ARCHITECTURE.md`,
+      `OPERATIONS.md`, and `CHANGELOG.md` as the human-readable system map.
+- [ ] Update the human map, diagrams, and changelog with every thematic
+      implementation change.
+
 ## Foundation
 
 - [x] Initialize the Rails 8.1.3.1 app with SQLite, Tailwind, Vite, Hotwire,

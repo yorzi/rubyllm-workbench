@@ -7,15 +7,22 @@ Attempts. It follows the source specifications linked into this workspace:
 - Canonical entrypoint: [ai/00_ENTRYPOINT.md](rubyllm-workbench/ai/00_ENTRYPOINT.md)
 - Implementation map: [IMPLEMENTATION_MAP.md](IMPLEMENTATION_MAP.md)
 - Current work list: [TODO.md](TODO.md)
+- Human understanding docs: [docs/README.md](docs/README.md)
 
 ## Current slice
 
-The implemented gate is M0–M3: Projects, Model Explorer, model selection,
+The implemented gate is M0–M3 core: Projects, Model Explorer, model selection,
 persisted Chats and Messages, RubyLLM-backed streaming execution, a
 code-defined Tool Lab, durable tool approvals, Run/Attempt/ToolInvocation
 records, a searchable Run history, and a token/cost/latency inspector.
-Agents, provider-hosted tools, RAG, media, batch evaluation, billing, and
-deployment remain deferred.
+Parallel tool-call compatibility, Agents, provider-hosted tools, RAG, media,
+batch evaluation, billing, and deployment remain deferred.
+
+If you are returning to the project after a pause, read
+[docs/SYSTEM_GUIDE.md](docs/SYSTEM_GUIDE.md) first, then the diagrams and
+operating notes linked from [docs/README.md](docs/README.md). These documents
+are maintained alongside each thematic implementation change so the system's
+current behavior and boundaries remain legible to a human.
 
 ## Local setup
 

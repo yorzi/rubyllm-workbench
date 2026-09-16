@@ -9,6 +9,15 @@ This implementation covers the M0, M1, M2 and current M3 slice:
 Later milestones (knowledge, agents, media, batch/evals and operational polish)
 stay deferred until this loop is extended deliberately.
 
+## Human understanding layer
+
+The human-readable system map lives in [docs/README.md](docs/README.md). Start
+with `docs/SYSTEM_GUIDE.md` for goals, current capabilities and cautions; use
+`docs/ARCHITECTURE.md` for flow/data/state diagrams; use `docs/OPERATIONS.md`
+for local operation and evidence boundaries; and append user-facing changes to
+`docs/CHANGELOG.md` with each thematic iteration. These documents summarize the
+implementation but do not override the canonical specs or code.
+
 ## Product shape
 
 - **User:** one local Ruby/Rails developer; no accounts, teams, billing or
