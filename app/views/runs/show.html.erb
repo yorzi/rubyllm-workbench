@@ -68,6 +68,25 @@
       </div>
     </section>
 
+    <section class="mt-8" aria-labelledby="lifecycle-events-heading">
+      <div class="flex items-center justify-between gap-3"><h2 id="lifecycle-events-heading" class="text-sm font-semibold text-ink">Lifecycle events</h2><span class="font-mono text-xs text-muted"><%= @lifecycle_events.size %> recorded</span></div>
+      <% if @lifecycle_events.empty? %>
+        <div class="mt-3 rounded-xl border border-dashed border-line bg-panel p-5 text-sm text-muted">No lifecycle events were recorded for this Run.</div>
+      <% else %>
+        <ol class="mt-3 overflow-hidden rounded-xl border border-line bg-panel divide-y divide-line">
+          <% @lifecycle_events.each do |event| %>
+            <li class="flex min-w-0 flex-col gap-1 px-4 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+              <div class="min-w-0">
+                <p class="break-all font-mono text-[11px] font-medium text-ink"><%= event.name %></p>
+                <p class="mt-1 break-words text-xs text-muted"><%= lifecycle_event_summary(event) %></p>
+              </div>
+              <time class="shrink-0 font-mono text-[10px] text-muted" datetime="<%= event.occurred_at.iso8601 %>"><%= l(event.occurred_at, format: :short) %></time>
+            </li>
+          <% end %>
+        </ol>
+      <% end %>
+    </section>
+
     <section class="mt-8" aria-labelledby="tools-heading">
       <div class="flex items-center justify-between gap-3"><h2 id="tools-heading" class="text-sm font-semibold text-ink">Tools</h2><span class="font-mono text-xs text-muted"><%= @tool_invocations.size %> recorded</span></div>
       <div class="mt-3 space-y-3">

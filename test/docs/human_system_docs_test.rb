@@ -22,6 +22,9 @@ class HumanSystemDocsTest < ActiveSupport::TestCase
     assert_includes sources.fetch("README.md"), "`REMOVED`"
     assert_includes sources.fetch("CHANGELOG.md"), "双层体系"
     assert_includes sources.fetch("OPERATIONS.md"), "当前可观测性边界"
+    assert_includes sources.fetch("SYSTEM_GUIDE.md"), "LifecycleEvent"
+    assert_includes sources.fetch("ARCHITECTURE.md"), "LifecycleEventRecorder"
+    assert_includes sources.fetch("OPERATIONS.md"), "PARALLEL_WORKERS=1"
   end
 
   test "architecture keeps the system diagrams and current boundary visible" do
@@ -29,6 +32,8 @@ class HumanSystemDocsTest < ActiveSupport::TestCase
 
     assert_operator architecture.scan("```mermaid").length, :>=, 4
     assert_includes architecture, "ToolInvocation"
+    assert_includes architecture, "LIFECYCLE_EVENT"
+    assert_includes architecture, "event_key 去重"
     assert_includes architecture, "waiting_for_approval"
     assert_includes architecture, "M4 Knowledge + RAG"
     assert_includes architecture, "ChatResponseJob"
@@ -48,6 +53,7 @@ class HumanSystemDocsTest < ActiveSupport::TestCase
     assert_includes guide, "Run #13"
     assert_includes guide, "Specs 基线"
     assert_includes guide, "当前现实层"
+    assert_includes guide, "LifecycleEvent"
     assert_includes guide, "`IMPLEMENTED`"
     assert_includes guide, "`PARTIAL`"
     assert_includes guide, "`PLANNED`"

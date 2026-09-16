@@ -4,13 +4,13 @@
 
 This implementation covers the M0, M1, M2 and current M3 slice:
 
-`Project -> Chat/Tool Lab -> persisted Run/Attempt/ToolInvocation/Approval/Artifact -> inspector`
+`Project -> Chat/Tool Lab -> persisted Run/Attempt/ToolInvocation/Approval/Artifact/LifecycleEvent -> inspector`
 
 Later milestones (knowledge, agents, media, batch/evals and operational polish)
 stay deferred until this loop is extended deliberately.
 
-Current status: M0–M3 core `IMPLEMENTED`; M3 parallel tool-call compatibility `PARTIAL`;
-M4–M8 `PLANNED`.
+Current status: M0–M3 core and the local lifecycle-event catalog `IMPLEMENTED`;
+M3 parallel tool-call compatibility `PARTIAL`; M4–M8 `PLANNED`.
 
 ## Human understanding layer
 
@@ -48,6 +48,10 @@ look complete.
   selected model; reruns create a new execution and preserve prior evidence.
 - **Artifact:** a bounded JSON result attached to the successful structured Run;
   the raw chat/Run/Attempt history remains inspectable alongside it.
+- **LifecycleEvent:** a Run-scoped, metadata-only event catalog entry with a fixed
+  name, optional links to an Attempt/Artifact/ToolInvocation/Approval, occurrence
+  time, duration and idempotency key. It indexes transitions; it is not a content
+  store or distributed trace.
 - **ToolDefinition:** a Project-owned enabled/disabled reference to a
   code-defined registry entry; browser input cannot upload executable code.
 - **ToolInvocation:** one normalized tool call attached to a Run, preserving
@@ -72,11 +76,14 @@ look complete.
 7. Experiment workspace: create/edit a versioned definition, choose configured
    interactive structured-output models, rerun a frozen execution, and inspect
    grouped Runs and JSON Artifacts.
+8. Run lifecycle timeline: inspect the ordered local event catalog alongside the
+   Run's original records.
 
 ## Data and service boundaries
 
-- Rails application records: `Project`, `Chat`, `Run`, `Attempt` and the
-  minimum message association needed to preserve durable history.
+- Rails application records: `Project`, `Chat`, `Run`, `Attempt`, `Artifact`,
+  `LifecycleEvent` and the minimum message association needed to preserve
+  durable history.
 - RubyLLM remains responsible for provider abstraction and conversation
   semantics where its Rails persistence helpers fit.
 - `Ai::ModelCatalog` queries RubyLLM model metadata and provider configuration.
@@ -95,10 +102,14 @@ look complete.
 - `Ai::ToolInvocationRecorder` maps RubyLLM tool calls to inspectable
   application records; `Ai::ApprovalService` records a decision and enqueues
   the resumable Chat completion.
+- `Ai::LifecycleEventRecorder` subscribes to application lifecycle
+  notifications, filters payloads to safe metadata, persists `LifecycleEvent`
+  rows and deduplicates repeated notifications by `event_key`.
 
-The current M3 inspector records tool and approval activity, but a unified lifecycle event
-catalog for `ai.run`, `ai.attempt` and `ai.artifact` remains `PLANNED`; it must not be
-assumed from the existence of database records.
+The current M3 inspector records application lifecycle events for Run, Attempt,
+ToolInvocation, Approval and Artifact transitions. This is a local event catalog,
+not provider-native tracing, a complete distributed event stream, a cost dashboard
+or a historical backfill system.
 
 ## Integrations and constraints
 
@@ -207,10 +218,29 @@ definition creates new evidence without mutating the saved definition.
 - **Failure boundary:** a local tool exception is represented as a tool-result
   error message plus failed invocation/Run diagnostics, leaving the chat
   history structurally answerable for the next prompt.
+- **Lifecycle catalog:** `Run`, `Attempt` and `Artifact` transitions plus
+  tool/approval notifications are normalized into `LifecycleEvent` rows. Event
+  payloads intentionally exclude prompt, arguments, results and Artifact
+  content; related records remain the source of those details.
 - **OpenRouter dogfood:** Run #11 completed a real `project_snapshot` call;
   Run #13 exercised `save_run_note` from `waiting_for_approval` through
   approval, continuation, and a report Artifact. The latter retained one user
   message and two assistant messages, with no duplicate prompt from the queue
   continuation.
 - **Still unverified:** parallel tool calls remain opt-in compatibility work;
-  M5 provider-hosted tools/agents are not part of this slice.
+  provider-native tracing, event export/backfill and M5 provider-hosted
+  tools/agents are not part of this slice.
+
+## Lifecycle event catalog — current slice
+
+The application emits a fixed local catalog through `ActiveSupport::Notifications`:
+
+- `ai.run.created`, `started`, `resumed`, `waiting_for_approval`, `succeeded`, `failed`;
+- `ai.attempt.started`, `streaming`, `succeeded`, `failed`;
+- `ai.tool.requested`, `completed`;
+- `ai.approval.requested`, `decided`;
+- `ai.artifact.created`.
+
+`LifecycleEvent` rows are scoped to a Run and ordered by `occurred_at` plus `id`.
+Repeated application notifications with the same `event_key` are ignored. Runs
+created before the migration do not receive synthetic historical events.

@@ -44,7 +44,7 @@ changelog 中记录两边的关系。
 | 文档 | 负责的问题 | 权威程度 |
 | --- | --- | --- |
 | `docs/SYSTEM_GUIDE.md` | 系统是什么、现在能做什么、用户如何理解它 | 当前实现的阅读入口；不覆盖 Specs 基线 |
-| `docs/ARCHITECTURE.md` | 模块、数据、时序和状态如何连接 | 当前实现结构图；具体字段以代码/迁移为准 |
+| `docs/ARCHITECTURE.md` | 模块、数据、事件、时序和状态如何连接 | 当前实现结构图；具体字段以代码/迁移为准 |
 | `docs/OPERATIONS.md` | 如何启动、测试、配置 provider、判断证据 | 当前本地操作手册；不包含任何 secret |
 | `docs/CHANGELOG.md` | 每次主题迭代改变了什么、为什么、证据是什么 | 面向人的增长历史，原则上只追加 |
 | `IMPLEMENTATION_MAP.md` | Specs 基线到当前代码的实现映射和技术边界 | 当前实现合同与偏差入口 |

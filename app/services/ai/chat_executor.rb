@@ -8,7 +8,7 @@ module Ai
     def call
       return @run unless claim_run
 
-      recorder = Ai::AttemptRecorder.new(@run, chat: @chat)
+      recorder = Ai::AttemptRecorder.new(@run, chat: @chat, continuation: @resuming_approval)
       attempt = recorder.start!
       Ai::ChatTooling.new(chat: @chat, project: @run.project, run: @run).configure
       tool_recorder = Ai::ToolInvocationRecorder.new(run: @run, chat: @chat, attempt:).attach

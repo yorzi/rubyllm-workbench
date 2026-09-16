@@ -60,6 +60,7 @@ class ToolApprovalFlowTest < ActionDispatch::IntegrationTest
     assert_equal "Reviewed in integration test", @invocation.approval.decision_note
     assert_equal "approved", @invocation.reload.status
     assert_equal "approved", @tool_call.reload.approval
+    assert_equal 1, @run.lifecycle_events.where(name: "ai.approval.decided").count
   end
 
   test "records denial in both the app audit row and RubyLLM tool call" do

@@ -45,6 +45,8 @@ class WorkbenchFlowTest < ActionDispatch::IntegrationTest
     get run_path(run)
     assert_response :success
     assert_includes response.body, "Input snapshot"
+    assert_includes response.body, "Lifecycle events"
+    assert_includes response.body, "ai.run.created"
   end
 
   test "renders persisted chat messages with their message local" do

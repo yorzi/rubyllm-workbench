@@ -8,10 +8,11 @@ module Ai
       thinking_tokens: :thinking
     }.freeze
 
-    def initialize(run, attempt: nil, clock: Process.method(:clock_gettime), chat: nil)
+    def initialize(run, attempt: nil, clock: Process.method(:clock_gettime), chat: nil, continuation: false)
       @run = run
       @chat = chat || @run.chat
       @attempt = attempt
+      @continuation = continuation
       @clock = clock
       @started_monotonic = @clock.call(Process::CLOCK_MONOTONIC)
       @partial_output = +""
@@ -21,12 +22,21 @@ module Ai
     attr_reader :partial_output
 
     def start!
-      @attempt ||= @run.attempts.order(:sequence, :id).first || @run.attempts.create!(
-        sequence: next_sequence,
-        provider: @chat.provider.to_s,
-        model_id: @chat.model_id.to_s,
-        status: :queued
-      )
+      @attempt ||= if @continuation
+        @run.attempts.create!(
+          sequence: next_sequence,
+          provider: @chat.provider.to_s,
+          model_id: @chat.model_id.to_s,
+          status: :queued
+        )
+      else
+        @run.attempts.order(:sequence, :id).first || @run.attempts.create!(
+          sequence: next_sequence,
+          provider: @chat.provider.to_s,
+          model_id: @chat.model_id.to_s,
+          status: :queued
+        )
+      end
 
       @run.start! unless @run.running?
       @attempt.start! unless @attempt.running?
@@ -43,6 +53,16 @@ module Ai
       first_output_ms = elapsed_ms(@first_output_monotonic)
       @run.update!(time_to_first_output_ms: first_output_ms)
       @attempt.update!(time_to_first_output_ms: first_output_ms)
+      Ai::LifecycleEventRecorder.emit(
+        "ai.attempt.streaming",
+        run_id: @run.id,
+        attempt_id: @attempt.id,
+        provider: @attempt.provider,
+        model_id: @attempt.model_id,
+        status: @attempt.status,
+        time_to_first_output_ms: first_output_ms,
+        event_key: "attempt:#{@attempt.id}:streaming"
+      )
     end
 
     def succeed!(response, usage_ids_before: [], result_summary: {})
@@ -62,10 +82,9 @@ module Ai
     def waiting_for_approval!(usage_ids_before: [], result_summary: {})
       usage_records = new_usage_records(usage_ids_before)
       sync_usage_records!(usage_records, fallback_status: :succeeded) if usage_records.any?
-      @run.update!(
-        status: :waiting_for_approval,
-        finished_at: nil,
-        result_summary_json: result_summary.merge("partial_output" => @partial_output.presence).compact
+      @run.wait_for_approval!(
+        result_summary.merge("partial_output" => @partial_output.presence).compact,
+        attempt_id: @attempt.id
       )
       @run
     end

@@ -8,7 +8,9 @@ class Run < ApplicationRecord
   has_many :attempts, -> { order(:sequence, :id) }, dependent: :destroy
   has_many :artifacts, dependent: :destroy
   has_many :tool_invocations, dependent: :destroy
+  has_many :lifecycle_events, -> { chronological }, dependent: :destroy
 
+  after_create :record_created_event
   after_create_commit :broadcast_status
   after_update_commit :broadcast_status
 
@@ -69,11 +71,31 @@ class Run < ApplicationRecord
   end
 
   def start!
+    was_waiting_for_approval = waiting_for_approval?
+    first_start = started_at.nil?
     update!(status: :running, started_at: started_at || Time.current)
+    if first_start
+      record_lifecycle_event("ai.run.started", attempt_id: current_attempt_id)
+    elsif was_waiting_for_approval
+      record_lifecycle_event("ai.run.resumed", attempt_id: current_attempt_id)
+    end
+    self
+  end
+
+  def wait_for_approval!(summary = {}, attempt_id: nil)
+    update!(
+      status: :waiting_for_approval,
+      finished_at: nil,
+      result_summary_json: summary
+    )
+    record_lifecycle_event("ai.run.waiting_for_approval", attempt_id: attempt_id)
+    self
   end
 
   def succeed!(summary = {})
     update!(status: :succeeded, finished_at: Time.current, result_summary_json: summary)
+    record_lifecycle_event("ai.run.succeeded")
+    self
   end
 
   def fail!(error, summary: {})
@@ -84,6 +106,13 @@ class Run < ApplicationRecord
       error_summary: error_message_for(error),
       result_summary_json: result_summary.merge(failure_summary).merge(summary)
     )
+    record_lifecycle_event(
+      "ai.run.failed",
+      error_class: error.class.name,
+      error_code: Ai::ErrorClassifier.code(error),
+      failure_kind: failure_summary.fetch("failure_kind")
+    )
+    self
   end
 
   def inspector_path
@@ -91,6 +120,35 @@ class Run < ApplicationRecord
   end
 
   private
+
+  def record_created_event
+    record_lifecycle_event("ai.run.created")
+  end
+
+  def record_lifecycle_event(event_name, **payload)
+    event_payload = {
+      run_id: id,
+      project_id: project_id,
+      operation: operation,
+      status: status
+    }.merge(payload)
+    event_payload[:event_key] = lifecycle_event_key(event_name, event_payload)
+
+    Ai::LifecycleEventRecorder.emit(
+      event_name,
+      event_payload
+    )
+  end
+
+  def current_attempt_id
+    attempts.reorder(sequence: :desc, id: :desc).pick(:id)
+  end
+
+  def lifecycle_event_key(event_name, payload)
+    base = "run:#{id}:#{event_name.delete_prefix('ai.run.')}"
+    attempt_id = payload[:attempt_id] || payload["attempt_id"]
+    attempt_id.present? ? "#{base}:attempt:#{attempt_id}" : base
+  end
 
   def error_message_for(error)
     return error.to_s if error.is_a?(String)

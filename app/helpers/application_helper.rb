@@ -34,4 +34,24 @@ module ApplicationHelper
     else "bg-slate-100 text-muted"
     end
   end
+
+  def lifecycle_event_summary(event)
+    payload = event.payload
+    case event.name
+    when "ai.attempt.started", "ai.attempt.succeeded", "ai.attempt.failed"
+      [ payload["provider"], payload["model_id"] ].compact.join(" / ").presence || "Attempt ##{event.attempt_id}"
+    when "ai.attempt.streaming"
+      "First output at #{format_duration(payload["time_to_first_output_ms"])}"
+    when "ai.tool.requested", "ai.tool.completed"
+      [ payload["tool_key"], payload["status"]&.to_s&.tr("_", " ") ].compact.join(" · ").presence || "Tool invocation"
+    when "ai.approval.requested", "ai.approval.decided"
+      payload["decision"].presence || "Approval review"
+    when "ai.artifact.created"
+      [ payload["kind"], payload["name"] ].compact.join(" · ").presence || "Artifact"
+    when "ai.run.failed"
+      [ payload["failure_kind"], payload["error_class"] ].compact.join(" · ").presence || "Run failed"
+    else
+      payload["status"].presence || "Recorded in the local event catalog"
+    end
+  end
 end

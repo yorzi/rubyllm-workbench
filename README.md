@@ -22,7 +22,8 @@ constraints. Current runtime changes must not silently rewrite the Specs baselin
 The implemented gate is M0–M3 core: Projects, Model Explorer, model selection,
 persisted Chats and Messages, RubyLLM-backed streaming execution, a
 code-defined Tool Lab, durable tool approvals, Run/Attempt/ToolInvocation
-records, a searchable Run history, and a token/cost/latency inspector.
+records, a searchable Run history, a token/cost/latency inspector, and a local
+LifecycleEvent timeline for each Run.
 Parallel tool-call compatibility is `PARTIAL` (single-call path verified, parallel
 compatibility not accepted). Agents, provider-hosted tools, RAG, media, batch evaluation,
 billing, and deployment remain `PLANNED`.

@@ -2,8 +2,11 @@ class Attempt < ApplicationRecord
   STATUSES = %w[queued running succeeded failed cancelled].freeze
 
   belongs_to :run
+  has_many :lifecycle_events, dependent: :nullify
 
   enum :status, STATUSES.index_with(&:itself), validate: true
+
+  after_update :record_lifecycle_status_event, if: :saved_change_to_status?
 
   validates :sequence, numericality: { only_integer: true, greater_than: 0 }
   validates :provider, :model_id, presence: true
@@ -29,5 +32,31 @@ class Attempt < ApplicationRecord
 
   def finish!(status:, finished_at: Time.current, **attributes)
     update!(attributes.merge(status: status, finished_at: finished_at))
+  end
+
+  private
+
+  def record_lifecycle_status_event
+    event_name = {
+      "running" => "ai.attempt.started",
+      "succeeded" => "ai.attempt.succeeded",
+      "failed" => "ai.attempt.failed"
+    }.fetch(status.to_s, nil)
+    return unless event_name
+
+    Ai::LifecycleEventRecorder.emit(
+      event_name,
+      {
+        run_id: run_id,
+        attempt_id: id,
+        provider: provider,
+        model_id: model_id,
+        status: status,
+        duration_ms: duration_ms,
+        error_class: error_class,
+        error_code: error_code,
+        event_key: "attempt:#{id}:#{status}"
+      }
+    )
   end
 end

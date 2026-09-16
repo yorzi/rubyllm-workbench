@@ -130,6 +130,9 @@ class Ai::ChatExecutorTest < ActiveSupport::TestCase
     assert @run.succeeded?
     assert_equal 1, messages.count
     assert_equal "Resumed answer", messages.first.content
+    assert_equal 2, @run.attempts.count
+    assert @run.attempts.first.succeeded?
+    assert @run.attempts.second.succeeded?
   end
 
   test "does not start a second executor for an already running Run" do

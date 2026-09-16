@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_16_110000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_16_123000) do
   create_table "active_storage_attachments", force: :cascade do |t|
     t.bigint "blob_id", null: false
     t.datetime "created_at", null: false
@@ -143,6 +143,30 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_110000) do
     t.datetime "updated_at", null: false
     t.index ["project_id", "status", "updated_at"], name: "index_experiments_on_project_id_and_status_and_updated_at"
     t.index ["project_id"], name: "index_experiments_on_project_id"
+  end
+
+  create_table "lifecycle_events", force: :cascade do |t|
+    t.integer "approval_id"
+    t.integer "artifact_id"
+    t.integer "attempt_id"
+    t.datetime "created_at", null: false
+    t.integer "duration_ms"
+    t.string "event_key", null: false
+    t.string "name", null: false
+    t.datetime "occurred_at", null: false
+    t.json "payload_json", default: {}, null: false
+    t.integer "run_id", null: false
+    t.string "source", default: "application", null: false
+    t.integer "tool_invocation_id"
+    t.datetime "updated_at", null: false
+    t.index ["approval_id"], name: "index_lifecycle_events_on_approval_id"
+    t.index ["artifact_id"], name: "index_lifecycle_events_on_artifact_id"
+    t.index ["attempt_id"], name: "index_lifecycle_events_on_attempt_id"
+    t.index ["event_key"], name: "index_lifecycle_events_on_event_key", unique: true
+    t.index ["name", "occurred_at"], name: "index_lifecycle_events_on_name_and_occurred_at"
+    t.index ["run_id", "occurred_at", "id"], name: "index_lifecycle_events_on_run_and_occurred_at"
+    t.index ["run_id"], name: "index_lifecycle_events_on_run_id"
+    t.index ["tool_invocation_id"], name: "index_lifecycle_events_on_tool_invocation_id"
   end
 
   create_table "messages", force: :cascade do |t|
@@ -333,6 +357,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_110000) do
   add_foreign_key "experiment_executions", "experiments"
   add_foreign_key "experiment_executions", "projects"
   add_foreign_key "experiments", "projects"
+  add_foreign_key "lifecycle_events", "approvals", on_delete: :nullify
+  add_foreign_key "lifecycle_events", "artifacts", on_delete: :nullify
+  add_foreign_key "lifecycle_events", "attempts", on_delete: :nullify
+  add_foreign_key "lifecycle_events", "runs", on_delete: :cascade
+  add_foreign_key "lifecycle_events", "tool_invocations", on_delete: :nullify
   add_foreign_key "messages", "chats"
   add_foreign_key "runs", "chats"
   add_foreign_key "runs", "experiment_executions"

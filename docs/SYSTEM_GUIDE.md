@@ -6,7 +6,7 @@ AI agent 持续修改系统之后，仍能快速回答：系统为什么存在�
 
 更新时间：2026-09-16
 当前实现：M0–M3 核心闭环
-当前代码基线：`05781d6 feat: add tool approvals and inspection`
+当前代码基线：`main` 上的 M3 生命周期事件切片
 
 ## 两套文档体系：先确认你正在读哪一种“真相”
 
@@ -58,6 +58,7 @@ Attempt、Message、ToolInvocation、Approval 和 Artifact。
 | M1 | 浏览模型、创建 Chat、发送 prompt、查看 Run 历史 | RubyLLM Message、Run、Attempt、usage、cost、latency、diagnostic | `IMPLEMENTED` · `LOCAL_VERIFIED` + `OPENROUTER_DOGFOOD` |
 | M2 | 保存结构化 Experiment，选择多个模型比较并重跑 | 冻结的 Experiment/Execution、独立 child Run、JSON Artifact、schema/provider 区分 | `IMPLEMENTED` · `LOCAL_VERIFIED` + `OPENROUTER_DOGFOOD` |
 | M3 核心 | 在 Tool Lab 启用代码定义工具，查看调用，审批或拒绝副作用 | ToolDefinition、ToolInvocation、Approval、工具参数/结果/时长/错误 | `IMPLEMENTED` · `LOCAL_VERIFIED` + `OPENROUTER_DOGFOOD` |
+| M3 观测切片 | 在 Run inspector 查看执行时间线 | LifecycleEvent、事件名称、关联记录、脱敏元数据和去重 key | `IMPLEMENTED` · `LOCAL_VERIFIED` |
 | M3 并行 tool calls | 验证多个并行 tool calls 和更多 provider 差异 | 多调用时序和兼容性证据 | `PARTIAL` · 单调用路径已验证，并行兼容性未验收 |
 | M4 | 知识集合、摄取、chunk、embedding、检索、rerank、文档提取 | Knowledge*、引用和来源 Artifact | `PLANNED` |
 | M5 | Agent、Durable Research、远程工具和可恢复长任务 | AgentDefinition、AgentRunStep、citation/research Artifact | `PLANNED` |
@@ -90,6 +91,17 @@ Run 的 `input_snapshot` 冻结这次执行看到的 prompt、工具 schema 和 
 
 Attempt 是 Run 内的一次具体 provider/model 请求。重试或 fallback 必须新增 Attempt，
 不能把旧的失败请求改写成成功。这样人才能区分“第一次失败”和“第二次重试成功”。
+
+审批 continuation 也会创建一个新的 Attempt；它复用已有 RubyLLM 会话，但不把新的
+provider 请求覆盖到原来的 Attempt 上。
+
+### LifecycleEvent
+
+LifecycleEvent 是挂在 Run 上的本地事件目录项，用来回答“状态何时发生、关联了哪条
+Attempt/工具/Artifact”。它通过 `ActiveSupport::Notifications` 接收应用事件，使用
+固定名称和 `event_key` 去重，只保存允许的元数据；prompt、工具参数、工具结果和
+Artifact 内容仍留在各自的原始记录中，不复制进事件 payload。它补充 Run/Attempt 等
+事实记录，不替代它们，也不等同于分布式 tracing。
 
 ### Experiment / Execution / Artifact
 
@@ -150,7 +162,8 @@ Tool Lab 只管理代码中已注册的 allowlist 条目。它不是在线执行
 - **Tool Lab**：查看 registry schema、approval policy 和 enabled 状态；开关只
   影响新 Run。
 - **Run inspector**：稳定查看单次证据。即使页面不是当前 Chat，也可以从全局 Runs
-  回到同一个执行。
+  回到同一个执行；Lifecycle events 时间线展示状态、流式首字节、工具/审批和
+  Artifact 事件的本地顺序。
 
 ## 最容易误读的地方
 
@@ -184,6 +197,8 @@ Agent 定义、多步运行、远程/provider-hosted 工具、研究引用和更
 - M3 的 Run #11 完成了真实 `project_snapshot`；Run #13 从
   `waiting_for_approval` 经批准恢复，完成 `save_run_note` 并生成 report Artifact，
   只保留一个 user message 和两条 assistant message。
+- 当前本地回归已覆盖 LifecycleEvent 的顺序、去重、脱敏 payload、审批事件和
+  continuation 的新 Attempt；Run inspector 也展示这条时间线。
 - 当前没有并行 tool-call 的真实兼容性结论，也没有 M4/M5 的实现证据。
 
 这些是本地、点时的验证，不是生产承诺。

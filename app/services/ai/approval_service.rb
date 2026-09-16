@@ -32,12 +32,17 @@ module Ai
         decision_note: @note
       )
       @invocation.update!(status: @decision)
-      ActiveSupport::Notifications.instrument(
+      Ai::LifecycleEventRecorder.emit(
         "ai.approval.decided",
         run_id: run.id,
+        project_id: run.project_id,
+        approval_id: @invocation.approval.id,
         tool_invocation_id: @invocation.id,
         tool_call_id: @invocation.tool_call_id,
-        decision: @decision
+        decision: @decision,
+        actor: @invocation.approval.actor,
+        status: @invocation.approval.status,
+        event_key: "approval:#{@invocation.approval.id}:decided:#{@decision}"
       )
       ChatResponseJob.perform_later(run.id)
       @invocation

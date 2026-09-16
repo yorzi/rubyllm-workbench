@@ -23,9 +23,10 @@ class RunsController < ApplicationController
   end
 
   def show
-    @run = Run.includes(:project, :chat, :attempts, :artifacts, :experiment, :experiment_execution).find(params[:id])
+    @run = Run.includes(:project, :chat, :attempts, :artifacts, :experiment, :experiment_execution, :lifecycle_events).find(params[:id])
     Ai::ToolInvocationRecorder.new(run: @run, chat: @run.chat).sync!
     @tool_invocations = @run.tool_invocations.includes(:approval, :tool_definition).recent.to_a
+    @lifecycle_events = @run.lifecycle_events.chronological.to_a
     @messages = @run.chat.messages
     @latest_assistant_message = @messages.reverse.find { |message| message.role.to_s == "assistant" }
     @structured_artifact = @run.artifacts.reverse.find { |artifact| artifact.kind == "json" }

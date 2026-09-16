@@ -6,6 +6,45 @@
 原则上只追加，不静默改写历史。代码细节回到对应 commit 和
 [IMPLEMENTATION_MAP.md](../IMPLEMENTATION_MAP.md)。
 
+## 2026-09-16 — M3 观测切片：LifecycleEvent 目录与 Run 时间线
+
+### 为什么做
+
+Run、Attempt、工具、审批和 Artifact 记录分别保存了事实，但人仍需要一个按时间
+顺序回答“这次执行发生了什么”的入口。本次按
+`supporting/OBSERVABILITY_COST_SPEC.md` 的最小事件模型，增加应用侧的本地事件目录；
+它是当前实现切片，不是新的 tracing 或外部监控承诺。
+
+### 人能看到的变化
+
+- Run inspector 新增 Lifecycle events 时间线，显示状态推进、首个流式输出、工具/
+  审批和 Artifact 事件。
+- 审批 continuation 会生成新的 Attempt，保留原始 Attempt 和工具调用的历史边界。
+- 事件 payload 只显示允许的 ID、状态、provider/model、时长和错误类别等元数据；
+  prompt、工具参数、结果和 Artifact 内容仍从原始记录查看。
+
+### 实现地图
+
+- `LifecycleEvent`：SQLite 持久化事件目录，使用 `event_key` 去重。
+- `Ai::LifecycleEventRecorder`：订阅 `ActiveSupport::Notifications`、过滤字段并写入
+  事件；Run/Attempt/Artifact model callbacks 和工具/审批 recorder 发出事件。
+- `RunsController` / Run inspector：加载并按发生时间展示事件。
+- SQLite 外键使用删除时 cascade/nullify，保证 schema reset 和历史关联可重建。
+
+### 验证证据
+
+- 干净测试库 `db:schema:load` 通过。
+- 全量本地回归：53 tests、363 assertions、0 failures、0 errors、1 个既有 skip。
+- 生命周期专项覆盖顺序、去重、敏感字段不进入 payload、审批事件和 continuation
+  新 Attempt。
+
+### 还没有证明什么
+
+- 这是当前应用侧的本地事件目录，不是 provider-native 完整事件流、分布式 tracing、
+  成本 dashboard、导出或历史回填。
+- 并行 tool calls 的 provider 兼容性仍为 `PARTIAL`；本次没有新增 live provider
+  dogfood，也没有部署或公开可用性结论。
+
 ## 2026-09-16 — 明确 Specs 基线与项目 `docs/` 双层体系
 
 ### 为什么做

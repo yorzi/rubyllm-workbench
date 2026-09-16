@@ -30,6 +30,12 @@ class Ai::ToolInvocationRecorderTest < ActiveSupport::TestCase
     @chat.reload
     assert @run.tool_invocations.first.reload.approval
     assert_equal "pending", @run.tool_invocations.first.approval.status
+
+    recorder = Ai::ToolInvocationRecorder.new(run: @run, chat: @chat, attempt: @attempt)
+    recorder.sync!
+    recorder.sync!
+    assert_equal 1, @run.lifecycle_events.where(name: "ai.tool.requested").count
+    assert_equal 1, @run.lifecycle_events.where(name: "ai.approval.requested").count
   end
 
   test "records a tool result as a successful invocation" do

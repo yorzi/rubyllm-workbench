@@ -81,11 +81,20 @@
       resumed through the existing queue worker, and created a report Artifact
       without duplicating the user prompt.
 
+- [x] Add the local `LifecycleEvent` catalog and Run inspector timeline for
+      Run/Attempt/tool/approval/Artifact transitions, with metadata-only payloads
+      and idempotent event keys.
+- [x] Preserve the Attempt invariant across approval continuation: the resumed
+      provider request receives a new Attempt while the original tool invocation
+      remains attached to its original Attempt.
+
 ## Known implementation gap
 
-- [ ] Add a unified lifecycle event catalog for `ai.run`, `ai.attempt` and
-      `ai.artifact`; the current inspector/database records are useful evidence but are
-      not yet a complete event stream or tracing system.
+- [x] Add a unified local lifecycle event catalog for `ai.run`, `ai.attempt`,
+      `ai.tool`, `ai.approval` and `ai.artifact`; the current implementation is
+      deliberately application-level and metadata-only.
+- [ ] Add provider-native tracing/metrics, event export or historical backfill;
+      these are not implied by the local `LifecycleEvent` timeline.
 
 ## Explicitly deferred
 

@@ -3,6 +3,9 @@ class Artifact < ApplicationRecord
 
   belongs_to :run
   belongs_to :attempt, optional: true
+  has_many :lifecycle_events, dependent: :nullify
+
+  after_create :record_created_event
 
   validates :kind, presence: true, inclusion: { in: KINDS }
   validate :has_content
@@ -15,6 +18,20 @@ class Artifact < ApplicationRecord
   end
 
   private
+
+  def record_created_event
+    Ai::LifecycleEventRecorder.emit(
+      "ai.artifact.created",
+      {
+        run_id: run_id,
+        attempt_id: attempt_id,
+        artifact_id: id,
+        kind: kind,
+        name: name,
+        event_key: "artifact:#{id}:created"
+      }
+    )
+  end
 
   def has_content
     errors.add(:base, "content is required") if content_json.nil? && content_text.blank?

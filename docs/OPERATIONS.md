@@ -78,6 +78,13 @@ bin/rubocop --cache false
 bin/rails assets:precompile
 ```
 
+受限环境无法启动测试并行 worker 时，可显式使用单进程回归；不设置时仍保持默认
+并行行为：
+
+```sh
+PARALLEL_WORKERS=1 bin/rails test
+```
+
 OpenRouter live structured test 是显式 opt-in：
 
 ```sh
@@ -89,11 +96,20 @@ OPENROUTER_LIVE_TEST=1 bin/rails test test/integration/openrouter_live_test.rb
 
 ## 当前可观测性边界
 
-M3 已经把工具请求、工具完成和审批请求/决定写入应用记录，并在 Run inspector 中
-展示；这些记录是当前本地执行的主要证据。生命周期事件的覆盖仍不完整：`ai.run`、
-`ai.attempt` 和 `ai.artifact` 的统一 started/succeeded/failed/created 事件属于
-`PLANNED` 的后续观测能力。当前不能把数据库 inspector 误称为已经存在的完整事件
-流、分布式 tracing 或成本监控系统。
+M3 当前切片已经把应用侧生命周期写入 `LifecycleEvent` 目录，并在 Run inspector 中
+展示。当前目录覆盖：
+
+- Run：`created`、`started`、`resumed`、`waiting_for_approval`、`succeeded`、`failed`；
+- Attempt：`started`、首个流式输出 `streaming`、`succeeded`、`failed`；
+- Tool/Approval/Artifact：请求、完成、审批请求/决定和 Artifact 创建。
+
+事件经 `ActiveSupport::Notifications` 进入 SQLite，使用 `event_key` 做幂等去重，且
+payload 只保留 ID、状态、provider/model、时长、错误类别等允许的元数据，不复制 prompt、
+工具参数、工具结果或 Artifact 内容。事件持久化失败不会阻断主执行，因此 Run/Attempt
+等原始记录仍是主要事实来源。迁移前已存在的 Run 不做历史回填。
+
+这仍不是 provider-native 完整事件流、分布式 tracing、成本监控、导出或 dashboard；
+也没有并行 tool-call 的兼容性结论。
 
 ## 如何读 Run inspector
 
@@ -105,9 +121,11 @@ M3 已经把工具请求、工具完成和审批请求/决定写入应用记录�
 2. **Operation**：是 `chat` 还是 `structured`。
 3. **Attempts**：是否有重试、哪个 provider/model 真正执行、usage 和 cost 是否
    已报告/估算/未知。
-4. **Tools**：工具 key、调用状态、脱敏参数、结果、审批和耗时。
-5. **Input snapshot**：这次 Run 实际冻结了哪些 prompt、工具和 schema。
-6. **Result/Diagnostic**：最终输出或安全的失败解释。
+4. **Lifecycle events**：状态推进、首个流式输出、工具/审批和 Artifact 的本地
+   时间顺序；它是导航索引，不是完整 tracing。
+5. **Tools**：工具 key、调用状态、脱敏参数、结果、审批和耗时。
+6. **Input snapshot**：这次 Run 实际冻结了哪些 prompt、工具和 schema。
+7. **Result/Diagnostic**：最终输出或安全的失败解释。
 
 一个 succeeded Run 仍可能包含重要的 warning/unknown cost；一个 failed Run 仍然
 是有价值的故障证据。不要只看绿色状态徽章。
@@ -130,6 +148,8 @@ M3 已经把工具请求、工具完成和审批请求/决定写入应用记录�
 - Tool Lab 的浏览器输入只能切换已存在的定义，不能上传或执行 Ruby。
 - 工具参数和结果展示必须过滤明显的 key/token/secret/password/authorization 等
   字段。
+- LifecycleEvent payload 使用固定字段白名单；不要为了调试把 prompt、原始参数、结果
+  或文件内容加入事件通知。
 - provider-hosted/server tools 是远程执行能力，未来如果加入必须单独标注；它们
   不等于本地工具，也不应被隐含为安全。
 - 任何新建的长期进程都要记录 PID、端口和停止方式；任务结束时清理。

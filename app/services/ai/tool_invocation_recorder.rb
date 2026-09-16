@@ -49,7 +49,7 @@ module Ai
       approval_status = tool_call_record.approval.to_s.presence
 
       invocation.assign_attributes(
-        attempt: @attempt || invocation.attempt,
+        attempt: invocation.attempt || @attempt,
         tool_definition: definition,
         arguments_json: Ai::ToolPayloadSanitizer.call(tool_call_record.arguments || {}),
         started_at: invocation.started_at || tool_call_record.created_at || Time.current
@@ -94,7 +94,11 @@ module Ai
 
       invocation.save!
       sync_approval!(invocation, definition, approval_status, tool_call_record.created_at)
-      notify("ai.tool.completed", invocation) if invocation.succeeded? || invocation.failed? || invocation.denied?
+      if invocation.succeeded? || invocation.failed? || invocation.denied?
+        notify("ai.tool.completed", invocation)
+      elsif invocation.requested? || invocation.waiting_for_approval? || invocation.approved? || invocation.running?
+        notify("ai.tool.requested", invocation)
+      end
       invocation
     end
 
@@ -139,15 +143,31 @@ module Ai
     end
 
     def notify(event, invocation, tool_call_id: nil)
-      ActiveSupport::Notifications.instrument(
+      Ai::LifecycleEventRecorder.emit(
         event,
         run_id: @run.id,
+        project_id: @run.project_id,
         attempt_id: invocation.attempt_id,
         tool_invocation_id: invocation.id,
+        approval_id: invocation.approval&.id,
         tool_call_id: tool_call_id || invocation.tool_call_id,
         tool_key: invocation.tool_key,
-        status: invocation.status
+        status: invocation.status,
+        event_key: event_key_for(event, invocation)
       )
+    end
+
+    def event_key_for(event, invocation)
+      case event
+      when "ai.tool.requested"
+        "tool:#{invocation.id}:requested"
+      when "ai.tool.completed"
+        "tool:#{invocation.id}:completed:#{invocation.status}"
+      when "ai.approval.requested"
+        "approval:#{invocation.approval&.id || invocation.id}:requested"
+      else
+        "tool:#{invocation.id}:#{event.delete_prefix('ai.tool.')}"
+      end
     end
   end
 end
