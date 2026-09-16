@@ -1,4 +1,4 @@
-# TODO — M0/M1/M2 current slice complete, M3 next
+# TODO — M0/M1/M2 complete, M3 tools and approvals in progress
 
 ## Foundation
 
@@ -63,9 +63,20 @@
 - [x] Desktop and 390px browser checks passed; no horizontal overflow was
       observed and the original browser page was restored.
 
+## M3 gate record — 2026-09-16
+
+- [x] Tool Lab exposes the two allowlisted Ruby-defined tools, including
+      schemas, approval policy, and enable/disable state.
+- [x] OpenRouter Run #11 completed a real `project_snapshot` tool call.
+- [x] OpenRouter Run #13 paused for `save_run_note`, recorded the approval,
+      resumed through the existing queue worker, and created a report Artifact
+      without duplicating the user prompt.
+
 ## Explicitly deferred
 
-- [ ] M3 tools, approvals, and agents.
+- [x] M3 code-defined tools, tool-call inspection, and approval/denial continuation.
+- [ ] M3 parallel tool calls and deeper provider/tool compatibility dogfooding.
+- [ ] M5 agents, durable research, and provider-hosted/server tools.
 - [ ] M4 knowledge, RAG, rerank, and document/OCR flows.
-- [ ] M5-M8 research, media, batch/evals, exports, deployment, and
+- [ ] M6-M8 media, batch/evals, exports, deployment, and
       public-reference polish.

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_16_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_16_110000) do
   create_table "active_storage_attachments", force: :cascade do |t|
     t.bigint "blob_id", null: false
     t.datetime "created_at", null: false
@@ -37,6 +37,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_100000) do
     t.bigint "blob_id", null: false
     t.string "variation_digest", null: false
     t.index ["blob_id", "variation_digest"], name: "index_active_storage_variant_records_uniqueness", unique: true
+  end
+
+  create_table "approvals", force: :cascade do |t|
+    t.string "actor", default: "local_user", null: false
+    t.datetime "created_at", null: false
+    t.datetime "decided_at"
+    t.text "decision_note"
+    t.datetime "requested_at", null: false
+    t.string "status", default: "pending", null: false
+    t.integer "tool_invocation_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["status", "requested_at"], name: "index_approvals_on_status_and_requested_at"
+    t.index ["tool_invocation_id"], name: "index_approvals_on_invocation_unique", unique: true
   end
 
   create_table "artifacts", force: :cascade do |t|
@@ -269,8 +282,49 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_100000) do
     t.index ["status", "created_at"], name: "index_runs_on_status_and_created_at"
   end
 
+  create_table "tool_definitions", force: :cascade do |t|
+    t.string "approval_policy", default: "never", null: false
+    t.string "class_identifier", null: false
+    t.datetime "created_at", null: false
+    t.text "description"
+    t.boolean "enabled", default: true, null: false
+    t.string "key", null: false
+    t.string "name", null: false
+    t.integer "project_id", null: false
+    t.json "schema_json", default: {}, null: false
+    t.datetime "updated_at", null: false
+    t.index ["project_id", "enabled"], name: "index_tool_definitions_on_project_id_and_enabled"
+    t.index ["project_id", "key"], name: "index_tool_definitions_on_project_id_and_key", unique: true
+    t.index ["project_id"], name: "index_tool_definitions_on_project_id"
+  end
+
+  create_table "tool_invocations", force: :cascade do |t|
+    t.json "arguments_json", default: {}, null: false
+    t.integer "attempt_id"
+    t.datetime "created_at", null: false
+    t.integer "duration_ms"
+    t.string "error_class"
+    t.text "error_message"
+    t.datetime "finished_at"
+    t.json "result_json"
+    t.integer "run_id", null: false
+    t.datetime "started_at"
+    t.string "status", default: "requested", null: false
+    t.string "tool_call_id", null: false
+    t.integer "tool_definition_id"
+    t.string "tool_key", null: false
+    t.datetime "updated_at", null: false
+    t.index ["attempt_id"], name: "index_tool_invocations_on_attempt_id"
+    t.index ["run_id", "status"], name: "index_tool_invocations_on_run_id_and_status"
+    t.index ["run_id", "tool_call_id"], name: "index_tool_invocations_on_run_id_and_tool_call_id", unique: true
+    t.index ["run_id"], name: "index_tool_invocations_on_run_id"
+    t.index ["tool_definition_id"], name: "index_tool_invocations_on_tool_definition_id"
+    t.index ["tool_key"], name: "index_tool_invocations_on_tool_key"
+  end
+
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "approvals", "tool_invocations"
   add_foreign_key "artifacts", "attempts"
   add_foreign_key "artifacts", "runs"
   add_foreign_key "attempts", "runs"
@@ -284,4 +338,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_100000) do
   add_foreign_key "runs", "experiment_executions"
   add_foreign_key "runs", "experiments"
   add_foreign_key "runs", "projects"
+  add_foreign_key "tool_definitions", "projects"
+  add_foreign_key "tool_invocations", "attempts"
+  add_foreign_key "tool_invocations", "runs"
+  add_foreign_key "tool_invocations", "tool_definitions"
 end

@@ -40,6 +40,7 @@ class ChatsController < ApplicationController
     @messages = @chat.messages
     @runs = @chat.runs.includes(:attempts).recent.limit(10)
     @latest_run = @runs.first
+    prepare_tool_inspection
     @model_entry = model_catalog.entries.find do |entry|
       entry.id == @chat.model_id && entry.provider == @chat.provider
     end
@@ -68,5 +69,18 @@ class ChatsController < ApplicationController
     model_catalog.find!(params[:model_id], provider: params[:provider])
   rescue RubyLLM::ModelNotFoundError, ArgumentError
     nil
+  end
+
+  def prepare_tool_inspection
+    @tool_invocations = []
+    @pending_tool_invocations = []
+    return unless @latest_run
+
+    Ai::ToolInvocationRecorder.new(run: @latest_run, chat: @chat).sync!
+    @tool_invocations = @latest_run.tool_invocations.includes(:approval, :tool_definition).recent.to_a
+    @pending_tool_invocations = @tool_invocations.select(&:approval_pending?)
+  rescue ActiveRecord::RecordNotFound, KeyError
+    @tool_invocations = []
+    @pending_tool_invocations = []
   end
 end

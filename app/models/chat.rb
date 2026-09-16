@@ -3,6 +3,7 @@ class Chat < ApplicationRecord
 
   belongs_to :project
   has_many :runs, dependent: :destroy
+  has_many :tool_invocations, through: :runs
 
   validates :title, length: { maximum: 160 }, allow_blank: true
   validates :project, presence: true

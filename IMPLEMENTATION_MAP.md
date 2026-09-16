@@ -2,12 +2,12 @@
 
 ## Scope
 
-This implementation covers the M0, M1 and current M2 slice:
+This implementation covers the M0, M1, M2 and current M3 slice:
 
-`Project -> Experiment -> structured comparison -> persisted Run/Attempt/Artifact -> inspector`
+`Project -> Chat/Tool Lab -> persisted Run/Attempt/ToolInvocation/Approval/Artifact -> inspector`
 
-Later milestones (tools, approvals, knowledge, agents, media, batch/evals and
-operational polish) stay deferred until this loop is extended deliberately.
+Later milestones (knowledge, agents, media, batch/evals and operational polish)
+stay deferred until this loop is extended deliberately.
 
 ## Product shape
 
@@ -25,6 +25,12 @@ operational polish) stay deferred until this loop is extended deliberately.
   selected model; reruns create a new execution and preserve prior evidence.
 - **Artifact:** a bounded JSON result attached to the successful structured Run;
   the raw chat/Run/Attempt history remains inspectable alongside it.
+- **ToolDefinition:** a Project-owned enabled/disabled reference to a
+  code-defined registry entry; browser input cannot upload executable code.
+- **ToolInvocation:** one normalized tool call attached to a Run, preserving
+  secret-filtered arguments, result/error, timing and lifecycle.
+- **Approval:** one persisted human decision for an approval-required tool call;
+  RubyLLM's persisted tool-call approval is the conversation source of truth.
 
 ## Core flows and pages
 
@@ -61,6 +67,11 @@ operational polish) stay deferred until this loop is extended deliberately.
 - `Ai::ExperimentExecutor` freezes definitions and creates one queued child Run
   per target; `Ai::StructuredExecutor` owns schema configuration, validation,
   Artifact persistence and failure classification.
+- `Ai::ToolRegistry` is the allowlisted code-defined tool boundary;
+  `Ai::ChatTooling` freezes the enabled tool snapshot onto a Run.
+- `Ai::ToolInvocationRecorder` maps RubyLLM tool calls to inspectable
+  application records; `Ai::ApprovalService` records a decision and enqueues
+  the resumable Chat completion.
 
 ## Integrations and constraints
 
@@ -84,9 +95,9 @@ keyboard-friendly.
 
 ## Pre-flight record
 
-- Milestone: M0 + M1 + M2 current slice.
-- Scope: local chat plus structured experiment comparison; M3-M8 explicitly
-  deferred.
+- Milestone: M0 + M1 + M2 + M3 current slice.
+- Scope: local chat, structured experiment comparison, code-defined tools and
+  durable approval continuation; M4-M8 remain explicitly deferred.
 - Runtime verified: Ruby 4.0.2 and Rails 8.1.3.1.
 - Baseline difference: RubyLLM 2.0.0.rc3 is not installed globally; RubyLLM
   1.16.0 is currently available. The Gemfile must target 2.0.0.rc3 and the
@@ -132,7 +143,7 @@ The first M2 slice is a complete structured-comparison workflow:
   choose two or more configured structured-output models, and inspect the
   grouped results.
 - **Boundary:** no arbitrary Ruby/schema class evaluation, no provider SDK or
-  direct HTTP call, no universal quality score, and no M3 tools/approvals.
+  direct HTTP call, no universal quality score, and no M5 agents/server tools.
 
 M2 acceptance for this slice is: a saved experiment can be run against two or
 more configured models with a frozen definition; transport/provider failures
@@ -151,3 +162,28 @@ definition creates new evidence without mutating the saved definition.
   action, successful Run inspector, provider-failure diagnostic, and a 390px
   viewport with no horizontal overflow. The temporary narrow viewport and tab
   were closed/reset after verification.
+
+## M3 implementation map — current slice
+
+- **Registry:** Project-scoped ToolDefinition records mirror two allowlisted
+  RubyLLM tools: read-only `project_snapshot` and approval-gated
+  `save_run_note`.
+- **Run boundary:** new chat Runs snapshot enabled tool keys, schemas and
+  approval policy; later toggles do not rewrite an existing Run.
+- **Inspection:** RubyLLM's persisted tool calls are normalized into
+  ToolInvocation records with sanitized arguments, result/error, timing and
+  links to the internal Approval record.
+- **Continuation:** an undecided approval moves the Run to
+  `waiting_for_approval`; the approve/deny endpoint writes both application
+  and RubyLLM decisions, then resumes the same persisted conversation with
+  `complete` instead of adding a duplicate user prompt.
+- **Failure boundary:** a local tool exception is represented as a tool-result
+  error message plus failed invocation/Run diagnostics, leaving the chat
+  history structurally answerable for the next prompt.
+- **OpenRouter dogfood:** Run #11 completed a real `project_snapshot` call;
+  Run #13 exercised `save_run_note` from `waiting_for_approval` through
+  approval, continuation, and a report Artifact. The latter retained one user
+  message and two assistant messages, with no duplicate prompt from the queue
+  continuation.
+- **Still unverified:** parallel tool calls remain opt-in compatibility work;
+  M5 provider-hosted tools/agents are not part of this slice.

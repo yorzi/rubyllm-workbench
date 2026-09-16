@@ -7,6 +7,7 @@ class Run < ApplicationRecord
   belongs_to :experiment_execution, optional: true
   has_many :attempts, -> { order(:sequence, :id) }, dependent: :destroy
   has_many :artifacts, dependent: :destroy
+  has_many :tool_invocations, dependent: :destroy
 
   after_create_commit :broadcast_status
   after_update_commit :broadcast_status

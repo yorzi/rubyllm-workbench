@@ -22,6 +22,10 @@ class Ai::ChatExecutorTest < ActiveSupport::TestCase
       @chat.messages
     end
 
+    def with_tools(*)
+      self
+    end
+
     def ruby_llm_usages
       @chat.ruby_llm_usages
     end
@@ -106,5 +110,47 @@ class Ai::ChatExecutorTest < ActiveSupport::TestCase
     assert_equal "Hello", messages.last.content
     assert_equal "Hello", @run.result_summary["partial_output"]
     assert_includes @run.error_summary, "provider stream interrupted"
+  end
+
+  test "resumes a waiting Run with complete without adding the prompt again" do
+    @run.update!(status: :waiting_for_approval)
+    @run.attempts.first.update!(status: :succeeded, finished_at: Time.current)
+    response = Response.new(
+      RubyLLM::Tokens.new(input: 3, output: 2),
+      RubyLLM::Cost.new(tokens: RubyLLM::Tokens.new(input: 3, output: 2), model: RubyLLM.models.find(@chat.model_id, provider: @chat.provider)),
+      :stop,
+      "response-resumed"
+    )
+    fake_chat = ResumingFakeChat.new(@chat, response)
+
+    Ai::ChatExecutor.new(@run.id, run: @run, chat: fake_chat).call
+
+    @run.reload
+    messages = @chat.messages.reload
+    assert @run.succeeded?
+    assert_equal 1, messages.count
+    assert_equal "Resumed answer", messages.first.content
+  end
+
+  test "does not start a second executor for an already running Run" do
+    @run.update!(status: :running, started_at: Time.current)
+    fake_chat = FakeChat.new(@chat, RuntimeError.new("must not call the provider"))
+
+    result = Ai::ChatExecutor.new(@run.id, run: @run, chat: fake_chat).call
+
+    assert_equal @run.id, result.id
+    assert_empty @chat.messages.reload
+    assert @run.reload.running?
+  end
+
+  class ResumingFakeChat < FakeChat
+    def complete
+      @chat.messages.create!(role: "assistant", content: "Resumed answer")
+      @response_or_error
+    end
+
+    def ask(*)
+      raise "ask should not be used while resuming an approval"
+    end
   end
 end

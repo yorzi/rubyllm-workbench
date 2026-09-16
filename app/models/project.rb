@@ -3,6 +3,8 @@ class Project < ApplicationRecord
   has_many :experiments, dependent: :destroy
   has_many :experiment_executions, dependent: :destroy
   has_many :runs, dependent: :destroy
+  has_many :tool_definitions, dependent: :destroy
+  has_many :tool_invocations, through: :runs
 
   validates :name, presence: true, length: { maximum: 120 }
   validates :slug, presence: true, uniqueness: true,

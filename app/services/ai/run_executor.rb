@@ -12,13 +12,15 @@ module Ai
     end
 
     def enqueue
+      Ai::ToolRegistry.sync_project!(@project)
+      tools_snapshot = Ai::ChatTooling.snapshot(@project)
       run = @chat.transaction do
         run = @chat.runs.create!(
           project: @project,
           operation: "chat",
           status: :queued,
           requested_by: @requested_by,
-          input_snapshot_json: { "prompt" => @prompt },
+          input_snapshot_json: { "prompt" => @prompt, "tools" => tools_snapshot },
           app_version: ENV.fetch("APP_VERSION", "local"),
           ruby_llm_version: Gem.loaded_specs.fetch("ruby_llm").version.to_s
         )

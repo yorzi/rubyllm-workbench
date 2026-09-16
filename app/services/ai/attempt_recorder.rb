@@ -59,13 +59,13 @@ module Ai
       @run
     end
 
-    def waiting_for_approval!(usage_ids_before: [])
+    def waiting_for_approval!(usage_ids_before: [], result_summary: {})
       usage_records = new_usage_records(usage_ids_before)
       sync_usage_records!(usage_records, fallback_status: :succeeded) if usage_records.any?
       @run.update!(
         status: :waiting_for_approval,
         finished_at: nil,
-        result_summary_json: { "partial_output" => @partial_output.presence }.compact
+        result_summary_json: result_summary.merge("partial_output" => @partial_output.presence).compact
       )
       @run
     end

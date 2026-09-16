@@ -10,12 +10,12 @@ Attempts. It follows the source specifications linked into this workspace:
 
 ## Current slice
 
-The implemented gate is M0/M1: Projects, Model Explorer, model selection,
-persisted Chats and Messages, RubyLLM-backed streaming execution, durable
-Run/Attempt records, a searchable Run history, and a token/cost/latency
-inspector. Agents, tools,
-approvals, RAG, media, batch evaluation, billing, and deployment remain
-deferred until this slice is dogfooded.
+The implemented gate is M0–M3: Projects, Model Explorer, model selection,
+persisted Chats and Messages, RubyLLM-backed streaming execution, a
+code-defined Tool Lab, durable tool approvals, Run/Attempt/ToolInvocation
+records, a searchable Run history, and a token/cost/latency inspector.
+Agents, provider-hosted tools, RAG, media, batch evaluation, billing, and
+deployment remain deferred.
 
 ## Local setup
 

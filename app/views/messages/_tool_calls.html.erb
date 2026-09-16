@@ -1,0 +1,11 @@
+<article id="message_<%= message.id %>" class="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-xs leading-5 text-indigo-900">
+  <div class="mb-1 font-semibold uppercase tracking-[0.14em]">Tool request</div>
+  <div class="space-y-3">
+    <% message.tool_calls.each_value do |tool_call| %>
+      <div>
+        <div class="font-mono text-[11px] font-medium"><%= tool_call.name %> · <%= tool_call.id %></div>
+        <pre class="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-white/70 p-3 font-mono text-[11px] leading-5 text-indigo-950"><%= JSON.pretty_generate("arguments" => Ai::ToolPayloadSanitizer.call(tool_call.arguments)) %></pre>
+      </div>
+    <% end %>
+  </div>
+</article>

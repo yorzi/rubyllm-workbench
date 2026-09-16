@@ -24,6 +24,10 @@
         <span>Experiments</span>
         <span class="font-mono text-[11px]">E</span>
       <% end %>
+      <%= link_to(project ? project_tool_definitions_path(project) : root_path(anchor: "new-project"), class: "flex items-center justify-between rounded-lg px-3 py-2 #{active == 'tools' ? 'bg-accent-soft font-medium text-accent' : 'text-muted hover:bg-slate-50 hover:text-ink'}") do %>
+        <span>Tools</span>
+        <span class="font-mono text-[11px]">T</span>
+      <% end %>
       <%= link_to runs_path, class: "flex items-center justify-between rounded-lg px-3 py-2 #{active == 'runs' ? 'bg-accent-soft font-medium text-accent' : 'text-muted hover:bg-slate-50 hover:text-ink'}" do %>
         <span>Runs</span>
         <span class="font-mono text-[11px]">R</span>
@@ -52,8 +56,8 @@
     <% end %>
 
     <div class="mt-10 hidden rounded-xl border border-line bg-canvas p-3 text-xs leading-5 text-muted lg:block">
-      <p class="font-medium text-ink">M0 / M1 / M2 slice</p>
-      <p class="mt-1">Chats, structured experiments, comparison runs, and inspectable evidence.</p>
+      <p class="font-medium text-ink">M0–M3 slice</p>
+      <p class="mt-1">Chats, tools, approvals, structured experiments, and inspectable evidence.</p>
     </div>
   </aside>
 
