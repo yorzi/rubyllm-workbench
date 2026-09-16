@@ -6,6 +6,35 @@
 原则上只追加，不静默改写历史。代码细节回到对应 commit 和
 [IMPLEMENTATION_MAP.md](../IMPLEMENTATION_MAP.md)。
 
+## 2026-09-16 — 明确 Specs 基线与项目 `docs/` 双层体系
+
+### 为什么做
+
+随着实现不断增长，Specs 和运行时文档如果被当成同一套东西，就会出现两种相反
+的错误：把原始参照线悄悄改成“当前代码是什么”，或者把旧的 planned baseline
+误读成“当前功能还不存在”。本次校正明确两者各自的意图，保留它们之间的可追溯
+关系。
+
+### 一致性工作
+
+- 保留 [`rubyllm-workbench/ai/`](../rubyllm-workbench/ai/) 和 supporting Specs 作为
+  稳定基线；本次没有把当前实现倒灌或改写到 Specs。
+- 将本目录 `docs/` 明确为代码仓库内部的当前现实层：它随着功能、证据和偏差增长，
+  但不覆盖 Specs、代码或测试。
+- 统一使用 `IMPLEMENTED`、`PARTIAL`、`PLANNED`、`DEPRECATED`、`REMOVED` 状态词，
+  并把 `LOCAL_VERIFIED`、`OPENROUTER_DOGFOOD` 作为独立证据标签。
+- 把架构图拆成 L0/L1/L2、运行时、状态和 milestone 图；已验证路径与未来节点分开，
+  避免把 M4/M5 画成当前依赖。
+- 扩展文档守护测试，确保两套体系的边界、状态词、关键组件和图表锚点不会被后续
+  迭代意外删除。
+
+### 证据与边界
+
+这是文档和一致性校正，不是新的运行时功能。当前 M0–M3 核心仍为
+`IMPLEMENTED`；并行 tool-call 兼容性为 `PARTIAL`。统一的 Run/Attempt/Artifact
+生命周期事件仍记录为 `PLANNED` 的后续技术工作，不能从现有 inspector 推断为完整
+event stream 或 tracing。
+
 ## 2026-09-16 — 建立人类理解层
 
 ### 为什么做

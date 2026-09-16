@@ -3,6 +3,11 @@
 这份手册解决“怎么运行”和“看到结果后能相信到什么程度”。它不保存任何
 provider secret，也不把本地成功包装成部署或业务结果。
 
+本手册属于项目内部 `docs/` 当前现实层。原始目标、合同和验收基线仍在
+[`rubyllm-workbench/ai/00_ENTRYPOINT.md`](../rubyllm-workbench/ai/00_ENTRYPOINT.md)
+及其 supporting Specs 中；两套文档的状态可以不同。操作命令验证的是当前代码，
+不会自动改变 Specs。
+
 更新时间：2026-09-16
 
 ## 运行前提
@@ -82,11 +87,21 @@ OPENROUTER_LIVE_TEST=1 bin/rails test test/integration/openrouter_live_test.rb
 该命令只表示本次本地 provider dogfood；它可能产生费用、受网络影响，也不应在
 没有用户明确意图时反复运行。
 
+## 当前可观测性边界
+
+M3 已经把工具请求、工具完成和审批请求/决定写入应用记录，并在 Run inspector 中
+展示；这些记录是当前本地执行的主要证据。生命周期事件的覆盖仍不完整：`ai.run`、
+`ai.attempt` 和 `ai.artifact` 的统一 started/succeeded/failed/created 事件属于
+`PLANNED` 的后续观测能力。当前不能把数据库 inspector 误称为已经存在的完整事件
+流、分布式 tracing 或成本监控系统。
+
 ## 如何读 Run inspector
 
 按这个顺序看：
 
-1. **Run status**：最终是 succeeded、failed，还是 waiting_for_approval。
+1. **Run status**：最终是 succeeded、failed，还是 waiting_for_approval；文档状态
+   另使用 `IMPLEMENTED`、`PARTIAL`、`PLANNED`、`DEPRECATED`、`REMOVED`，不要用
+   “差不多完成”替代它们。
 2. **Operation**：是 `chat` 还是 `structured`。
 3. **Attempts**：是否有重试、哪个 provider/model 真正执行、usage 和 cost 是否
    已报告/估算/未知。

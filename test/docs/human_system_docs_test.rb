@@ -12,6 +12,16 @@ class HumanSystemDocsTest < ActiveSupport::TestCase
     assert_includes sources.fetch("README.md"), "OPERATIONS.md"
     assert_includes sources.fetch("README.md"), "CHANGELOG.md"
     assert_includes File.read(Rails.root.join("README.md")), "docs/README.md"
+    assert_includes File.read(Rails.root.join("README.md")), "rubyllm-workbench/ai/00_ENTRYPOINT.md"
+    assert_includes sources.fetch("README.md"), "Specs 基线"
+    assert_includes sources.fetch("README.md"), "当前实现层"
+    assert_includes sources.fetch("README.md"), "`IMPLEMENTED`"
+    assert_includes sources.fetch("README.md"), "`PARTIAL`"
+    assert_includes sources.fetch("README.md"), "`PLANNED`"
+    assert_includes sources.fetch("README.md"), "`DEPRECATED`"
+    assert_includes sources.fetch("README.md"), "`REMOVED`"
+    assert_includes sources.fetch("CHANGELOG.md"), "双层体系"
+    assert_includes sources.fetch("OPERATIONS.md"), "当前可观测性边界"
   end
 
   test "architecture keeps the system diagrams and current boundary visible" do
@@ -21,6 +31,11 @@ class HumanSystemDocsTest < ActiveSupport::TestCase
     assert_includes architecture, "ToolInvocation"
     assert_includes architecture, "waiting_for_approval"
     assert_includes architecture, "M4 Knowledge + RAG"
+    assert_includes architecture, "ChatResponseJob"
+    assert_includes architecture, "Run #13"
+    assert_includes architecture, "`IMPLEMENTED`"
+    assert_includes architecture, "`PARTIAL`"
+    assert_includes architecture, "`PLANNED`"
   end
 
   test "system guide keeps goals and evidence boundaries visible" do
@@ -31,5 +46,10 @@ class HumanSystemDocsTest < ActiveSupport::TestCase
     assert_includes guide, "## 最容易误读的地方"
     assert_includes guide, "不等于生产部署"
     assert_includes guide, "Run #13"
+    assert_includes guide, "Specs 基线"
+    assert_includes guide, "当前现实层"
+    assert_includes guide, "`IMPLEMENTED`"
+    assert_includes guide, "`PARTIAL`"
+    assert_includes guide, "`PLANNED`"
   end
 end

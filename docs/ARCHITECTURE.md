@@ -1,143 +1,98 @@
 # RubyLLM Workbench 架构与流程图
 
-图表用于恢复整体关系。它们是面向人的结构说明，不是自动从数据库 schema
-生成的图；新增实体、状态、队列或 provider 边界时必须同步维护。
+这些图是项目内部 `docs/` 的当前实现视图，用来帮助人恢复系统关系。它们不是从
+数据库自动生成的 ERD，也不是 Specs 的未来架构宣言；具体字段和行为仍以代码、
+迁移、测试和运行证据为准。
 
 更新时间：2026-09-16
-当前实现：M0–M3 核心闭环
+当前实现：M0–M3 核心闭环 `IMPLEMENTED`
+当前图表范围：已验证的本地运行路径；未来节点全部显式标为 `PLANNED`
+校准依据：routes、models、migrations、jobs、services、测试，以及 M3 OpenRouter
+dogfood（Run #11、Run #13）
 
-## 1. 系统总览：人从哪里进入，证据在哪里落下
+## 读图规则
+
+- 先看 L0，得到系统边界；再看 L1，定位代码职责；最后按问题查看数据、时序或状态图。
+- `Run` 是一次用户可理解的执行边界；`Attempt` 是其中一次 provider/model 请求。
+- `ToolDefinition` 表示“允许什么”，`ToolInvocation` 表示“实际请求了什么”，
+  `Approval` 表示“人做了什么决定”。
+- `PLANNED` 节点不是当前系统已经存在的运行时组件，不能从图中推断出实现。
+
+## 1. L0 — 当前系统上下文
+
+这张图只回答“谁进入系统、系统经过哪条边界、证据落在哪里”。
 
 ```mermaid
 flowchart LR
-    Human["人 / 本地开发者"] --> Web["Rails Web Shell"]
-
-    subgraph UI["工作台入口"]
-      Projects["Projects"]
-      Models["Model Explorer"]
-      Chat["Project Chat"]
-      Tools["Tool Lab"]
-      Experiments["Experiment Workspace"]
-      Runs["Global Run History / Inspector"]
-    end
-
-    Web --> Projects
-    Web --> Models
-    Web --> Chat
-    Web --> Tools
-    Web --> Experiments
-    Web --> Runs
-
-    subgraph Rails["Rails application"]
-      RunExecutor["Ai::RunExecutor"]
-      ExperimentExecutor["Ai::ExperimentExecutor"]
-      ChatExecutor["Ai::ChatExecutor"]
-      StructuredExecutor["Ai::StructuredExecutor"]
-      ToolRegistry["Ai::ToolRegistry"]
-      ToolRecorder["Ai::ToolInvocationRecorder"]
-      ApprovalService["Ai::ApprovalService"]
-      Queue["Solid Queue / ChatResponseJob"]
-      DB[("SQLite + RubyLLM ActiveRecord")]
-    end
-
-    Chat --> RunExecutor
-    Tools --> ToolRegistry
-    Experiments --> ExperimentExecutor
-    Runs --> DB
-    RunExecutor --> ToolRegistry
-    RunExecutor --> DB
-    RunExecutor --> Queue
-    ExperimentExecutor --> StructuredExecutor
-    StructuredExecutor --> Queue
-    Queue --> ChatExecutor
-    ChatExecutor --> ToolRecorder
-    ChatExecutor --> DB
-    ApprovalService --> Queue
-    ApprovalService --> DB
-    ToolRecorder --> DB
-
-    subgraph RubyLLM["RubyLLM boundary"]
-      Conversation["Chat / Message persistence"]
-      ProviderAdapter["Provider abstraction"]
-      RubyTools["Ruby-defined tools"]
-    end
-
-    ChatExecutor --> Conversation
-    ChatExecutor --> ProviderAdapter
-    ToolRegistry --> RubyTools
-    ProviderAdapter --> Providers["Configured providers\nOpenRouter, etc."]
-    Conversation --> DB
-
-    classDef current fill:#e9e7ff,stroke:#6558d3,color:#211b4d;
-    class Chat,Tools,Runs,RunExecutor,ChatExecutor,ToolRecorder,ApprovalService current;
+    Human["人 / 本地开发者"] --> UI["Rails HTML / Turbo UI"]
+    UI --> App["Rails Workbench"]
+    App --> DB[("SQLite\nRails + RubyLLM records")]
+    App --> Queue["Solid Queue\nChatResponseJob"]
+    Queue --> RubyLLM["RubyLLM boundary"]
+    App --> RubyLLM
+    RubyLLM --> Providers["Configured providers\nOpenRouter, etc."]
+    App --> Blobs["Active Storage\nlocal disk"]
 ```
 
-读图方式：
+当前含义：provider 操作从 RubyLLM 边界进入；Run、Message、Attempt、Artifact、工具
+调用和审批等证据落在本地持久化层；队列负责 Chat continuation。远程部署、账号、
+外部数据库和公开访问不属于这张当前实现图。
 
-- 人只接触工作台入口；provider SDK/HTTP 不应该从 controller 旁路进入。
-- `Run` 是连接 UI、队列、RubyLLM 和数据库的核心证据节点。
-- Tool Lab 管的是 allowlist 和 schema；实际调用由 ChatExecutor/RubyLLM 产生，
-  再由 ToolInvocationRecorder 标准化。
-- M4 Knowledge 和 M5 Agent 不在这张当前图中作为已实现模块出现。
+## 2. L1 — 已实现组件如何连接
 
-## 2. 带审批的 Chat Run 时序
+这张图缩小了节点数量，只保留人需要定位职责的组件。
 
 ```mermaid
-sequenceDiagram
-    autonumber
-    actor Human as 人
-    participant UI as Chat UI
-    participant RE as Ai::RunExecutor
-    participant DB as SQLite / RubyLLM records
-    participant Q as ChatResponseJob
-    participant CE as Ai::ChatExecutor
-    participant LLM as RubyLLM + Provider
-    participant AS as Ai::ApprovalService
-
-    Human->>UI: 输入 prompt，点击 Run
-    UI->>RE: enqueue(chat, project, prompt)
-    RE->>DB: 创建 queued Run + Attempt
-    RE->>DB: 冻结 prompt、tools、schema、approval policy
-    RE->>Q: perform_later(run_id)
-    Q->>CE: call(run_id)
-    CE->>DB: claim Run，启动 Attempt
-    CE->>LLM: 配置快照中的工具并 ask(prompt)
-    LLM-->>CE: streamed chunks / assistant tool call
-    CE->>DB: 保存 Message、usage、Attempt metrics
-
-    alt 工具不需要审批
-        CE->>DB: 记录 ToolInvocation = succeeded
-        CE->>LLM: 继续会话
-        LLM-->>CE: final assistant response
-        CE->>DB: Run = succeeded
-        DB-->>UI: inspector 显示结果和工具审计
-    else 工具需要审批
-        CE->>DB: ToolInvocation + pending Approval
-        CE->>DB: Run = waiting_for_approval
-        DB-->>UI: 刷新后显示待审批调用
-        Human->>UI: Approve 或 Deny
-        UI->>AS: 写入决定
-        AS->>DB: 更新 Approval 和 ToolInvocation
-        AS->>LLM: 更新 RubyLLM 会话决定
-        AS->>Q: enqueue continuation
-        Q->>CE: call(run_id)
-        CE->>DB: claim waiting Run，不新增 user prompt
-        CE->>LLM: complete()
-        LLM-->>CE: tool result / final assistant response
-        CE->>DB: Run = succeeded 或 failed
-        DB-->>UI: inspector 显示完整时间线
+flowchart TD
+    subgraph UI["工作台页面"]
+        ProjectUI["Project shell"]
+        ChatUI["Project Chat"]
+        ExperimentUI["Experiment workspace"]
+        ToolUI["Tool Lab"]
+        RunUI["Run history / inspector"]
     end
+
+    RunExecutor["Ai::RunExecutor\n(chat submission)"]
+    ExperimentExecutor["Ai::ExperimentExecutor\n(structured submission)"]
+    StructuredExecutor["Ai::StructuredExecutor"]
+    ChatJob["ChatResponseJob"]
+    StructuredJob["StructuredResponseJob"]
+    ChatExecutor["Ai::ChatExecutor"]
+    Tooling["ToolRegistry + ChatTooling"]
+    Audit["ToolInvocationRecorder + ApprovalService"]
+    Records["Project / Chat / Run / Attempt\n/ Artifact / tool records"]
+    RubyLLM["RubyLLM Chat + provider boundary"]
+
+    ChatUI --> RunExecutor
+    ExperimentUI --> ExperimentExecutor
+    ToolUI --> Tooling
+    RunUI --> Records
+    RunExecutor --> ChatJob
+    ExperimentExecutor --> StructuredJob
+    StructuredJob --> StructuredExecutor
+    ChatJob --> ChatExecutor
+    ChatExecutor --> RubyLLM
+    ChatExecutor --> Audit
+    Audit --> Records
+    Tooling --> ChatExecutor
+    RunExecutor --> Records
+    StructuredExecutor --> Records
 ```
 
-关键点：
+代码职责的简化记忆：
 
-1. approval 是 Run 的一种真实中间状态，不是前端 loading 文案。
-2. continuation 通过已有会话完成，不重复提交原始 prompt。
-3. Run claim 防止审批请求和队列 worker 竞争时重复执行。
-4. 如果工具抛异常，系统记录安全的 tool-result error 和失败 diagnostic，保留
-   可继续阅读的会话结构。
+1. Controller 只接收页面意图；`Ai::RunExecutor` 或
+   `Ai::ExperimentExecutor` 创建带快照的执行边界。
+2. Job 把可恢复执行交给 `Ai::ChatExecutor`；结构化流程再由
+   `Ai::StructuredExecutor` 负责 schema、validation 和 Artifact。
+3. `ToolRegistry`/`ChatTooling` 只允许代码中已注册的工具；Recorder 和
+   `ApprovalService` 把调用及人的决定变成可检查记录。
+4. provider/conversation 语义仍由 RubyLLM 承担，应用不旁路调用 provider SDK 或 HTTP。
 
-## 3. 数据关系：一次执行为什么有这么多记录
+## 3. L2 — 当前持久化关系
+
+这是当前代码中已落地的主要关系；Message 是 RubyLLM 的持久化记录，不能与 Run
+混为一谈。
 
 ```mermaid
 erDiagram
@@ -148,6 +103,7 @@ erDiagram
     CHAT ||--o{ MESSAGE : persists
     CHAT ||--o{ RUN : starts
     EXPERIMENT ||--o{ EXPERIMENT_EXECUTION : runs
+    EXPERIMENT ||--o{ RUN : defines
     EXPERIMENT_EXECUTION ||--o{ RUN : groups
     RUN ||--o{ ATTEMPT : retries
     RUN ||--o{ ARTIFACT : produces
@@ -158,74 +114,159 @@ erDiagram
     TOOL_INVOCATION ||--o| APPROVAL : requests
 
     PROJECT {
-      string name
-      string slug
-      text description
+        bigint id
+        string name
+        string slug
+        text description
     }
     CHAT {
-      bigint project_id
-      bigint ruby_llm_model_id
-      string title
+        bigint project_id
+        bigint ruby_llm_model_id
+        string title
+    }
+    MESSAGE {
+        bigint chat_id
+        string role
+        text content
+    }
+    EXPERIMENT {
+        bigint project_id
+        integer revision
+        string status
+        json schema_json
+    }
+    EXPERIMENT_EXECUTION {
+        bigint experiment_id
+        string status
+        json input_snapshot_json
     }
     RUN {
-      bigint project_id
-      bigint chat_id
-      string operation
-      string status
-      json input_snapshot_json
-      json result_summary_json
+        bigint project_id
+        bigint chat_id
+        bigint experiment_id
+        bigint experiment_execution_id
+        string operation
+        string status
+        json input_snapshot_json
+        json result_summary_json
     }
     ATTEMPT {
-      bigint run_id
-      integer sequence
-      string provider
-      string model_id
-      string status
-      integer input_tokens
-      integer output_tokens
-    }
-    TOOL_DEFINITION {
-      bigint project_id
-      string key
-      string class_identifier
-      boolean enabled
-      string approval_policy
-      json schema_json
-    }
-    TOOL_INVOCATION {
-      bigint run_id
-      bigint attempt_id
-      bigint tool_definition_id
-      string tool_call_id
-      string status
-      json arguments_json
-      json result_json
-    }
-    APPROVAL {
-      bigint tool_invocation_id
-      string status
-      string actor
-      datetime requested_at
-      datetime decided_at
+        bigint run_id
+        integer sequence
+        string provider
+        string model_id
+        string status
+        integer input_tokens
+        integer output_tokens
     }
     ARTIFACT {
-      bigint run_id
-      bigint attempt_id
-      string kind
-      json content_json
-      text content_text
+        bigint run_id
+        bigint attempt_id
+        string kind
+        json content_json
+        text content_text
+    }
+    TOOL_DEFINITION {
+        bigint project_id
+        string key
+        string class_identifier
+        boolean enabled
+        string approval_policy
+        json schema_json
+    }
+    TOOL_INVOCATION {
+        bigint run_id
+        bigint attempt_id
+        bigint tool_definition_id
+        string tool_call_id
+        string status
+        json arguments_json
+        json result_json
+    }
+    APPROVAL {
+        bigint tool_invocation_id
+        string status
+        string actor
+        datetime requested_at
+        datetime decided_at
     }
 ```
 
-读图时记住：
+读取关系时记住：
 
-- `Message` 记录模型对话内容；`Run` 记录一次执行的边界和状态；二者不是重复表。
-- `Attempt` 解释 provider/model 请求和重试；`Artifact` 解释可复用的耐久产物。
-- `ToolDefinition` 是“允许什么”；`ToolInvocation` 是“实际发生什么”；`Approval`
-  是“人是否允许发生”。
-- `input_snapshot_json` 是历史证据的一部分，不能用今天的工具开关反推过去。
+- Experiment 定义可复用的结构化任务；Execution 冻结一次运行；child Run 各自保存
+  provider/model 结果，所以一个失败不会被另一个成功覆盖。
+- `input_snapshot_json` 是历史证据：之后的工具开关、schema 或模型选择不能回写它。
+- Artifact 是可复用的产物，不取代原始 Chat、Run、Attempt 和工具审计。
 
-## 4. 状态图：哪些状态需要等待，哪些状态已经结束
+### 仍未进入当前关系图的扩展
+
+```mermaid
+flowchart LR
+    Current["当前 Run / Artifact 证据"] -. "未来扩展" .-> Knowledge["PLANNED: Knowledge / RAG"]
+    Current -. "未来扩展" .-> Agent["PLANNED: Agent / durable research"]
+    Current -. "未来扩展" .-> Media["PLANNED: Media / batch / export"]
+```
+
+这些不是缺失的当前表，而是 Specs 和路线图中的后续方向。
+
+## 4. Runtime — 带审批的 Chat Run
+
+这条路径已经用本地 fake provider 测试，并用 OpenRouter Run #13 做过真实 dogfood。
+重点是 continuation 使用已有 RubyLLM 会话，不再次追加原始 user prompt。
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Human as 人
+    participant UI as Chat UI
+    participant RE as Ai::RunExecutor
+    participant DB as SQLite / RubyLLM records
+    participant Q as ChatResponseJob
+    participant CE as Ai::ChatExecutor
+    participant LLM as RubyLLM + provider
+    participant Audit as Recorder / ApprovalService
+
+    Human->>UI: 输入 prompt，点击 Run
+    UI->>RE: enqueue(chat, project, prompt)
+    RE->>DB: 原子创建 queued Run + Attempt
+    RE->>DB: 冻结 prompt、tools、schema、approval policy
+    RE->>Q: perform_later(run_id)
+    Q->>CE: call(run_id)
+    CE->>DB: claim Run，启动 Attempt
+    CE->>LLM: 配置快照中的工具并 ask(prompt)
+    LLM-->>CE: streamed chunks / assistant tool call
+    CE->>DB: 保存 Message、usage、Attempt metrics
+
+    alt 工具不需要审批
+        CE->>Audit: 记录 ToolInvocation
+        Audit->>DB: succeeded invocation
+        CE->>LLM: 继续会话
+        LLM-->>CE: final assistant response
+        CE->>DB: Run = succeeded
+        DB-->>UI: inspector 显示结果和工具审计
+    else 工具需要审批
+        CE->>Audit: 请求 ToolInvocation + Approval
+        Audit->>DB: pending approval，Run = waiting_for_approval
+        DB-->>UI: 显示待审批调用
+        Human->>UI: Approve 或 Deny
+        UI->>Audit: 写入决定
+        Audit->>DB: 更新 Approval 和 ToolInvocation
+        Audit->>LLM: 更新 RubyLLM 会话决定
+        Audit->>Q: enqueue continuation
+        Q->>CE: call(run_id)
+        CE->>DB: claim waiting Run，不新增 user prompt
+        CE->>LLM: complete()
+        LLM-->>CE: tool result / final assistant response
+        CE->>DB: Run = succeeded 或 failed
+        DB-->>UI: inspector 显示完整时间线
+    end
+```
+
+安全边界：Tool Lab 管理的是 Project-scoped allowlist；浏览器输入不能上传 Ruby，
+也不能把任意 shell/code 变成工具。参数和结果展示会过滤明显的 secret 字段。
+
+## 5. Runtime — 状态如何推进
 
 ```mermaid
 stateDiagram-v2
@@ -243,41 +284,42 @@ stateDiagram-v2
     cancelled --> [*]
 
     note right of WaitingForApproval
-      页面可刷新
-      Approval 必须可审计
-      不应显示为 succeeded
+        页面可刷新
+        Approval 必须可审计
+        不应显示为 succeeded
     end note
 ```
 
-Approval 自己的状态是：
+Approval 自己的状态是 `pending → approved | denied | expired`。ToolInvocation 更细，
+可能经历 `requested → running → succeeded | failed`，也可能在决定后进入 `denied`。
+因此不能只看 Run 的最终 badge 判断工具是否真的执行。
 
-`pending → approved | denied | expired`
-
-ToolInvocation 的状态比 Run 更细：它可能先是 `requested`，等待审批，再进入
-`running`、`succeeded`、`denied` 或 `failed`。因此不要只看 Run 的最终 badge 来
-判断工具是否实际执行。
-
-## 5. 里程碑图：现在在哪里，下一步是什么
+## 6. Milestone — 基线与当前实现的距离
 
 ```mermaid
 flowchart LR
-    M0["M0 Foundation\n已完成"] --> M1["M1 Chat + Runs\n已完成"]
-    M1 --> M2["M2 Structured Compare\n已完成"]
-    M2 --> M3["M3 Tools + Approval\n核心已完成"]
-    M3 --> M3P["M3 Parallel Calls\n下一项"]
-    M3P --> M4["M4 Knowledge + RAG\n延期"]
-    M4 --> M5["M5 Agents + Research\n延期"]
-    M5 --> M6["M6+ Media / Batch / Ops\n延期"]
-
-    classDef done fill:#e7f6ed,stroke:#3a8f5a,color:#174b2b;
-    classDef current fill:#e9e7ff,stroke:#6558d3,color:#211b4d;
-    classDef next fill:#fff4d6,stroke:#b27a00,color:#654600;
-    classDef deferred fill:#f1f2f4,stroke:#89909b,color:#4c535d;
-    class M0,M1,M2 done;
-    class M3 current;
-    class M3P next;
-    class M4,M5,M6 deferred;
+    M0["M0 Foundation\nIMPLEMENTED"] --> M1["M1 Chat + Runs\nIMPLEMENTED"]
+    M1 --> M2["M2 Structured Compare\nIMPLEMENTED"]
+    M2 --> M3["M3 Tools + Approval\nIMPLEMENTED"]
+    M3 --> M3P["M3 Parallel Calls\nPARTIAL"]
+    M3P --> M4["M4 Knowledge + RAG\nPLANNED"]
+    M4 --> M5["M5 Agents + Research\nPLANNED"]
+    M5 --> M6["M6+ Media / Batch / Ops\nPLANNED"]
 ```
 
-里程碑不是“功能越多越好”的排行榜。每进入下一个阶段，都要先把上一个阶段的
-失败边界、可恢复性和证据写清楚；否则新能力只会增加人无法理解的状态数量。
+`PARTIAL` 的含义是：M3 单个工具调用和审批闭环已验证，但并行调用的 provider
+兼容性仍未验收。该状态不能被简化成 M3 全部完成，也不能被误写为 M4/M5 已开始。
+
+## 7. 如何保持图表可信
+
+每次新增或改变以下任一项，都要在同一主题迭代中检查本页：实体/迁移、状态转移、
+队列 job、provider 边界、工具审批、Artifact 产出或页面入口。更新时：
+
+1. 先对照 Specs，确认目标和约束没有被误读。
+2. 再对照代码、测试和实际页面，把已验证路径写成 `IMPLEMENTED` 或 `PARTIAL`。
+3. 尚未落地的目标只写 `PLANNED`；被淘汰的入口写 `DEPRECATED` 或 `REMOVED`，
+   不要把未来节点画成当前依赖。
+4. 在 [CHANGELOG.md](CHANGELOG.md) 记录变更原因、证据和未证明的边界。
+
+图表是帮助人理解当前系统的压缩视图，不是新的事实来源；当图与代码冲突时，应
+先修正图或记录偏差，而不是用图替代代码证据。

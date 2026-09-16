@@ -8,6 +8,20 @@ AI agent 持续修改系统之后，仍能快速回答：系统为什么存在�
 当前实现：M0–M3 核心闭环
 当前代码基线：`05781d6 feat: add tool approvals and inspection`
 
+## 两套文档体系：先确认你正在读哪一种“真相”
+
+- **Specs 基线**：[`rubyllm-workbench/ai/`](../rubyllm-workbench/ai/) 和
+  [`rubyllm-workbench/supporting/`](../rubyllm-workbench/supporting/) 定义原始目标、
+  合同、约束和验收线；[`rubyllm-workbench/human/`](../rubyllm-workbench/human/) 是
+  Specs 对人类可理解性的基线说明。
+- **项目 `docs/` 当前现实层**：本目录根据当前代码、数据库、测试、浏览器检查和
+  provider dogfood 记录“现在实际上发生什么”。它会随项目增长，不是 Specs 的副本，
+  也不能替代代码或测试。
+
+Specs 中的 `PLANNED` 可能仍然是正确的基线状态，而本页可以记录其中某个切片已经
+  在代码中 `IMPLEMENTED`。反过来，如果当前实现偏离 Specs，本页必须同时写出基线
+  意图和实际偏差；不能通过改写 Specs 来消除差异。
+
 ## 一句话理解
 
 RubyLLM Workbench 是一个 local-first 的 Rails 工作台：人在一个 Project 中选择
@@ -40,13 +54,16 @@ Attempt、Message、ToolInvocation、Approval 和 Artifact。
 
 | 阶段 | 人能做什么 | 系统留下什么 | 当前状态 |
 | --- | --- | --- | --- |
-| M0 | 浏览项目工作台和空状态 | Project、基础页面、SQLite 记录 | 已实现/本地已验证 |
-| M1 | 浏览模型、创建 Chat、发送 prompt、查看 Run 历史 | RubyLLM Message、Run、Attempt、usage、cost、latency、diagnostic | 已实现/OpenRouter 已 dogfood |
-| M2 | 保存结构化 Experiment，选择多个模型比较并重跑 | 冻结的 Experiment/Execution、独立 child Run、JSON Artifact、schema/provider 区分 | 已实现/OpenRouter 已 dogfood |
-| M3 核心 | 在 Tool Lab 启用代码定义工具，查看调用，审批或拒绝副作用 | ToolDefinition、ToolInvocation、Approval、工具参数/结果/时长/错误 | 已实现/OpenRouter 已 dogfood |
-| M3 后续 | 验证多个并行 tool calls 和更多 provider 差异 | 多调用时序和兼容性证据 | 未完成 |
-| M4 | 知识集合、摄取、chunk、embedding、检索、rerank、文档提取 | Knowledge*、引用和来源 Artifact | 明确延期 |
-| M5 | Agent、Durable Research、远程工具和可恢复长任务 | AgentDefinition、AgentRunStep、citation/research Artifact | 明确延期 |
+| M0 | 浏览项目工作台和空状态 | Project、基础页面、SQLite 记录 | `IMPLEMENTED` · `LOCAL_VERIFIED` |
+| M1 | 浏览模型、创建 Chat、发送 prompt、查看 Run 历史 | RubyLLM Message、Run、Attempt、usage、cost、latency、diagnostic | `IMPLEMENTED` · `LOCAL_VERIFIED` + `OPENROUTER_DOGFOOD` |
+| M2 | 保存结构化 Experiment，选择多个模型比较并重跑 | 冻结的 Experiment/Execution、独立 child Run、JSON Artifact、schema/provider 区分 | `IMPLEMENTED` · `LOCAL_VERIFIED` + `OPENROUTER_DOGFOOD` |
+| M3 核心 | 在 Tool Lab 启用代码定义工具，查看调用，审批或拒绝副作用 | ToolDefinition、ToolInvocation、Approval、工具参数/结果/时长/错误 | `IMPLEMENTED` · `LOCAL_VERIFIED` + `OPENROUTER_DOGFOOD` |
+| M3 并行 tool calls | 验证多个并行 tool calls 和更多 provider 差异 | 多调用时序和兼容性证据 | `PARTIAL` · 单调用路径已验证，并行兼容性未验收 |
+| M4 | 知识集合、摄取、chunk、embedding、检索、rerank、文档提取 | Knowledge*、引用和来源 Artifact | `PLANNED` |
+| M5 | Agent、Durable Research、远程工具和可恢复长任务 | AgentDefinition、AgentRunStep、citation/research Artifact | `PLANNED` |
+
+这里的状态是项目当前实现层的判断；Specs 人类基线中的 `PLANNED` 状态仍保留其
+“原始需求尚未被基线承认为已完成”的含义。
 
 ## 关键概念：不要把它们混成一个“结果”
 

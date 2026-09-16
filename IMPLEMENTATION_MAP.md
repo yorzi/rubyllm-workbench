@@ -9,14 +9,28 @@ This implementation covers the M0, M1, M2 and current M3 slice:
 Later milestones (knowledge, agents, media, batch/evals and operational polish)
 stay deferred until this loop is extended deliberately.
 
+Current status: M0–M3 core `IMPLEMENTED`; M3 parallel tool-call compatibility `PARTIAL`;
+M4–M8 `PLANNED`.
+
 ## Human understanding layer
 
-The human-readable system map lives in [docs/README.md](docs/README.md). Start
-with `docs/SYSTEM_GUIDE.md` for goals, current capabilities and cautions; use
-`docs/ARCHITECTURE.md` for flow/data/state diagrams; use `docs/OPERATIONS.md`
+There are two deliberately separate documentation systems:
+
+- **Specs baseline:** [`rubyllm-workbench/ai/`](rubyllm-workbench/ai/) and
+  [`rubyllm-workbench/supporting/`](rubyllm-workbench/supporting/) define the original
+  product intent, contracts, constraints and acceptance line. Their
+  [`human/`](rubyllm-workbench/human/) layer explains that baseline to a person.
+- **Project current-reality layer:** [docs/README.md](docs/README.md) and the documents
+  below summarize what this repository actually implements and what evidence exists.
+  They grow with the project, record deviations and risks, and do not override Specs,
+  source code or tests.
+
+Start with `docs/SYSTEM_GUIDE.md` for current goals, capabilities and cautions; use
+`docs/ARCHITECTURE.md` for verified flow/data/state diagrams; use `docs/OPERATIONS.md`
 for local operation and evidence boundaries; and append user-facing changes to
-`docs/CHANGELOG.md` with each thematic iteration. These documents summarize the
-implementation but do not override the canonical specs or code.
+`docs/CHANGELOG.md` with each thematic iteration. If runtime and Specs differ, keep
+both sides visible: do not rewrite the baseline merely to make the current implementation
+look complete.
 
 ## Product shape
 
@@ -81,6 +95,10 @@ implementation but do not override the canonical specs or code.
 - `Ai::ToolInvocationRecorder` maps RubyLLM tool calls to inspectable
   application records; `Ai::ApprovalService` records a decision and enqueues
   the resumable Chat completion.
+
+The current M3 inspector records tool and approval activity, but a unified lifecycle event
+catalog for `ai.run`, `ai.attempt` and `ai.artifact` remains `PLANNED`; it must not be
+assumed from the existence of database records.
 
 ## Integrations and constraints
 

@@ -5,9 +5,17 @@ capabilities, running project-scoped chats, and reviewing durable AI Runs and
 Attempts. It follows the source specifications linked into this workspace:
 
 - Canonical entrypoint: [ai/00_ENTRYPOINT.md](rubyllm-workbench/ai/00_ENTRYPOINT.md)
+- Specs baseline: [`ai/`](rubyllm-workbench/ai/) and [`supporting/`](rubyllm-workbench/supporting/),
+  including the original product, technical, safety and acceptance contracts.
 - Implementation map: [IMPLEMENTATION_MAP.md](IMPLEMENTATION_MAP.md)
 - Current work list: [TODO.md](TODO.md)
-- Human understanding docs: [docs/README.md](docs/README.md)
+- Current implementation docs: [docs/README.md](docs/README.md)
+
+Specs and `docs/` have different jobs. Specs are the stable reference line; the project
+`docs/` directory is the living record of what this repository currently implements,
+what evidence supports it, and where it deviates or remains incomplete. Read `docs/`
+for current behavior and the linked Specs when checking original intent or acceptance
+constraints. Current runtime changes must not silently rewrite the Specs baseline.
 
 ## Current slice
 
@@ -15,8 +23,9 @@ The implemented gate is M0–M3 core: Projects, Model Explorer, model selection,
 persisted Chats and Messages, RubyLLM-backed streaming execution, a
 code-defined Tool Lab, durable tool approvals, Run/Attempt/ToolInvocation
 records, a searchable Run history, and a token/cost/latency inspector.
-Parallel tool-call compatibility, Agents, provider-hosted tools, RAG, media,
-batch evaluation, billing, and deployment remain deferred.
+Parallel tool-call compatibility is `PARTIAL` (single-call path verified, parallel
+compatibility not accepted). Agents, provider-hosted tools, RAG, media, batch evaluation,
+billing, and deployment remain `PLANNED`.
 
 If you are returning to the project after a pause, read
 [docs/SYSTEM_GUIDE.md](docs/SYSTEM_GUIDE.md) first, then the diagrams and
