@@ -7,6 +7,10 @@ module Ai
         "project_snapshot"
       end
 
+      def self.parallel_safe?
+        true
+      end
+
       def initialize(project:, run: nil)
         @project = project
         @run = run

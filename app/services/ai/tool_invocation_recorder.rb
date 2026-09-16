@@ -4,6 +4,7 @@ module Ai
       @run = run
       @chat = chat
       @attempt = attempt
+      @mutex = Mutex.new
     end
 
     def attach
@@ -15,10 +16,12 @@ module Ai
     end
 
     def sync!(failure: nil)
-      persisted_tool_calls.each do |tool_call_record|
-        sync_record(tool_call_record, failure:)
+      @mutex.synchronize do
+        persisted_tool_calls.each do |tool_call_record|
+          sync_record(tool_call_record, failure:)
+        end
+        @run.tool_invocations.reload
       end
-      @run.tool_invocations.reload
     end
 
     private
@@ -31,15 +34,17 @@ module Ai
     end
 
     def mark_running(tool_call)
-      invocation = find_or_initialize(tool_call.id, tool_call.name)
-      invocation.assign_attributes(
-        attempt: @attempt,
-        status: :running,
-        arguments_json: Ai::ToolPayloadSanitizer.call(tool_call.arguments),
-        started_at: invocation.started_at || Time.current
-      )
-      invocation.save!
-      notify("ai.tool.requested", invocation, tool_call_id: tool_call.id)
+      @mutex.synchronize do
+        invocation = find_or_initialize(tool_call.id, tool_call.name)
+        invocation.assign_attributes(
+          attempt: @attempt,
+          status: :running,
+          arguments_json: Ai::ToolPayloadSanitizer.call(tool_call.arguments),
+          started_at: invocation.started_at || Time.current
+        )
+        invocation.save!
+        notify("ai.tool.requested", invocation, tool_call_id: tool_call.id)
+      end
     end
 
     def sync_record(tool_call_record, failure: nil)
@@ -94,10 +99,9 @@ module Ai
 
       invocation.save!
       sync_approval!(invocation, definition, approval_status, tool_call_record.created_at)
+      notify("ai.tool.requested", invocation)
       if invocation.succeeded? || invocation.failed? || invocation.denied?
         notify("ai.tool.completed", invocation)
-      elsif invocation.requested? || invocation.waiting_for_approval? || invocation.approved? || invocation.running?
-        notify("ai.tool.requested", invocation)
       end
       invocation
     end

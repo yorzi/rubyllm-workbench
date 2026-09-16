@@ -24,9 +24,12 @@ persisted Chats and Messages, RubyLLM-backed streaming execution, a
 code-defined Tool Lab, durable tool approvals, Run/Attempt/ToolInvocation
 records, a searchable Run history, a token/cost/latency inspector, and a local
 LifecycleEvent timeline for each Run.
-Parallel tool-call compatibility is `PARTIAL` (single-call path verified, parallel
-compatibility not accepted). Agents, provider-hosted tools, RAG, media, batch evaluation,
-billing, and deployment remain `PLANNED`.
+Tool execution is sequential by default; Tool Lab has an explicit parallel mode that is
+frozen into each new Run and only takes effect for a model advertising
+`parallel_tool_calls` when every enabled tool is marked parallel-safe. The local application
+path and multiple-call inspection are verified; real provider compatibility remains `PARTIAL`.
+Agents, provider-hosted tools, RAG, media, batch evaluation, billing, and deployment remain
+`PLANNED`.
 
 If you are returning to the project after a pause, read
 [docs/SYSTEM_GUIDE.md](docs/SYSTEM_GUIDE.md) first, then the diagrams and

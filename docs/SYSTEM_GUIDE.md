@@ -6,7 +6,7 @@ AI agent 持续修改系统之后，仍能快速回答：系统为什么存在�
 
 更新时间：2026-09-16
 当前实现：M0–M3 核心闭环
-当前代码基线：`main` 上的 M3 生命周期事件切片
+当前代码基线：`main` 上的 M3 生命周期与并行策略切片
 
 ## 两套文档体系：先确认你正在读哪一种“真相”
 
@@ -59,7 +59,7 @@ Attempt、Message、ToolInvocation、Approval 和 Artifact。
 | M2 | 保存结构化 Experiment，选择多个模型比较并重跑 | 冻结的 Experiment/Execution、独立 child Run、JSON Artifact、schema/provider 区分 | `IMPLEMENTED` · `LOCAL_VERIFIED` + `OPENROUTER_DOGFOOD` |
 | M3 核心 | 在 Tool Lab 启用代码定义工具，查看调用，审批或拒绝副作用 | ToolDefinition、ToolInvocation、Approval、工具参数/结果/时长/错误 | `IMPLEMENTED` · `LOCAL_VERIFIED` + `OPENROUTER_DOGFOOD` |
 | M3 观测切片 | 在 Run inspector 查看执行时间线 | LifecycleEvent、事件名称、关联记录、脱敏元数据和去重 key | `IMPLEMENTED` · `LOCAL_VERIFIED` |
-| M3 并行 tool calls | 验证多个并行 tool calls 和更多 provider 差异 | 多调用时序和兼容性证据 | `PARTIAL` · 单调用路径已验证，并行兼容性未验收 |
+| M3 并行 tool calls | 通过显式策略验证多个调用的应用侧记录和安全降级 | 冻结的 calls/concurrency 选项、多调用 ToolInvocation 和生命周期事件 | `IMPLEMENTED` · `LOCAL_VERIFIED`；live provider 兼容性仍 `PARTIAL` |
 | M4 | 知识集合、摄取、chunk、embedding、检索、rerank、文档提取 | Knowledge*、引用和来源 Artifact | `PLANNED` |
 | M5 | Agent、Durable Research、远程工具和可恢复长任务 | AgentDefinition、AgentRunStep、citation/research Artifact | `PLANNED` |
 
@@ -84,7 +84,8 @@ Run 是一次用户能理解的执行请求，有稳定的 inspector URL 和状�
 
 `queued → running → waiting_for_approval → succeeded | failed | cancelled`
 
-Run 的 `input_snapshot` 冻结这次执行看到的 prompt、工具 schema 和 approval policy。
+Run 的 `input_snapshot` 冻结这次执行看到的 prompt、工具 schema、approval policy 和
+Tool execution policy。
 之后在 Tool Lab 里切换 enabled，不会回写已经开始的旧 Run。
 
 ### Attempt
@@ -102,6 +103,15 @@ Attempt/工具/Artifact”。它通过 `ActiveSupport::Notifications` 接收应�
 固定名称和 `event_key` 去重，只保存允许的元数据；prompt、工具参数、工具结果和
 Artifact 内容仍留在各自的原始记录中，不复制进事件 payload。它补充 Run/Attempt 等
 事实记录，不替代它们，也不等同于分布式 tracing。
+
+### Tool execution policy
+
+Tool Lab 为 Project 保存一个新 Chat Run 的默认执行模式，默认为 `sequential`。选择
+`parallel` 不会直接绕过安全边界：只有当当前模型能力元数据包含
+`parallel_tool_calls`，且所有 enabled 工具都声明 `parallel_safe?` 时，Run 才会冻结
+`calls: many` 和 `concurrency: threads`。否则 Run 仍使用串行 RubyLLM 选项，并在
+`input_snapshot` 中留下 `fallback_reason`。因此“请求了 parallel”与“这次实际并行”是
+两个必须分开的事实。
 
 ### Experiment / Execution / Artifact
 
@@ -123,16 +133,18 @@ Artifact 内容仍留在各自的原始记录中，不复制进事件 payload。
 ## 一次 Chat Run 是如何工作的
 
 1. 人在 Chat 输入 prompt，应用调用 `Ai::RunExecutor`。
-2. 系统同步 Project 的 registry，并把当前 enabled 工具的 key、schema、描述和
-   approval policy 写入新 Run 的 `input_snapshot`。
+2. 系统同步 Project 的 registry，并把当前 enabled 工具的 key、schema、描述、
+   approval policy 和 Tool execution policy 写入新 Run 的 `input_snapshot`。
 3. 系统原子创建 Run 和第一个 queued Attempt，然后把 `ChatResponseJob` 放入
    Solid Queue。
 4. `Ai::ChatExecutor` 领取 Run；同一 Run 已经 `running` 或已经 terminal 时，
    后来的重复 job 不会再次提交 prompt。
-5. ChatExecutor 通过 RubyLLM 配置工具并执行 `ask(prompt)`，流式内容继续写入
-   RubyLLM Message，同时 Attempt 记录 usage、latency、cost 和 finish reason。
-6. 如果模型请求工具，`Ai::ToolInvocationRecorder` 把 RubyLLM 持久化的调用映射成
-   ToolInvocation，并过滤参数中的 key/token/secret/password 等敏感字段。
+5. ChatExecutor 通过 RubyLLM 配置工具和快照中的 `with_tool_options`，再执行
+   `ask(prompt)`；流式内容继续写入 RubyLLM Message，同时 Attempt 记录 usage、latency、
+   cost 和 finish reason。
+6. 如果模型请求一个或多个工具，`Ai::ToolInvocationRecorder` 为每个 RubyLLM
+   持久化的调用映射成 ToolInvocation，并过滤参数中的 key/token/secret/password 等
+   敏感字段。
 7. 如果工具需要审批，Run 进入 `waiting_for_approval`，页面刷新后仍能看到待决定
    的调用；这时不会假装 Run 已成功。
 8. 人 approve 或 deny 后，`Ai::ApprovalService` 同时写应用 Approval 和 RubyLLM
@@ -145,10 +157,10 @@ Artifact 内容仍留在各自的原始记录中，不复制进事件 payload。
 
 ## 当前两个工具的含义
 
-| 工具 | 副作用 | 默认审批 | 返回内容 | 人要注意什么 |
+| 工具 | 副作用 | 默认审批 | 并行执行 | 返回内容 / 人要注意什么 |
 | --- | --- | --- | --- | --- |
-| `project_snapshot` | 无，只读 | `never` | Project 名称、slug、描述和本地计数 | 计数是本地数据库观察，不代表生产数据 |
-| `save_run_note` | 创建一个 `report` Artifact | `always` | 保存状态、Artifact id、note | 它会改变本地数据；必须先审批 |
+| `project_snapshot` | 无，只读 | `never` | `safe` | Project 名称、slug、描述和本地计数；计数是本地数据库观察，不代表生产数据 |
+| `save_run_note` | 创建一个 `report` Artifact | `always` | `sequential only` | 保存状态、Artifact id、note；它会改变本地数据，必须先审批 |
 
 Tool Lab 只管理代码中已注册的 allowlist 条目。它不是在线执行器，也不能把用户
 上传的脚本变成工具。
@@ -159,8 +171,8 @@ Tool Lab 只管理代码中已注册的 allowlist 条目。它不是在线执行
 - **主画布**：Chat、Experiment、Tool Lab 或 Run 历史；它回答“我正在操作什么”。
 - **右侧 inspector**：状态、usage、cost、attempt、工具和 diagnostic；它回答“这次
   执行究竟发生了什么”。
-- **Tool Lab**：查看 registry schema、approval policy 和 enabled 状态；开关只
-  影响新 Run。
+- **Tool Lab**：查看 registry schema、approval policy、并行安全标记和 enabled 状态，
+  还可以为新 Chat Run 选择串行/并行默认模式；开关和模式都只影响新 Run。
 - **Run inspector**：稳定查看单次证据。即使页面不是当前 Chat，也可以从全局 Runs
   回到同一个执行；Lifecycle events 时间线展示状态、流式首字节、工具/审批和
   Artifact 事件的本地顺序。
@@ -199,7 +211,10 @@ Agent 定义、多步运行、远程/provider-hosted 工具、研究引用和更
   只保留一个 user message 和两条 assistant message。
 - 当前本地回归已覆盖 LifecycleEvent 的顺序、去重、脱敏 payload、审批事件和
   continuation 的新 Attempt；Run inspector 也展示这条时间线。
-- 当前没有并行 tool-call 的真实兼容性结论，也没有 M4/M5 的实现证据。
+- 当前本地回归覆盖并行策略的能力门控、side-effect 工具串行降级、冻结的 RubyLLM
+  options，以及多个 tool calls 的独立 ToolInvocation/request/completion 事件。
+- 当前仍没有 live provider 返回多个 parallel tool calls 的兼容性结论，也没有 M4/M5
+  的实现证据。
 
 这些是本地、点时的验证，不是生产承诺。
 

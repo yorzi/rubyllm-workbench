@@ -31,7 +31,16 @@ class ToolApprovalFlowTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_includes response.body, "Tool Lab"
     assert_includes response.body, "Inspect JSON Schema"
+    assert_includes response.body, "Tool execution"
+    assert_includes response.body, "Sequential — one call at a time"
     assert_includes response.body, "save_run_note"
+
+    patch project_tool_settings_path(@project), params: {
+      tool_settings: { execution_mode: "parallel" }
+    }
+
+    assert_response :redirect
+    assert_equal "parallel", @project.reload.tool_execution_mode
 
     patch project_tool_definition_path(@project, @project.tool_definitions.find_by!(key: "project_snapshot")), params: {
       tool_definition: { enabled: "0" }

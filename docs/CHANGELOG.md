@@ -6,6 +6,48 @@
 原则上只追加，不静默改写历史。代码细节回到对应 commit 和
 [IMPLEMENTATION_MAP.md](../IMPLEMENTATION_MAP.md)。
 
+## 2026-09-16 — M3 并行 tool-call 应用侧策略与多调用审计
+
+### 为什么做
+
+RubyLLM 已经提供 `with_tool_options(calls:, concurrency:)`，但应用此前没有把并行
+意图按 Run 冻结，也没有明确哪些本地工具可以安全并行。继续直接打开并行会把 provider
+能力差异、SQLite 写入和工具副作用混成一个未经验证的开关。
+
+### 人能看到的变化
+
+- Tool Lab 新增 Project 级 Tool execution 模式，默认 `sequential`，可显式选择
+  `parallel`。
+- 每个新 Run 的 Input snapshot 现在记录 requested/effective mode、模型 capability、
+  `calls`/`concurrency` 和 fallback reason。
+- `parallel` 只有在模型声明 `parallel_tool_calls` 且所有 enabled 工具声明
+  `parallel_safe?` 时才生效；否则仍串行执行，并显示可检查的降级原因。
+- Run inspector 显示实际 tool execution mode；多个 RubyLLM ToolCall 各自显示独立的
+  参数、结果、状态、时长和 lifecycle request/completion 事件。
+
+### 实现地图
+
+- `Project#tool_execution_mode` / `ToolDefinitionsController`：保存 Tool Lab 模式。
+- `Ai::ToolExecutionPolicy`：能力和并行安全门控，并生成 Run snapshot 与 RubyLLM 选项。
+- `Ai::ChatTooling`：通过 RubyLLM public `with_tool_options` 应用冻结选项。
+- `Ai::ToolRegistry` 和两个工具：声明并行安全元数据；`save_run_note` 保持
+  sequential-only。
+- `Ai::ToolInvocationRecorder`：在 RubyLLM thread callback 下用 mutex 保护本地审计，
+  并幂等补齐多个调用的 request/completion 事件。
+
+### 验证证据
+
+- 定向回归：28 tests、175 assertions、0 failures、0 errors。
+- 覆盖项目设置、模型 capability 门控、side-effect 工具降级、冻结 options、Tool Lab
+  更新，以及两个独立 ToolCall 的审计记录和 lifecycle event keys。
+- 浏览器 QA 使用临时 loopback Rails 服务，验证后已停止；没有留下后台或常驻服务。
+
+### 还没有证明什么
+
+- 没有 live provider 返回多个 parallel tool calls 的验收结果；当前 live provider
+  兼容性继续标记为 `PARTIAL`。
+- 这不是 provider-native tracing、跨 provider SLA、SQLite 高并发承诺或部署结果。
+
 ## 2026-09-16 — M3 观测切片：LifecycleEvent 目录与 Run 时间线
 
 ### 为什么做

@@ -36,6 +36,7 @@ class Ai::ToolInvocationRecorderTest < ActiveSupport::TestCase
     recorder.sync!
     assert_equal 1, @run.lifecycle_events.where(name: "ai.tool.requested").count
     assert_equal 1, @run.lifecycle_events.where(name: "ai.approval.requested").count
+    assert_equal invocation.approval.id, @run.lifecycle_events.find_by!(name: "ai.tool.requested").approval_id
   end
 
   test "records a tool result as a successful invocation" do
@@ -52,6 +53,31 @@ class Ai::ToolInvocationRecorderTest < ActiveSupport::TestCase
     assert_equal result.id, call.reload.result_id
     assert invocation.succeeded?
     assert_equal "saved", invocation.result.fetch("parsed").fetch("status")
+  end
+
+  test "keeps multiple tool calls independently inspectable" do
+    first_call = create_tool_call(arguments: {}, tool_call_id: "call-parallel-1", name: "project_snapshot")
+    second_call = create_tool_call(arguments: {}, tool_call_id: "call-parallel-2", name: "project_snapshot")
+    first_result = @chat.add_message(
+      role: :tool,
+      content: JSON.generate("call" => first_call.tool_call_id, "status" => "ok"),
+      tool_call_id: first_call.tool_call_id
+    )
+    second_result = @chat.add_message(
+      role: :tool,
+      content: JSON.generate("call" => second_call.tool_call_id, "status" => "ok"),
+      tool_call_id: second_call.tool_call_id
+    )
+
+    Ai::ToolInvocationRecorder.new(run: @run, chat: @chat, attempt: @attempt).sync!
+
+    invocations = @run.tool_invocations.order(:tool_call_id).to_a
+    assert_equal [ first_call.tool_call_id, second_call.tool_call_id ], invocations.map(&:tool_call_id)
+    assert_equal [ first_result.id, second_result.id ], [ first_call.reload.result_id, second_call.reload.result_id ]
+    assert invocations.all?(&:succeeded?)
+    assert_equal 2, @run.lifecycle_events.where(name: "ai.tool.requested").count
+    assert_equal 2, @run.lifecycle_events.where(name: "ai.tool.completed").count
+    assert_equal 2, @run.lifecycle_events.where(name: "ai.tool.requested").distinct.count(:event_key)
   end
 
   test "finalizes a local tool exception with an answerable tool result" do
@@ -72,11 +98,11 @@ class Ai::ToolInvocationRecorderTest < ActiveSupport::TestCase
 
   private
 
-  def create_tool_call(arguments:)
+  def create_tool_call(arguments:, tool_call_id: "call-#{SecureRandom.hex(6)}", name: "save_run_note")
     RubyLLM::ActiveRecord::ToolCall.create!(
       message: @assistant,
-      tool_call_id: "call-#{SecureRandom.hex(6)}",
-      name: "save_run_note",
+      tool_call_id: tool_call_id,
+      name: name,
       arguments: arguments,
       remote: false
     )

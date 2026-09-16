@@ -17,6 +17,10 @@ module Ai
         approval_policy == "always"
       end
 
+      def parallel_safe?
+        tool_class.respond_to?(:parallel_safe?) && tool_class.parallel_safe?
+      end
+
       def schema(project: nil, run: nil)
         tool_class.new(project:, run:).parameters_schema || {}
       end
@@ -70,7 +74,8 @@ module Ai
             "name" => definition.name,
             "description" => definition.description,
             "schema" => definition.schema_json,
-            "approval_policy" => definition.approval_policy
+            "approval_policy" => definition.approval_policy,
+            "parallel_safe" => definition.parallel_safe?
           }
         end
       end

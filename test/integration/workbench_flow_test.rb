@@ -40,6 +40,7 @@ class WorkbenchFlowTest < ActionDispatch::IntegrationTest
     run = chat.runs.order(:id).last
     assert_equal "queued", run.status
     assert_equal "Say hello", run.input_snapshot["prompt"]
+    assert_equal "sequential", run.input_snapshot.dig("tool_options", "effective_mode")
     assert_equal 1, run.attempts.count
 
     get run_path(run)
@@ -47,6 +48,28 @@ class WorkbenchFlowTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "Input snapshot"
     assert_includes response.body, "Lifecycle events"
     assert_includes response.body, "ai.run.created"
+  end
+
+  test "freezes an effective parallel tool policy into a Run snapshot" do
+    project = create_project(name: "Parallel policy project")
+    chat = create_chat(project)
+    ensure_chat_model_record
+    chat.model.update!(capabilities: chat.model.capabilities | [ "parallel_tool_calls" ])
+    Ai::ToolRegistry.sync_project!(project)
+    project.tool_definitions.find_by!(key: "save_run_note").update!(enabled: false)
+    project.update_tool_execution_mode!("parallel")
+
+    assert_enqueued_with(job: ChatResponseJob) do
+      @run = Ai::RunExecutor.enqueue(chat:, project:, prompt: "Inspect two sources")
+    end
+
+    snapshot = @run.input_snapshot.fetch("tool_options")
+    assert_equal "parallel", snapshot.fetch("requested_mode")
+    assert_equal "parallel", snapshot.fetch("effective_mode")
+    assert_equal "many", snapshot.fetch("calls")
+    assert_equal "threads", snapshot.fetch("concurrency")
+    assert_equal "supported", snapshot.fetch("parallel_tool_calls_capability")
+    assert_nil snapshot["fallback_reason"]
   end
 
   test "renders persisted chat messages with their message local" do

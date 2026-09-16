@@ -11,8 +11,11 @@ class Ai::ToolRegistryTest < ActiveSupport::TestCase
     assert_equal %w[project_snapshot save_run_note], definitions.map(&:key).sort
     assert_equal "never", definitions.find { |definition| definition.key == "project_snapshot" }.approval_policy
     assert_equal "always", definitions.find { |definition| definition.key == "save_run_note" }.approval_policy
+    assert definitions.find { |definition| definition.key == "project_snapshot" }.parallel_safe?
+    assert_not definitions.find { |definition| definition.key == "save_run_note" }.parallel_safe?
     assert_equal [ "note" ], definitions.find { |definition| definition.key == "save_run_note" }.schema_json.fetch("required")
     assert_equal [ "project_snapshot", "save_run_note" ], Ai::ToolRegistry.snapshot(@project).map { |entry| entry.fetch("key") }
+    assert_equal true, Ai::ToolRegistry.snapshot(@project).find { |entry| entry.fetch("key") == "project_snapshot" }.fetch("parallel_safe")
   end
 
   test "disabled definitions are excluded from the next Run snapshot" do

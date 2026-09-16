@@ -9,6 +9,10 @@ module Ai
         "save_run_note"
       end
 
+      def self.parallel_safe?
+        false
+      end
+
       def initialize(project:, run: nil)
         @project = project
         @run = run

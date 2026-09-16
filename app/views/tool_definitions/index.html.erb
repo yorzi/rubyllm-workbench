@@ -12,12 +12,26 @@
     <%= link_to "← #{@project.name}", project_path(@project), class: "text-xs font-medium text-accent hover:underline" %>
     <div class="mt-3 flex flex-col justify-between gap-4 border-b border-line pb-5 sm:flex-row sm:items-end"><div><h1 class="text-3xl font-semibold tracking-tight text-ink">Tool Lab</h1><p class="mt-2 max-w-2xl text-sm leading-6 text-muted">Inspect the code-defined tools available to this Project and decide which ones may be included in future chat Runs.</p></div><%= link_to "Return to project", project_path(@project), class: "inline-flex items-center justify-center rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" %></div>
 
+    <section class="mt-8 rounded-xl border border-line bg-panel p-5" aria-labelledby="tool-execution-heading">
+      <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+        <div>
+          <h2 id="tool-execution-heading" class="text-sm font-semibold text-ink">Tool execution</h2>
+          <p class="mt-2 max-w-2xl text-xs leading-5 text-muted">Parallel mode is opt-in. A new Run uses it only when the selected model advertises <span class="font-mono">parallel_tool_calls</span> and every enabled tool is marked safe for concurrent read-only execution; otherwise the Run records a sequential fallback.</p>
+        </div>
+        <span class="shrink-0 rounded-full bg-accent-soft px-2 py-1 font-mono text-[10px] text-accent"><%= @project.tool_execution_mode %></span>
+      </div>
+      <%= form_with url: project_tool_settings_path(@project), method: :patch, scope: :tool_settings, class: "mt-4 flex flex-col gap-3 border-t border-line pt-4 sm:flex-row sm:items-end sm:justify-between" do |form| %>
+        <div class="min-w-0 flex-1"><%= form.label :execution_mode, "Default for new chat Runs", class: "text-xs font-medium text-ink" %><%= form.select :execution_mode, [["Sequential — one call at a time", "sequential"], ["Parallel — opt-in concurrent calls", "parallel"]], {}, class: "mt-2 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm focus:border-accent focus:outline-none sm:max-w-md" %></div>
+        <%= form.submit "Save mode", class: "cursor-pointer rounded-lg bg-accent px-4 py-2.5 text-xs font-medium text-white hover:bg-indigo-700" %>
+      <% end %>
+    </section>
+
     <div class="mt-8 grid gap-4 lg:grid-cols-2">
       <% @tool_definitions.each do |tool_definition| %>
         <article class="rounded-xl border border-line bg-panel p-5">
           <div class="flex items-start justify-between gap-3"><div class="min-w-0"><h2 class="truncate text-sm font-semibold text-ink"><%= tool_definition.name %></h2><p class="mt-1 font-mono text-[11px] text-muted"><%= tool_definition.key %></p></div><span class="rounded-full px-2 py-1 text-[10px] font-medium <%= tool_definition.enabled? ? 'bg-emerald-50 text-success' : 'bg-slate-100 text-muted' %>"><%= tool_definition.enabled? ? 'enabled' : 'disabled' %></span></div>
           <p class="mt-4 text-sm leading-6 text-muted"><%= tool_definition.description %></p>
-          <dl class="mt-4 grid grid-cols-2 gap-3 border-y border-line py-3 text-xs"><div><dt class="text-muted">Approval</dt><dd class="mt-1 font-mono text-ink"><%= tool_definition.approval_policy %></dd></div><div><dt class="text-muted">Registry</dt><dd class="mt-1 font-mono text-ink"><%= tool_definition.class_identifier %></dd></div></dl>
+          <dl class="mt-4 grid grid-cols-2 gap-3 border-y border-line py-3 text-xs"><div><dt class="text-muted">Approval</dt><dd class="mt-1 font-mono text-ink"><%= tool_definition.approval_policy %></dd></div><div><dt class="text-muted">Parallel</dt><dd class="mt-1 font-mono text-ink"><%= tool_definition.parallel_safe? ? "safe" : "sequential only" %></dd></div><div class="col-span-2"><dt class="text-muted">Registry</dt><dd class="mt-1 font-mono text-ink"><%= tool_definition.class_identifier %></dd></div></dl>
           <details class="mt-4 rounded-lg bg-canvas p-3"><summary class="cursor-pointer text-xs font-medium text-ink">Inspect JSON Schema</summary><pre class="mt-3 max-h-56 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-muted"><%= JSON.pretty_generate(tool_definition.schema_json) %></pre></details>
           <%= form_with model: tool_definition, url: project_tool_definition_path(@project, tool_definition), method: :patch, class: "mt-4 flex items-center justify-between gap-3" do |form| %><%= form.hidden_field :enabled, value: tool_definition.enabled? ? "0" : "1" %><span class="text-xs text-muted"><%= tool_definition.enabled? ? 'Included in new chat Runs.' : 'Excluded from new chat Runs.' %></span><%= form.submit(tool_definition.enabled? ? "Disable" : "Enable", class: "cursor-pointer rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent") %><% end %>
         </article>

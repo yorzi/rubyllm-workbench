@@ -10,7 +10,7 @@
 
 更新时间：2026-09-16
 当前实现：M0–M3 核心闭环 `IMPLEMENTED`
-当前边界：M3 并行 tool-call 兼容性 `PARTIAL`；M4–M8 `PLANNED`
+当前边界：M3 并行 tool-call 应用路径 `IMPLEMENTED`、live provider 兼容性 `PARTIAL`；M4–M8 `PLANNED`
 
 ## 两套文档体系的边界
 

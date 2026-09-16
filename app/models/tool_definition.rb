@@ -23,6 +23,12 @@ class ToolDefinition < ApplicationRecord
     approval_policy == "always"
   end
 
+  def parallel_safe?
+    registry_entry.parallel_safe?
+  rescue KeyError
+    false
+  end
+
   private
 
   def registry_entry_exists

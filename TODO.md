@@ -87,6 +87,12 @@
 - [x] Preserve the Attempt invariant across approval continuation: the resumed
       provider request receives a new Attempt while the original tool invocation
       remains attached to its original Attempt.
+- [x] Add an explicit Project Tool Lab execution mode, freeze the effective
+      RubyLLM `calls`/`concurrency` options into each new Run, and conservatively
+      fall back to sequential execution for unsupported models or side-effecting
+      tools.
+- [x] Make the recorder idempotently retain separate audit rows and lifecycle
+      request/completion events for multiple tool calls.
 
 ## Known implementation gap
 
@@ -99,7 +105,9 @@
 ## Explicitly deferred
 
 - [x] M3 code-defined tools, tool-call inspection, and approval/denial continuation.
-- [ ] M3 parallel tool calls and deeper provider/tool compatibility dogfooding.
+- [ ] M3 parallel tool calls and deeper provider/tool compatibility dogfooding;
+      the explicit local path and multiple-call recorder are verified, but live
+      provider behavior is still not accepted.
 - [ ] M5 agents, durable research, and provider-hosted/server tools.
 - [ ] M4 knowledge, RAG, rerank, and document/OCR flows.
 - [ ] M6-M8 media, batch/evals, exports, deployment, and

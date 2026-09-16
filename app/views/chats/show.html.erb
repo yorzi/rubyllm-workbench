@@ -16,6 +16,7 @@
           <div class="flex justify-between gap-3 py-3"><dt class="text-muted">First output</dt><dd class="text-ink"><%= format_duration(@latest_run.time_to_first_output_ms) %></dd></div>
           <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Tokens</dt><dd class="font-mono text-right text-ink"><%= format_tokens(@latest_run.total_tokens[:input]) %> in / <%= format_tokens(@latest_run.total_tokens[:output]) %> out</dd></div>
           <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Cost</dt><dd class="text-right text-ink"><%= format_cost(@latest_run.total_cost, status: @latest_run.cost_status) %></dd></div>
+          <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Tool execution</dt><dd class="font-mono text-right text-ink"><%= @latest_run.input_snapshot.dig("tool_options", "effective_mode") || "sequential" %></dd></div>
         </dl>
       </div>
       <% if @latest_run.error_summary.present? %>

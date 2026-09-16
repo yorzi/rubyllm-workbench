@@ -14,13 +14,18 @@ module Ai
     def enqueue
       Ai::ToolRegistry.sync_project!(@project)
       tools_snapshot = Ai::ChatTooling.snapshot(@project)
+      tool_options = Ai::ToolExecutionPolicy.snapshot(project: @project, chat: @chat)
       run = @chat.transaction do
         run = @chat.runs.create!(
           project: @project,
           operation: "chat",
           status: :queued,
           requested_by: @requested_by,
-          input_snapshot_json: { "prompt" => @prompt, "tools" => tools_snapshot },
+          input_snapshot_json: {
+            "prompt" => @prompt,
+            "tools" => tools_snapshot,
+            "tool_options" => tool_options
+          },
           app_version: ENV.fetch("APP_VERSION", "local"),
           ruby_llm_version: Gem.loaded_specs.fetch("ruby_llm").version.to_s
         )

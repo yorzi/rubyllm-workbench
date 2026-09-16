@@ -9,8 +9,9 @@ This implementation covers the M0, M1, M2 and current M3 slice:
 Later milestones (knowledge, agents, media, batch/evals and operational polish)
 stay deferred until this loop is extended deliberately.
 
-Current status: M0–M3 core and the local lifecycle-event catalog `IMPLEMENTED`;
-M3 parallel tool-call compatibility `PARTIAL`; M4–M8 `PLANNED`.
+Current status: M0–M3 core, the local lifecycle-event catalog and the opt-in
+application parallel-tool path `IMPLEMENTED`; live M3 parallel provider
+compatibility `PARTIAL`; M4–M8 `PLANNED`.
 
 ## Human understanding layer
 
@@ -53,11 +54,15 @@ look complete.
   time, duration and idempotency key. It indexes transitions; it is not a content
   store or distributed trace.
 - **ToolDefinition:** a Project-owned enabled/disabled reference to a
-  code-defined registry entry; browser input cannot upload executable code.
+  code-defined registry entry; browser input cannot upload executable code. Each
+  registry entry also declares whether concurrent execution is safe.
 - **ToolInvocation:** one normalized tool call attached to a Run, preserving
   secret-filtered arguments, result/error, timing and lifecycle.
 - **Approval:** one persisted human decision for an approval-required tool call;
   RubyLLM's persisted tool-call approval is the conversation source of truth.
+- **Tool execution policy:** a Project setting requests sequential or parallel
+  execution. Each new Run freezes the requested mode, model capability result,
+  effective mode, and any sequential fallback reason in its input snapshot.
 
 ## Core flows and pages
 
@@ -98,7 +103,11 @@ look complete.
   per target; `Ai::StructuredExecutor` owns schema configuration, validation,
   Artifact persistence and failure classification.
 - `Ai::ToolRegistry` is the allowlisted code-defined tool boundary;
-  `Ai::ChatTooling` freezes the enabled tool snapshot onto a Run.
+  `Ai::ChatTooling` applies the frozen tool snapshot and RubyLLM tool options.
+- `Ai::ToolExecutionPolicy` decides whether a requested parallel mode is
+  effective. It requires the model's `parallel_tool_calls` capability and all
+  enabled tools to declare `parallel_safe?`; otherwise it records a safe
+  sequential fallback.
 - `Ai::ToolInvocationRecorder` maps RubyLLM tool calls to inspectable
   application records; `Ai::ApprovalService` records a decision and enqueues
   the resumable Chat completion.
@@ -206,11 +215,20 @@ definition creates new evidence without mutating the saved definition.
 - **Registry:** Project-scoped ToolDefinition records mirror two allowlisted
   RubyLLM tools: read-only `project_snapshot` and approval-gated
   `save_run_note`.
-- **Run boundary:** new chat Runs snapshot enabled tool keys, schemas and
-  approval policy; later toggles do not rewrite an existing Run.
+- **Run boundary:** new chat Runs snapshot enabled tool keys, schemas, approval
+  policy and the requested/effective tool execution options; later toggles do
+  not rewrite an existing Run.
+- **Execution policy:** Tool Lab defaults to sequential mode. Parallel mode is
+  opt-in and becomes `calls: :many, concurrency: :threads` only when RubyLLM's
+  model metadata supports `parallel_tool_calls` and every enabled registry
+  tool is marked parallel-safe. A missing capability or side-effecting tool is
+  recorded as a sequential fallback rather than silently forcing concurrency.
 - **Inspection:** RubyLLM's persisted tool calls are normalized into
   ToolInvocation records with sanitized arguments, result/error, timing and
   links to the internal Approval record.
+- **Multiple calls:** each RubyLLM ToolCall receives its own ToolInvocation and
+  idempotent request/completion lifecycle keys. Recorder persistence is mutex
+  protected because RubyLLM's thread mode invokes tool callbacks concurrently.
 - **Continuation:** an undecided approval moves the Run to
   `waiting_for_approval`; the approve/deny endpoint writes both application
   and RubyLLM decisions, then resumes the same persisted conversation with
@@ -227,9 +245,9 @@ definition creates new evidence without mutating the saved definition.
   approval, continuation, and a report Artifact. The latter retained one user
   message and two assistant messages, with no duplicate prompt from the queue
   continuation.
-- **Still unverified:** parallel tool calls remain opt-in compatibility work;
-  provider-native tracing, event export/backfill and M5 provider-hosted
-  tools/agents are not part of this slice.
+- **Still unverified:** no live provider has yet been accepted for a parallel
+  response; provider-native tracing, event export/backfill and M5
+  provider-hosted tools/agents are not part of this slice.
 
 ## Lifecycle event catalog — current slice
 

@@ -23,8 +23,13 @@ class HumanSystemDocsTest < ActiveSupport::TestCase
     assert_includes sources.fetch("CHANGELOG.md"), "双层体系"
     assert_includes sources.fetch("OPERATIONS.md"), "当前可观测性边界"
     assert_includes sources.fetch("SYSTEM_GUIDE.md"), "LifecycleEvent"
+    assert_includes sources.fetch("SYSTEM_GUIDE.md"), "Tool execution policy"
     assert_includes sources.fetch("ARCHITECTURE.md"), "LifecycleEventRecorder"
+    assert_includes sources.fetch("ARCHITECTURE.md"), "ToolExecutionPolicy"
+    assert_includes sources.fetch("ARCHITECTURE.md"), "APP PATH IMPLEMENTED"
     assert_includes sources.fetch("OPERATIONS.md"), "PARALLEL_WORKERS=1"
+    assert_includes sources.fetch("OPERATIONS.md"), "Tool Lab 执行模式"
+    assert_includes sources.fetch("CHANGELOG.md"), "多调用审计"
   end
 
   test "architecture keeps the system diagrams and current boundary visible" do
@@ -54,6 +59,7 @@ class HumanSystemDocsTest < ActiveSupport::TestCase
     assert_includes guide, "Specs 基线"
     assert_includes guide, "当前现实层"
     assert_includes guide, "LifecycleEvent"
+    assert_includes guide, "parallel_tool_calls"
     assert_includes guide, "`IMPLEMENTED`"
     assert_includes guide, "`PARTIAL`"
     assert_includes guide, "`PLANNED`"

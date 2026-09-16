@@ -94,6 +94,24 @@ OPENROUTER_LIVE_TEST=1 bin/rails test test/integration/openrouter_live_test.rb
 该命令只表示本次本地 provider dogfood；它可能产生费用、受网络影响，也不应在
 没有用户明确意图时反复运行。
 
+## Tool Lab 执行模式
+
+Tool Lab 的默认模式是 `sequential`。只有在 Project 中显式选择 `parallel` 时，新建
+Chat Run 才会请求 RubyLLM 的 `calls: :many` 与 `concurrency: :threads`。应用在创建
+Run 时检查当前模型是否声明 `parallel_tool_calls`，并检查所有 enabled registry 工具
+是否声明 `parallel_safe?`；任一条件不满足，就冻结为 `calls: :one`、串行执行，并把
+`fallback_reason` 写入 Run 的 `input_snapshot`。
+
+因此排查一次并行行为要看三层证据：
+
+1. Run 的 Input snapshot：requested/effective mode、capability 和 fallback reason；
+2. RubyLLM 的实际 ToolCall 数量与每个 ToolInvocation 的状态、参数、结果和时长；
+3. Lifecycle events：每个调用独立的 request/completed `event_key`。
+
+当前 `project_snapshot` 是 parallel-safe；`save_run_note` 会创建 Artifact，被标记为
+sequential-only，避免把 SQLite 写入和本地副作用未经专门验证地并行化。此策略并不等于
+某个 provider 已经承诺会返回多个调用。
+
 ## 当前可观测性边界
 
 M3 当前切片已经把应用侧生命周期写入 `LifecycleEvent` 目录，并在 Run inspector 中
@@ -109,7 +127,8 @@ payload 只保留 ID、状态、provider/model、时长、错误类别等允许�
 等原始记录仍是主要事实来源。迁移前已存在的 Run 不做历史回填。
 
 这仍不是 provider-native 完整事件流、分布式 tracing、成本监控、导出或 dashboard；
-也没有并行 tool-call 的兼容性结论。
+并行策略和多调用审计已有本地 deterministic test 证据，但还没有 live provider 并行
+返回的兼容性结论。
 
 ## 如何读 Run inspector
 
@@ -124,7 +143,8 @@ payload 只保留 ID、状态、provider/model、时长、错误类别等允许�
 4. **Lifecycle events**：状态推进、首个流式输出、工具/审批和 Artifact 的本地
    时间顺序；它是导航索引，不是完整 tracing。
 5. **Tools**：工具 key、调用状态、脱敏参数、结果、审批和耗时。
-6. **Input snapshot**：这次 Run 实际冻结了哪些 prompt、工具和 schema。
+6. **Input snapshot**：这次 Run 实际冻结了哪些 prompt、工具、schema 和 tool execution
+   policy；如果 requested mode 与 effective mode 不同，先看 fallback reason。
 7. **Result/Diagnostic**：最终输出或安全的失败解释。
 
 一个 succeeded Run 仍可能包含重要的 warning/unknown cost；一个 failed Run 仍然

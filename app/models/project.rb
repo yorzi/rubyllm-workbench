@@ -1,4 +1,6 @@
 class Project < ApplicationRecord
+  TOOL_EXECUTION_MODES = %w[sequential parallel].freeze
+
   has_many :chats, dependent: :destroy
   has_many :experiments, dependent: :destroy
   has_many :experiment_executions, dependent: :destroy
@@ -16,7 +18,34 @@ class Project < ApplicationRecord
     slug.presence || super
   end
 
+  def tool_settings
+    value = settings_hash["tools"]
+    value.is_a?(Hash) ? value : {}
+  end
+
+  def tool_execution_mode
+    mode = tool_settings["execution_mode"].to_s
+    TOOL_EXECUTION_MODES.include?(mode) ? mode : "sequential"
+  end
+
+  def update_tool_execution_mode!(mode)
+    normalized_mode = mode.to_s
+    unless TOOL_EXECUTION_MODES.include?(normalized_mode)
+      raise ArgumentError, "Unknown tool execution mode: #{mode.inspect}"
+    end
+
+    self.settings_json = settings_hash.merge(
+      "tools" => tool_settings.merge("execution_mode" => normalized_mode)
+    )
+    save!
+  end
+
   private
+
+  def settings_hash
+    value = settings_json
+    value.is_a?(Hash) ? value.deep_stringify_keys : {}
+  end
 
   def derive_slug
     self.slug = name.to_s.parameterize

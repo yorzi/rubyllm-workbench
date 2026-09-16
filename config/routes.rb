@@ -9,6 +9,7 @@ Rails.application.routes.draw do
       resources :approvals, only: :update
     end
     resources :tool_definitions, only: %i[index update], controller: :tool_definitions
+    patch "tool-settings", to: "tool_definitions#update_settings", as: :tool_settings
     resources :experiments, only: %i[index new create show edit update] do
       resources :executions, only: :create, controller: :experiment_executions
     end

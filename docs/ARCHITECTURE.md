@@ -5,7 +5,7 @@
 迁移、测试和运行证据为准。
 
 更新时间：2026-09-16
-当前实现：M0–M3 核心闭环和本地 LifecycleEvent 目录 `IMPLEMENTED`
+当前实现：M0–M3 核心闭环、本地 LifecycleEvent 目录和并行策略切片 `IMPLEMENTED`
 当前图表范围：已验证的本地运行路径；未来节点全部显式标为 `PLANNED`
 校准依据：routes、models、migrations、jobs、services、测试，以及 M3 OpenRouter
 dogfood（Run #11、Run #13）
@@ -18,6 +18,8 @@ dogfood（Run #11、Run #13）
   `Approval` 表示“人做了什么决定”。
 - `LifecycleEvent` 是按时间索引这些变化的本地元数据记录，不替代原始业务记录，
   也不等同于 provider tracing。
+- `ToolExecutionPolicy` 把 Project 的串行/并行意图与 RubyLLM 的
+  `calls`/`concurrency` 选项绑定到每个新 Run；不满足能力或安全条件时显式降级。
 - `PLANNED` 节点不是当前系统已经存在的运行时组件，不能从图中推断出实现。
 
 ## 1. L0 — 当前系统上下文
@@ -60,7 +62,7 @@ flowchart TD
     ChatJob["ChatResponseJob"]
     StructuredJob["StructuredResponseJob"]
     ChatExecutor["Ai::ChatExecutor"]
-    Tooling["ToolRegistry + ChatTooling"]
+    Tooling["ToolRegistry + ChatTooling\n+ ToolExecutionPolicy"]
     Audit["ToolInvocationRecorder + ApprovalService"]
     Events["LifecycleEventRecorder\nActiveSupport Notifications"]
     Records["Project / Chat / Run / Attempt\n/ Artifact / tool records / LifecycleEvent"]
@@ -130,6 +132,7 @@ erDiagram
         string name
         string slug
         text description
+        json settings_json
     }
     CHAT {
         bigint project_id
@@ -259,27 +262,18 @@ sequenceDiagram
     Human->>UI: 输入 prompt，点击 Run
     UI->>RE: enqueue(chat, project, prompt)
     RE->>DB: 原子创建 queued Run + Attempt
-    RE->>DB: 冻结 prompt、tools、schema、approval policy
+    RE->>DB: 冻结 prompt、tools、schema、approval policy、tool options
     RE->>Events: ai.run.created
     RE->>Q: perform_later(run_id)
     Q->>CE: call(run_id)
     CE->>DB: claim Run，启动 Attempt
     CE->>Events: ai.run.started + ai.attempt.started
-    CE->>LLM: 配置快照中的工具并 ask(prompt)
+    CE->>LLM: 配置快照中的工具/options 并 ask(prompt)
     LLM-->>CE: streamed chunks / assistant tool call
     CE->>DB: 保存 Message、usage、Attempt metrics
     CE->>Events: ai.attempt.streaming（首个输出）
 
-    alt 工具不需要审批
-        CE->>Audit: 记录 ToolInvocation
-        Audit->>DB: succeeded invocation
-        Audit->>Events: ai.tool.requested / completed
-        CE->>LLM: 继续会话
-        LLM-->>CE: final assistant response
-        CE->>DB: Run = succeeded
-        CE->>Events: ai.attempt.succeeded + ai.run.succeeded
-        DB-->>UI: inspector 显示结果和工具审计
-    else 工具需要审批
+    alt 工具需要审批
         CE->>Audit: 请求 ToolInvocation + Approval
         Audit->>DB: pending approval，Run = waiting_for_approval
         Audit->>Events: ai.tool.requested + ai.approval.requested + ai.run.waiting_for_approval
@@ -298,6 +292,26 @@ sequenceDiagram
         CE->>DB: Run = succeeded 或 failed
         CE->>Events: ai.attempt.succeeded/failed + ai.run.succeeded/failed
         DB-->>UI: inspector 显示完整时间线
+    else 无待审批工具
+        alt effective_mode = parallel 且 provider 返回多个调用
+            CE->>Audit: 并发 callback 逐个记录 ToolInvocation
+            Audit->>DB: 每个调用独立保存参数、结果、时长和状态
+            Audit->>Events: 每个调用独立 request/completed event_key
+            CE->>LLM: 继续会话
+            LLM-->>CE: final assistant response
+            CE->>DB: Run = succeeded
+            CE->>Events: ai.attempt.succeeded + ai.run.succeeded
+            DB-->>UI: inspector 显示多个调用和本地时序
+        else sequential 或只有一个调用
+            CE->>Audit: 记录 ToolInvocation
+            Audit->>DB: succeeded invocation
+            Audit->>Events: ai.tool.requested / completed
+            CE->>LLM: 继续会话
+            LLM-->>CE: final assistant response
+            CE->>DB: Run = succeeded
+            CE->>Events: ai.attempt.succeeded + ai.run.succeeded
+            DB-->>UI: inspector 显示结果和工具审计
+        end
     end
 ```
 
@@ -306,6 +320,34 @@ sequenceDiagram
 
 事件记录是同一条本地执行路径的元数据索引；如果事件持久化失败，主 Run/Attempt
 执行不会因此失败，原始业务记录仍是事实来源。
+
+## 4.1 Runtime — 并行 tool-call 策略
+
+并行是应用侧的显式 opt-in，不是 provider 能力的默认假设。创建 Chat Run 时，策略
+读取 Project 的 `tool_execution_mode`、当前模型的 `parallel_tool_calls` capability 和
+enabled registry 工具的 `parallel_safe?` 声明，然后把结果冻结到 `input_snapshot`：
+
+```mermaid
+flowchart TD
+    Setting["Project Tool Lab\nsequential / parallel"] --> Policy["Ai::ToolExecutionPolicy"]
+    Model["RubyLLM model capabilities"] --> Policy
+    Tools["Enabled ToolDefinition\nparallel_safe?"] --> Policy
+    Policy --> Decision{"条件满足?"}
+    Decision -- "是" --> Parallel["effective parallel\ncalls: many\nconcurrency: threads"]
+    Decision -- "否" --> Fallback["effective sequential\ncalls: one\nconcurrency: false\n+ fallback_reason"]
+    Parallel --> Snapshot["Run input_snapshot"]
+    Fallback --> Snapshot
+    Snapshot --> ChatTooling["Ai::ChatTooling\nwith_tool_options"]
+    ChatTooling --> RubyLLM["RubyLLM conversation loop"]
+    RubyLLM --> Recorder["ToolInvocationRecorder\nmutex-protected callbacks"]
+    Recorder --> Inspector["Run inspector\nseparate calls + events"]
+```
+
+当前两个 registry 工具中，`project_snapshot` 声明可并行，`save_run_note` 创建
+Artifact，因此声明为 sequential-only。若使用 parallel 模式但启用了后者，策略会
+保留用户的 requested mode，同时把 effective mode 和 fallback reason 写成可检查的
+串行结果。此图有本地 deterministic tests 的证据；尚无 live provider 返回多个并行
+调用的验收证据。
 
 ## 5. Runtime — 状态如何推进
 
@@ -368,14 +410,16 @@ flowchart LR
     M0["M0 Foundation\nIMPLEMENTED"] --> M1["M1 Chat + Runs\nIMPLEMENTED"]
     M1 --> M2["M2 Structured Compare\nIMPLEMENTED"]
     M2 --> M3["M3 Tools + Approval\nIMPLEMENTED"]
-    M3 --> M3P["M3 Parallel Calls\nPARTIAL"]
+    M3 --> M3P["M3 Parallel Calls\nAPP PATH IMPLEMENTED"]
     M3P --> M4["M4 Knowledge + RAG\nPLANNED"]
     M4 --> M5["M5 Agents + Research\nPLANNED"]
     M5 --> M6["M6+ Media / Batch / Ops\nPLANNED"]
 ```
 
-`PARTIAL` 的含义是：M3 单个工具调用和审批闭环已验证，但并行调用的 provider
-兼容性仍未验收。该状态不能被简化成 M3 全部完成，也不能被误写为 M4/M5 已开始。
+`APP PATH IMPLEMENTED` 的含义是：Project opt-in、能力/安全门控、Run snapshot 和
+多调用本地审计路径已经存在并通过 deterministic tests；live provider 的并行返回和
+跨 provider 兼容性仍是 `PARTIAL`，不能被简化成 M3 全部完成，也不能被误写为 M4/M5
+已开始。
 
 ## 8. 如何保持图表可信
 
