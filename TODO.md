@@ -178,6 +178,38 @@ Specs gate.
 Enabled only by explicit configuration; not the default, not distributed with
 the app, and not benchmarked.
 
+## M4 rerank — 2026-09-17
+
+- [x] Add `Ai::Knowledge::RerankCatalog` gating rerank on the registry's
+      `rerank` output modality plus provider configuration, so the toggle only
+      offers compatible providers.
+- [x] Add `Ai::Knowledge::Reranker` over `RubyLLM.rerank` with secret-filtered
+      errors and normalized (index, score) results.
+- [x] Make rerank a second stage in `Ai::Knowledge::Search`: it reorders
+      evidence and records `rerank_score` / `pre_rank`, never rewriting the
+      retrieval score, cosine, lexical components or chunk evidence.
+- [x] Report explicitly when rerank is unavailable, unselected or failing, and
+      keep the original evidence in that case.
+- [x] Surface the toggle, pre/post rank, rerank score and the not-applied note
+      in the Knowledge workspace with integration coverage.
+- [x] Verify with targeted service/integration tests and one real OpenRouter
+      free rerank-model dogfood run.
+
+### M4 rerank status: `IMPLEMENTED` · `LOCAL_VERIFIED` + `OPENROUTER_DOGFOOD`
+
+Only one provider and one free rerank model were exercised; rerank quality is a
+model property, not an app guarantee.
+
+### M4 rerank dogfood record — 2026-09-17
+
+- [x] OpenRouter `nvidia/llama-nemotron-rerank-vl-1b-v2:free` reranked 3 chunks;
+  scores 0.6758 / 0.111 / 0.0009 with pre-rank positions preserved in evidence.
+- [x] On a lexical tie (0.7833) the reranker promoted a term-dense off-topic
+  chunk above the semantically correct one; recorded as a caveat, not a defect
+  in the plumbing.
+- [ ] Other rerank providers (Cohere, Voyage non-free tiers) and `top_n`
+  behaviour on larger candidate sets remain unverified.
+
 ## Known implementation gap
 
 - [x] Add a unified local lifecycle event catalog for `ai.run`, `ai.attempt`,
@@ -201,7 +233,8 @@ the app, and not benchmarked.
       is deliberately not committed.
 - [ ] M4 provider embeddings for providers other than OpenRouter; only one free
       OpenRouter embedding model has been dogfooded so far.
-- [ ] M4 compatible-provider rerank with explicit capability checks and evidence.
+- [ ] M4 rerank breadth: other rerank providers, `top_n` on larger candidate
+      sets, and a persisted rerank record for cost/latency comparison.
 - [ ] M4 file references, Active Storage ingestion, OCR/extraction jobs, and
       provenance artifacts.
 - [ ] M5 agents, durable research, and provider-hosted/server tools.

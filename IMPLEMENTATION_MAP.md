@@ -65,6 +65,10 @@ look complete.
   secret-filtered arguments, result/error, timing and lifecycle.
 - **Approval:** one persisted human decision for an approval-required tool call;
   RubyLLM's persisted tool-call approval is the conversation source of truth.
+- **Rerank stage:** an optional second stage over retrieved evidence, offered
+  only for models whose registry output modality is `rerank` and whose provider is
+  configured. It reorders results and records a provider score and the pre-rank
+  position; it never replaces retrieval scores or chunk evidence.
 - **Tool execution policy:** a Project setting requests sequential or parallel
   execution. Each new Run freezes the requested mode, model capability result,
   effective mode, and any sequential fallback reason in its input snapshot.
@@ -145,7 +149,9 @@ look complete.
   lexical score and matched terms as inspectable evidence;
   `Ai::Knowledge::Search` resolves the requested mode, embeds the query when
   needed and records an explicit degradation reason when semantic or hybrid
-  retrieval is unavailable.
+  retrieval is unavailable; `Ai::Knowledge::RerankCatalog` gates the optional
+  second stage on a compatible, configured provider and `Ai::Knowledge::Reranker`
+  reorders evidence while preserving the original scores and pre-rank positions.
 
 The current M3 inspector records application lifecycle events for Run, Attempt,
 ToolInvocation, Approval and Artifact transitions. The M4 Knowledge workspace is

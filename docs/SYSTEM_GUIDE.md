@@ -67,7 +67,8 @@ Artifact，并把文本来源保存为可追溯的 KnowledgeItem/KnowledgeChunk�
 | M3 并行 tool calls | 通过显式策略验证多个调用的应用侧记录和安全降级 | 冻结的 calls/concurrency 选项、多调用 ToolInvocation 和生命周期事件 | `IMPLEMENTED` · `LOCAL_VERIFIED`；live provider 兼容性仍 `PARTIAL` |
 | M4 本地文本基础 | 创建知识集合、摄取文本、chunk、checksum、词法检索和证据查看 | KnowledgeCollection、KnowledgeItem、KnowledgeChunk、来源引用与 offset | `IMPLEMENTED` · `LOCAL_VERIFIED` |
 | M4 embedding + 检索 | 选择已配置的 embedding model 入库向量，并用 lexical/semantic/hybrid 查看证据 | KnowledgeEmbedding（model/dimensions/packed vector/checksum）、collection embedding 状态、降级原因 | `IMPLEMENTED` · `LOCAL_VERIFIED` + `OPENROUTER_DOGFOOD` |
-| M4 完整目标 | rerank、文件/OCR 提取和引用 Artifact | rerank evidence、provenance artifacts | `PARTIAL`；其余 `PLANNED` |
+| M4 rerank | 对已配置的兼容 rerank model 打开第二阶段重排，查看 pre/post rank | rerank score、pre_rank、未应用原因 | `IMPLEMENTED` · `LOCAL_VERIFIED` + `OPENROUTER_DOGFOOD` |
+| M4 完整目标 | 文件/OCR 提取和引用 Artifact | provenance artifacts | `PARTIAL`；其余 `PLANNED` |
 | M5 | Agent、Durable Research、远程工具和可恢复长任务 | AgentDefinition、AgentRunStep、citation/research Artifact | `PLANNED` |
 
 这里的状态是项目当前实现层的判断；Specs 人类基线中的 `PLANNED` 状态仍保留其
@@ -146,6 +147,9 @@ Tool Lab 为 Project 保存一个新 Chat Run 的默认执行模式，默认为 
 - **vector adapter**：默认在应用侧对 SQLite 里的 Float32 blob 算 cosine；也可以显式
   开启 `sqlite_vector_extension`（外部 sqlite-vector 扩展，需自备二进制）做同样的
   exact cosine 扫描。两者含义一致；扩展不可用时会回退并在页面写明原因。
+- **rerank**：可选第二阶段，只对已配置的兼容 rerank model 开放；它只重排，不改变
+  retrieval score、cosine、lexical 分量或 chunk 证据，并记录 `pre_rank` 与 rerank
+  score。rerank 分数是重排信号，不等于语义正确性。
 
 ### ToolDefinition / ToolInvocation / Approval
 
@@ -250,6 +254,10 @@ Agent 定义、多步运行、远程/provider-hosted 工具、研究引用和更
 - 真实 provider dogfood：OpenRouter 免费 embedding model
   `liquid/lfm-2.5-embedding-350m:free` 成功 embed 2 个 chunk（1024 维），语义排序
   把相关段落在 cosine 0.5373 排在 0.2334 之前；只覆盖一个 provider 与一个 model。
+- 真实 provider dogfood：OpenRouter 免费 rerank model
+  `nvidia/llama-nemotron-rerank-vl-1b-v2:free` 在 3 个 chunk 上给出
+  0.6758 / 0.111 / 0.0009；它在一次 lexical 并列（0.7833）时把词面重复但离题的段落
+  排在语义正确的段落之前，说明 rerank 分数需要人复核。
 - 当前仍没有 live provider 返回多个 parallel tool calls 的兼容性结论，也没有 M4
   rerank/OCR 或 M5 的实现证据。
 

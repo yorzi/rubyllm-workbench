@@ -2,7 +2,7 @@ module Ai
   module Knowledge
     class Retriever
       MODES = %w[lexical semantic hybrid].freeze
-      Result = Data.define(:chunk, :score, :matched_terms, :lexical_score, :similarity)
+      Result = Data.define(:chunk, :score, :matched_terms, :lexical_score, :similarity, :rerank_score, :pre_rank)
       DEFAULT_LIMIT = 8
       MAX_LIMIT = 20
 
@@ -40,7 +40,7 @@ module Ai
         lexical_matches.sort_by { |chunk, score, _| [ -score, chunk.knowledge_item_id, chunk.position ] }
           .first(@limit)
           .map do |chunk, score, terms|
-            Result.new(chunk:, score: score.round(4), matched_terms: terms, lexical_score: score.round(4), similarity: nil)
+            Result.new(chunk:, score: score.round(4), matched_terms: terms, lexical_score: score.round(4), similarity: nil, rerank_score: nil, pre_rank: nil)
           end
       end
 
@@ -50,7 +50,7 @@ module Ai
         adapter.rank(query_vector: @query_vector, candidates: embedding_candidates, limit: @limit, collection: @collection, model_id: @model_id)
           .map do |embedding, similarity|
             chunk = embedding.knowledge_chunk
-            Result.new(chunk:, score: similarity.round(4), matched_terms: [], lexical_score: nil, similarity: similarity.round(4))
+            Result.new(chunk:, score: similarity.round(4), matched_terms: [], lexical_score: nil, similarity: similarity.round(4), rerank_score: nil, pre_rank: nil)
           end
       end
 
@@ -80,7 +80,9 @@ module Ai
             score: score.round(4),
             matched_terms: lexical.dig(chunk_id, 2) || [],
             lexical_score: lexical_score&.round(4),
-            similarity: similarity&.round(4)
+            similarity: similarity&.round(4),
+            rerank_score: nil,
+            pre_rank: nil
           )
         end.sort_by { |result| [ -result.score, result.chunk.knowledge_item_id, result.chunk.position ] }.first(@limit)
       end

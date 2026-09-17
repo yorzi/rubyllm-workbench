@@ -430,12 +430,17 @@ flowchart TD
     Vectors --> Retriever
     Retriever --> Adapter["Ai::Knowledge::VectorStore\nsqlite_application_cosine (default)\n+ sqlite_vector_extension (opt-in)"]
     Retriever --> Evidence["score + cosine + lexical\n+ matched terms + source chunk"]
+    Evidence --> RerankGate["Ai::Knowledge::RerankCatalog\ncompatible provider gate"]
+    RerankGate --> Reranker["Ai::Knowledge::Reranker\nRubyLLM.rerank (optional)"]
+    Reranker --> Final["rerank score + pre/post rank\n+ unchanged retrieval evidence"]
 ```
 
 每次查询的降级都是显式的：semantic/hybrid 需要已选择的 embedding model、已配置的
 provider、已存储的向量和一次 query embedding；任一项缺失时 `Search` 返回 lexical
-证据并在页面上写明 requested mode 与实际原因。该路径不创建 `Run`/`Attempt`，
-也不宣称 rerank、文件上传或 OCR。
+证据并在页面上写明 requested mode 与实际原因。rerank 是可选的第二阶段：只有通过
+`RerankCatalog` 的能力门控（registry 的 `rerank` output modality + provider 已配置）
+才会调用，它只改变顺序并记录 `rerank_score` 与 `pre_rank`；不可用或失败时保留原证据并
+说明理由。该路径不创建 `Run`/`Attempt`，也不宣称文件上传或 OCR。
 
 ## 5. Runtime — 状态如何推进
 

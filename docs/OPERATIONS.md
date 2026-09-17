@@ -128,6 +128,9 @@ sequential-only，避免把 SQLite 写入和本地副作用未经专门验证地
    adapter；失败时显示脱敏后的原因。
 6. 用 `semantic` 或 `hybrid` 再查一次。semantic 结果是 provider embedding 上的
    cosine similarity；hybrid 同时展示 cosine 与 lexical 分量。
+7. （可选）选择一个已配置的 rerank model 再查一次。rerank 只重排：结果会显示
+   `rank N (was M)` 与 rerank score，而 retrieval score / cosine / lexical 分量保持
+   不变。没有已配置 rerank model 时该控件不会出现。
 
 这个页面是独立的同步产品数据流，不会创建 `Run`/`Attempt`。它只在显式 embed 或
 semantic/hybrid 查询时才调用 provider embedding 接口：
@@ -206,6 +209,7 @@ payload 只保留 ID、状态、provider/model、时长、错误类别等允许�
 | 页面刷新后消息仍在 | RubyLLM Message 和 Run inspector | 不要把浏览器 DOM 当唯一数据源 |
 | Knowledge 搜不到结果 | source 是否为 `ready`、query token、chunk offsets、embedding coverage | 不要把 lexical 当成 semantic embedding 或 rerank |
 | Knowledge embedding 失败 | collection embedding status/error、provider 配置、model capability | 不要把脱敏后的错误当成完整 provider 日志，也不要混合不同 model 的向量 |
+| Rerank 没有生效 | 页面 “Rerank was not applied” 原因、rerank model 是否已配置 | 不要把 rerank 分数当成语义正确性，也不要认为重排会改写检索证据 |
 | Tool 参数不完整 | ToolInvocation 的 secret filtering | 不要为“调试方便”恢复 secret |
 | 390px 出现横向滚动 | 页面实际 `scrollWidth/clientWidth`、长 JSON/table | 不要用截图裁剪掩盖布局问题 |
 | live test 失败 | 网络、provider availability、model capability、credentials | 不要把一次网络失败改写成代码永远错误 |

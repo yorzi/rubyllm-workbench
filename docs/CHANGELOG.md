@@ -61,6 +61,55 @@ Specs 允许“应用侧 cosine 或兼容的 SQLite vector extension”，但不
 - 只验证了 macOS arm64 + OpenRouter 一个 1024 维模型；跨维度、跨 provider 未验证。
 - 派生索引表是运行时创建的，不在 `db/schema.rb` 中；它是缓存，可删除重建。
 
+## 2026-09-17 — M4 兼容 provider 的 rerank（可切换、pre/post rank 可检查）
+
+### 为什么做
+
+M4 Specs 要求“reranking can be toggled only for compatible providers”。此前检索只有
+第一阶段的 lexical/semantic/hybrid 排序，没有第二阶段，也没有能力门控。这次把 rerank
+做成可选的第二阶段：它可以改变顺序，但不能替代或改写检索证据。
+
+### 人能看到的变化
+
+- Search evidence 新增 rerank 选择（Off + 已配置的 rerank model）。没有已配置 rerank
+  model 时控件不出现，并说明“No configured rerank model; rerank stays off.”
+- 应用 rerank 后，每个结果同时显示 `rank N (was M)`、provider rerank score，以及原始
+  的 retrieval score / cosine / lexical 分量。
+- rerank 不可用或失败时，页面显示“Rerank was not applied — retrieval evidence is
+  unchanged”和具体原因；检索结果保持原样，不会消失。
+- Inspector 显示本次是否启用 rerank 以及 model。
+
+### 实现地图
+
+- `Ai::Knowledge::RerankCatalog`：以 registry 的 `rerank` output modality + provider
+  配置作为能力门控（对应 Specs 的 compatible-provider 要求）。
+- `Ai::Knowledge::Reranker`：调用 `RubyLLM.rerank`，返回 (index, score)，错误经
+  `Ai::ErrorText` 脱敏。
+- `Ai::Knowledge::Search`：rerank 是第二阶段，只重排；`Result` 增加 `rerank_score`
+  与 `pre_rank`，Outcome 增加 `rerank_model_id` / `rerank_note` / `rerank_applied`。
+- 无新表：rerank 是请求范围内的证据重排，不落库；原始 chunk、checksum 与向量仍是事实。
+
+### 验证证据
+
+- 定向回归覆盖 catalog 过滤、未配置/未知 model 拒绝、reranker 排序、secret 脱敏、
+  重排后 pre_rank 指回原检索位置、rerank 失败与未选择 model 时证据不变：新增 9 tests，
+  全套 122 tests、758 assertions、0 failures、0 errors、1 skip。
+- 真实 provider dogfood（`OPENROUTER_DOGFOOD`）：OpenRouter 免费 rerank model
+  `nvidia/llama-nemotron-rerank-vl-1b-v2:free` 可用；同一 query 下 lexical 出现
+  0.7833 并列，rerank 给出 0.6758 / 0.111 / 0.0009，把 term 密集的 decoy 提到第一位
+  （rerank 与语义意图不一致，见下）。
+- HTTP 渲染检查确认 rerank 结果页显示 `rank 1 (was 2)`；本会话仍无 headless browser，
+  未做桌面/390px 视觉复核。
+
+### 还没有证明什么
+
+- 只验证了 OpenRouter 一个免费 rerank model；不同 rerank model 的质量差异没有基准。
+- dogfood 里 rerank 把词面重复但离题的 decoy 排在语义正确的段落之前，说明 rerank 分数
+  不等于语义正确性；它只是一层可检查的重排信号。
+- 没有持久化 rerank 调用记录，因此没有跨时间对比或成本累计；rerank 让一次查询多了一次
+  provider 往返（本次约 +3s）。
+- 未验证 Cohere 等其他 rerank provider，也未验证 top_n / 大候选集行为。
+
 ## 2026-09-17 — M4 provider embedding 与 lexical/semantic/hybrid 检索证据
 
 ### 为什么做

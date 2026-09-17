@@ -6,6 +6,10 @@ module Ai
     # embeddings and a query vector. When any of those is missing the search
     # degrades to lexical retrieval and reports the reason instead of quietly
     # returning lexical evidence labelled as semantic.
+    #
+    # Reranking is an optional second stage gated on provider compatibility. It
+    # only reorders evidence: when it is unavailable or fails, the original
+    # retrieval evidence is returned unchanged with an explicit note.
     class Search
       MODES = Ai::Knowledge::Retriever::MODES
 
@@ -21,20 +25,27 @@ module Ai
         :stale_count,
         :query,
         :adapter_key,
-        :adapter_note
+        :adapter_note,
+        :rerank_model_id,
+        :rerank_note,
+        :rerank_applied
       )
 
+      RerankState = Data.define(:results, :model_id, :note, :applied)
+
       def self.call(collection:, query:, mode: "lexical", limit: Ai::Knowledge::Retriever::DEFAULT_LIMIT,
-                    embedding_model_id: nil, client: RubyLLM)
-        new(collection:, query:, mode:, limit:, embedding_model_id:, client:).call
+                    embedding_model_id: nil, rerank: false, rerank_model_id: nil, client: RubyLLM)
+        new(collection:, query:, mode:, limit:, embedding_model_id:, rerank:, rerank_model_id:, client:).call
       end
 
-      def initialize(collection:, query:, mode:, limit:, embedding_model_id:, client:)
+      def initialize(collection:, query:, mode:, limit:, embedding_model_id:, rerank:, rerank_model_id:, client:)
         @collection = collection
         @query = query.to_s
         @limit = limit
         @requested_mode = MODES.include?(mode.to_s) ? mode.to_s : "lexical"
         @embedding_model_id = embedding_model_id.presence || collection.embedding_model_id.presence
+        @rerank = rerank.to_s.in?(%w[1 true]) || rerank == true
+        @rerank_model_id = rerank_model_id.presence
         @client = client
       end
 
@@ -52,9 +63,10 @@ module Ai
           model_id: @embedding_model_id
         )
         results = retriever.search
+        rerank_state = apply_rerank(results)
 
         Outcome.new(
-          results: results,
+          results: rerank_state.results,
           mode: resolution[:mode],
           requested_mode: @requested_mode,
           degraded_reason: resolution[:degraded_reason],
@@ -65,11 +77,59 @@ module Ai
           stale_count: retriever.stale_count,
           query: @query,
           adapter_key: selection.key,
-          adapter_note: selection.note
+          adapter_note: selection.note,
+          rerank_model_id: rerank_state.model_id,
+          rerank_note: rerank_state.note,
+          rerank_applied: rerank_state.applied
         )
       end
 
       private
+
+      def apply_rerank(results)
+        return RerankState.new(results: results, model_id: nil, note: nil, applied: false) unless @rerank
+        return skipped(results, "No rerank model is selected.") if @rerank_model_id.blank?
+
+        availability = Ai::Knowledge::RerankCatalog.availability(@rerank_model_id)
+        return skipped(results, availability.reason) unless availability.available
+        return skipped(results, "No evidence to rerank.") if results.empty?
+
+        rerank_results(results)
+      rescue Ai::Knowledge::Reranker::Error => error
+        skipped(results, error.message)
+      end
+
+      def rerank_results(results)
+        ranked = Ai::Knowledge::Reranker.call(
+          query: @query,
+          documents: results.map { |result| result.chunk.content_text },
+          model_id: @rerank_model_id,
+          client: @client
+        )
+
+        ordered = ranked.filter_map do |row|
+          result = results[row.index]
+          next if result.nil?
+
+          Ai::Knowledge::Retriever::Result.new(
+            chunk: result.chunk,
+            score: result.score,
+            matched_terms: result.matched_terms,
+            lexical_score: result.lexical_score,
+            similarity: result.similarity,
+            rerank_score: row.score.round(4),
+            pre_rank: row.index
+          )
+        end
+
+        return skipped(results, "Rerank model returned no usable ranking.") if ordered.empty?
+
+        RerankState.new(results: ordered, model_id: @rerank_model_id, note: nil, applied: true)
+      end
+
+      def skipped(results, note)
+        RerankState.new(results: results, model_id: @rerank ? @rerank_model_id : nil, note: note, applied: false)
+      end
 
       def selection
         Ai::Knowledge::VectorStore.selection
@@ -88,7 +148,10 @@ module Ai
           stale_count: 0,
           query: @query,
           adapter_key: selection.key,
-          adapter_note: selection.note
+          adapter_note: selection.note,
+          rerank_model_id: nil,
+          rerank_note: nil,
+          rerank_applied: false
         )
       end
 

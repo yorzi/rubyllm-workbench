@@ -33,15 +33,22 @@ module WorkbenchTestHelpers
     with_provider_configuration(chat.provider) { yield }
   end
 
-  # Routes every RubyLLM.embed call through a deterministic double for the
-  # duration of the block. Knowledge services take `client:` explicitly, so
+  # Routes RubyLLM.embed and RubyLLM.rerank through a deterministic double for
+  # the duration of the block. Knowledge services take `client:` explicitly, so
   # only the default global boundary needs redirecting here.
   def with_embedding_client(client)
-    original = RubyLLM.method(:embed)
+    with_knowledge_client(client) { yield }
+  end
+
+  def with_knowledge_client(client)
+    embed = RubyLLM.method(:embed)
+    rerank = RubyLLM.method(:rerank)
     RubyLLM.define_singleton_method(:embed) { |text, **options| client.embed(text, **options) }
+    RubyLLM.define_singleton_method(:rerank) { |query, documents, **options| client.rerank(query, documents, **options) }
     yield
   ensure
-    RubyLLM.define_singleton_method(:embed, original)
+    RubyLLM.define_singleton_method(:embed, embed)
+    RubyLLM.define_singleton_method(:rerank, rerank)
   end
 
   def with_provider_configuration(provider, value: "test-only-key")

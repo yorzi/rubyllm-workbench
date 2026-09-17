@@ -2,6 +2,7 @@ require "test_helper"
 
 class KnowledgeFlowTest < ActionDispatch::IntegrationTest
   EMBEDDING_MODEL_ID = "openai/text-embedding-3-small"
+  RERANK_MODEL_ID = "voyageai/rerank-2.5-lite"
 
   test "creates a collection, ingests text, and searches inspectable evidence" do
     post projects_path, params: { project: { name: "Knowledge flow project", description: "Test" } }
@@ -92,6 +93,38 @@ class KnowledgeFlowTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_includes response.body, "Semantic retrieval was unavailable"
       assert_includes response.body, "No embedding model is selected"
+    end
+  end
+
+  test "rerank toggle reorders evidence through the workspace and degrades explicitly" do
+    with_provider_configuration("openrouter") do
+      project = create_project(name: "Rerank flow project")
+      collection = project.knowledge_collections.create!(name: "Notes")
+      [ "sqlite only chunk", "sqlite retrieval evidence with both terms", "unrelated provider notes" ].each_with_index do |text, index|
+        item = collection.knowledge_items.create!(title: "Notes #{index}", content_text: text)
+        Ai::Knowledge::Ingestor.call(item)
+      end
+
+      client = FakeEmbeddingClient.new
+      with_knowledge_client(client) do
+        get project_knowledge_collection_path(project, collection),
+          params: { q: "sqlite retrieval", mode: "lexical", rerank: "1", rerank_model_id: RERANK_MODEL_ID }
+        assert_response :success
+      end
+
+      assert_includes response.body, "rerank #{RERANK_MODEL_ID}"
+      assert_includes response.body, "rank 1"
+      assert_includes response.body, "sqlite retrieval evidence with both terms"
+
+      with_knowledge_client(FakeEmbeddingClient.new(error: StandardError.new("provider unavailable"))) do
+        get project_knowledge_collection_path(project, collection),
+          params: { q: "sqlite retrieval", mode: "lexical", rerank: "1", rerank_model_id: RERANK_MODEL_ID }
+        assert_response :success
+      end
+
+      assert_includes response.body, "Rerank was not applied"
+      assert_includes response.body, "Reranking failed"
+      assert_includes response.body, "sqlite retrieval evidence with both terms"
     end
   end
 

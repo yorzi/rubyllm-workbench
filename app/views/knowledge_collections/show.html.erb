@@ -25,6 +25,7 @@
         <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Dimensions</dt><dd class="font-mono text-ink"><%= @collection.embedding_dimensions || "—" %></dd></div>
         <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Coverage</dt><dd class="font-mono text-ink"><%= @collection.embedded_chunk_count %>/<%= @collection.chunk_count %></dd></div>
         <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Similarity</dt><dd class="font-mono text-ink"><%= @adapter_selection.key %></dd></div>
+        <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Rerank</dt><dd class="truncate font-mono text-ink"><%= @outcome&.rerank_applied ? @outcome.rerank_model_id : "off" %></dd></div>
       </dl>
       <% if @collection.embedding_error.present? %>
         <p class="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700"><%= @collection.embedding_error %></p>
@@ -145,7 +146,29 @@
                 {},
                 class: "mt-2 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm outline-none ring-accent/20 focus:border-accent focus:ring-4" %>
         </div>
+        <% if @rerank_models.any? %>
+          <div class="sm:w-56">
+            <%= form.label :rerank_model_id, "Rerank (compatible providers only)", class: "text-xs font-medium text-ink" %>
+            <%= form.select :rerank_model_id,
+                  options_for_select(@rerank_models.map { |entry| [ "#{entry.name} · #{entry.id}", entry.id ] }, @rerank_model_id),
+                  { include_blank: "Off" },
+                  class: "mt-2 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm outline-none ring-accent/20 focus:border-accent focus:ring-4" %>
+          </div>
+          <%= hidden_field_tag :rerank, "1" %>
+        <% else %>
+          <div class="sm:w-56">
+            <p class="text-xs font-medium text-ink">Rerank</p>
+            <p class="mt-2 rounded-lg border border-dashed border-line bg-canvas px-3 py-2 text-xs leading-5 text-muted">No configured rerank model; rerank stays off.</p>
+          </div>
+        <% end %>
         <%= form.submit "Search", class: "inline-flex cursor-pointer items-center justify-center rounded-lg border border-line bg-white px-4 py-2.5 text-sm font-medium text-ink hover:border-accent hover:text-accent" %>
+      <% end %>
+
+      <% if @outcome && @outcome.rerank_note.present? %>
+        <div class="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-800">
+          <p class="font-medium">Rerank was not applied — retrieval evidence is unchanged</p>
+          <p class="mt-1"><%= @outcome.rerank_note %></p>
+        </div>
       <% end %>
 
       <% if @outcome && @outcome.degraded_reason.present? %>
@@ -158,15 +181,15 @@
       <% if @query.present? %>
         <div class="mt-6 flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
           <h3 class="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Results for “<%= @query %>”</h3>
-          <span class="font-mono text-xs text-muted"><%= @results.size %> matches · <%= @outcome.mode %> · <%= @outcome.adapter_key %><% if @outcome.embedding_model_id.present? %> · <%= @outcome.embedding_model_id %><% end %></span>
+          <span class="font-mono text-xs text-muted"><%= @results.size %> matches · <%= @outcome.mode %> · <%= @outcome.adapter_key %><% if @outcome.embedding_model_id.present? %> · <%= @outcome.embedding_model_id %><% end %><% if @outcome.rerank_applied %> · rerank <%= @outcome.rerank_model_id %><% end %></span>
         </div>
         <div class="mt-3 space-y-3">
-          <% @results.each do |result| %>
+          <% @results.each_with_index do |result, index| %>
             <article class="rounded-xl border border-line bg-canvas p-4">
               <div class="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
                 <div class="min-w-0">
                   <h4 class="truncate text-sm font-semibold text-ink"><%= result.chunk.knowledge_item.title %></h4>
-                  <p class="mt-1 text-xs text-muted">Chunk <%= result.chunk.position + 1 %> · chars <%= result.chunk.char_start %>–<%= result.chunk.char_end %></p>
+                  <p class="mt-1 text-xs text-muted">Chunk <%= result.chunk.position + 1 %> · chars <%= result.chunk.char_start %>–<%= result.chunk.char_end %><% if @outcome.rerank_applied %> · rank <%= index + 1 %><% if result.pre_rank.present? %> (was <%= result.pre_rank + 1 %>)<% end %><% end %></p>
                 </div>
                 <div class="shrink-0 text-left text-xs sm:text-right">
                   <p class="font-mono font-semibold text-accent">score <%= result.score %></p>
@@ -175,6 +198,9 @@
                   <% end %>
                   <% if result.lexical_score.present? %>
                     <p class="mt-1 font-mono text-muted">lexical <%= result.lexical_score %></p>
+                  <% end %>
+                  <% if @outcome.rerank_applied && result.rerank_score.present? %>
+                    <p class="mt-1 font-mono text-muted">rerank <%= result.rerank_score %></p>
                   <% end %>
                   <% if result.matched_terms.present? %>
                     <p class="mt-1 text-muted">terms: <%= result.matched_terms.join(", ") %></p>
