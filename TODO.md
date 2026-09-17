@@ -158,6 +158,26 @@ Specs gate.
 - [x] Only one provider and one free embedding model were exercised; cross-
       provider embedding compatibility is still unaccepted.
 
+## M4 vector adapter spike — 2026-09-17
+
+- [x] Add an opt-in `sqlite_vector_extension` adapter behind the existing
+      `Ai::Knowledge::VectorStore` interface using the external sqlite-vector
+      loadable extension, keeping `sqlite_application_cosine` as the default.
+- [x] Keep evidence semantics identical by using exact `vector_full_scan`
+      cosine only; no quantization, so no recall claim is introduced.
+- [x] Read through a dimension-scoped derived index
+      (`knowledge_vector_index_<dimension>`) because sqlite-vector declares one
+      dimension per column and does not check per-row blob length.
+- [x] Fall back explicitly: registry, inspector and result header report the
+      effective adapter and the reason when the extension is unavailable.
+- [x] Verify locally against the real macOS arm64 binary: same ranking as the
+      default adapter within 3.5e-07, end-to-end semantic search identical.
+
+### Vector adapter status: `sqlite_vector_extension` `PARTIAL` · spike `LOCAL_VERIFIED`
+
+Enabled only by explicit configuration; not the default, not distributed with
+the app, and not benchmarked.
+
 ## Known implementation gap
 
 - [x] Add a unified local lifecycle event catalog for `ai.run`, `ai.attempt`,
@@ -173,8 +193,12 @@ Specs gate.
       the explicit local path and multiple-call recorder are verified, but live
       provider behavior is still not accepted.
 - [ ] M4 cross-provider embedding compatibility, batch-failure semantics and a
-      measured corpus/query-scale record before considering a SQLite vector
-      extension or PostgreSQL/pgvector; the current adapter is bounded by design.
+      measured corpus/query-scale record before promoting the sqlite-vector
+      adapter to the default; the application-side adapter remains the default
+      by design.
+- [ ] Package or provision the sqlite-vector binary per platform (Linux VPS,
+      Kamal, Docker, CI); the spike relies on a manually downloaded binary that
+      is deliberately not committed.
 - [ ] M4 provider embeddings for providers other than OpenRouter; only one free
       OpenRouter embedding model has been dogfooded so far.
 - [ ] M4 compatible-provider rerank with explicit capability checks and evidence.

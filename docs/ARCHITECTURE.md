@@ -275,8 +275,12 @@ KnowledgeItem 保存规范化后的文本与 checksum；KnowledgeChunk 保存可
 内容窗口、位置和字符 offset。KnowledgeEmbedding 按 (chunk, model_id) 唯一保存
 provider、dimensions、packed Float32 vector 与 content checksum；检索只在同一
 model_id 内比较，stale checksum 会被跳过，所以不同模型或维度的向量不会被混用。
-向量读写经过 `Ai::Knowledge::VectorStore` adapter 接口，当前默认实现是应用侧
-cosine，只适用于有界语料。
+向量读写经过 `Ai::Knowledge::VectorStore` adapter 接口。默认实现是应用侧 cosine，
+只适用于有界语料；opt-in 的 `sqlite_vector_extension` 用外部 sqlite-vector 扩展做
+exact cosine 扫描。后者不直接扫 `knowledge_embeddings.vector`（该列混合多个模型的
+维度，而扩展要求每列一个固定 dimension 且不检查单行 blob 长度），而是读写按维度划分
+的派生索引表 `knowledge_vector_index_<dimension>`；该表不在 `db/schema.rb` 中，可
+由源表重建。扩展不可用时 registry 回退到默认 adapter 并写明原因。
 
 ### 仍未进入当前关系图的扩展
 
@@ -424,7 +428,7 @@ flowchart TD
     Search --> Retriever["Ai::Knowledge::Retriever\nlexical / semantic / hybrid"]
     Chunks --> Retriever
     Vectors --> Retriever
-    Retriever --> Adapter["Ai::Knowledge::VectorStore\nsqlite_application_cosine"]
+    Retriever --> Adapter["Ai::Knowledge::VectorStore\nsqlite_application_cosine (default)\n+ sqlite_vector_extension (opt-in)"]
     Retriever --> Evidence["score + cosine + lexical\n+ matched terms + source chunk"]
 ```
 

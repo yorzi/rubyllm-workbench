@@ -136,7 +136,24 @@ semantic/hybrid 查询时才调用 provider embedding 接口：
 rerank 结果或模型生成答案。semantic/hybrid 缺少 model、配置、已存向量或 query
 embedding 时，页面会退回 lexical 并写明原因。
 
-当前向量以 Float32 blob 存在 SQLite，由 `sqlite_application_cosine` adapter 在应用侧
+### 可选：开启 sqlite-vector 扩展 adapter
+
+默认 adapter（`sqlite_application_cosine`）不需要任何外部依赖。想让 SQLite 扩展来做
+扫描时，显式提供二进制并声明 adapter：
+
+```sh
+# 二进制不入库：自行下载对应平台的 release 并放置，或直接指路径
+SQLITE_VECTOR_PATH=/path/to/vector.dylib \
+KNOWLEDGE_VECTOR_ADAPTER=sqlite_vector_extension \
+bin/rails server -b 127.0.0.1 -p 3100
+```
+
+开启后页面会显示 effective adapter。二进制缺失或加载失败时会回退到默认 adapter，并在
+Inspector 写明原因；这不是错误，也不是降级为近似搜索——spike 只用
+`vector_full_scan` 的 exact cosine，不涉及 INT8/TurboQuant 量化。扩展会按需维护
+`knowledge_vector_index_<dimension>` 派生索引表（可删除重建，不在 schema.rb 中）。
+
+当前向量以 Float32 blob 存在 SQLite，默认由 `sqlite_application_cosine` adapter 在应用侧
 算 cosine，只适用于有界语料；换 provider 或 model 前先 clear 或重新 embed，避免把
 不同维度的向量混在一起。当前 M4 尚未开放远程 URL 抓取、文件上传、Active Storage
 文档处理、OCR 或 rerank；这些能力进入时必须补充各自的 provenance、失败状态和兼容性证据。
@@ -207,6 +224,8 @@ payload 只保留 ID、状态、provider/model、时长、错误类别等允许�
   输出当成已经存在的来源 provenance。
 - embedding 错误摘要、collection 状态和事件只保存脱敏后的文本；不要把 provider
   credential、原始响应体或完整 key 写进数据库或日志。
+- sqlite-vector 二进制是外部可执行代码：只从官方 release 获取，不要入库、不要在 CI 里
+  隐式下载未经确认的版本；它默认关闭，只有显式配置才会被加载。
 - 任何新建的长期进程都要记录 PID、端口和停止方式；任务结束时清理。
 
 ## 变更后最小检查清单

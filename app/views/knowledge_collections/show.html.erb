@@ -24,10 +24,13 @@
         <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Model</dt><dd class="truncate font-mono text-ink"><%= @collection.embedding_model_id.presence || "none" %></dd></div>
         <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Dimensions</dt><dd class="font-mono text-ink"><%= @collection.embedding_dimensions || "—" %></dd></div>
         <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Coverage</dt><dd class="font-mono text-ink"><%= @collection.embedded_chunk_count %>/<%= @collection.chunk_count %></dd></div>
-        <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Similarity</dt><dd class="font-mono text-ink"><%= Ai::Knowledge::VectorStore.default.key %></dd></div>
+        <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Similarity</dt><dd class="font-mono text-ink"><%= @adapter_selection.key %></dd></div>
       </dl>
       <% if @collection.embedding_error.present? %>
         <p class="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700"><%= @collection.embedding_error %></p>
+      <% end %>
+      <% if @adapter_selection.note.present? %>
+        <p class="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800"><%= @adapter_selection.note %></p>
       <% end %>
     </div>
     <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-800">
@@ -88,7 +91,7 @@
           <h2 id="embeddings-heading" class="text-sm font-semibold text-ink">Embeddings</h2>
           <p class="mt-1 text-xs leading-5 text-muted">Embedding a collection stores one vector per ready chunk, tied to the model id and chunk checksum.</p>
         </div>
-        <span class="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-muted"><%= Ai::Knowledge::VectorStore.default.key %></span>
+        <span class="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-muted"><%= @adapter_selection.key %></span>
       </div>
 
       <% if @embedding_models.any? %>
@@ -155,7 +158,7 @@
       <% if @query.present? %>
         <div class="mt-6 flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
           <h3 class="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Results for “<%= @query %>”</h3>
-          <span class="font-mono text-xs text-muted"><%= @results.size %> matches · <%= @outcome.mode %><% if @outcome.embedding_model_id.present? %> · <%= @outcome.embedding_model_id %><% end %></span>
+          <span class="font-mono text-xs text-muted"><%= @results.size %> matches · <%= @outcome.mode %> · <%= @outcome.adapter_key %><% if @outcome.embedding_model_id.present? %> · <%= @outcome.embedding_model_id %><% end %></span>
         </div>
         <div class="mt-3 space-y-3">
           <% @results.each do |result| %>

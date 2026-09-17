@@ -23,6 +23,7 @@ class KnowledgeCollectionsController < ApplicationController
     @query = params[:q].to_s.strip.truncate(500)
     @mode = Ai::Knowledge::Search::MODES.include?(params[:mode].to_s) ? params[:mode].to_s : "lexical"
     @embedding_models = Ai::Knowledge::EmbeddingCatalog.configured_entries
+    @adapter_selection = Ai::Knowledge::VectorStore.selection
     @outcome = @query.present? ? Ai::Knowledge::Search.call(collection: @collection, query: @query, mode: @mode) : nil
     @results = @outcome&.results || []
   end

@@ -19,7 +19,9 @@ module Ai
         :dimensions,
         :embedded_chunk_count,
         :stale_count,
-        :query
+        :query,
+        :adapter_key,
+        :adapter_note
       )
 
       def self.call(collection:, query:, mode: "lexical", limit: Ai::Knowledge::Retriever::DEFAULT_LIMIT,
@@ -38,6 +40,7 @@ module Ai
 
       def call
         return empty_outcome if @query.strip.blank?
+
 
         resolution = resolve_mode
         retriever = Ai::Knowledge::Retriever.new(
@@ -60,11 +63,17 @@ module Ai
           dimensions: @collection.embedding_dimensions,
           embedded_chunk_count: @collection.embedded_chunk_count(model_id: @embedding_model_id),
           stale_count: retriever.stale_count,
-          query: @query
+          query: @query,
+          adapter_key: selection.key,
+          adapter_note: selection.note
         )
       end
 
       private
+
+      def selection
+        Ai::Knowledge::VectorStore.selection
+      end
 
       def empty_outcome
         Outcome.new(
@@ -77,7 +86,9 @@ module Ai
           dimensions: @collection.embedding_dimensions,
           embedded_chunk_count: @collection.embedded_chunk_count(model_id: @embedding_model_id),
           stale_count: 0,
-          query: @query
+          query: @query,
+          adapter_key: selection.key,
+          adapter_note: selection.note
         )
       end
 

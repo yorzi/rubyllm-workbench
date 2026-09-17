@@ -143,6 +143,9 @@ Tool Lab 为 Project 保存一个新 Chat Run 的默认执行模式，默认为 
 - **检索模式**：`lexical` 是精确 token 的 coverage/frequency 信号；`semantic` 是
   provider embedding 上的 cosine similarity；`hybrid` 同时保留两个分量。任一模式
   的结果都是证据片段，不是模型答案。
+- **vector adapter**：默认在应用侧对 SQLite 里的 Float32 blob 算 cosine；也可以显式
+  开启 `sqlite_vector_extension`（外部 sqlite-vector 扩展，需自备二进制）做同样的
+  exact cosine 扫描。两者含义一致；扩展不可用时会回退并在页面写明原因。
 
 ### ToolDefinition / ToolInvocation / Approval
 

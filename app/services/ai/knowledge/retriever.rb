@@ -47,7 +47,7 @@ module Ai
       def semantic_results
         require_semantic_inputs!
 
-        VectorStore.default.rank(query_vector: @query_vector, candidates: embedding_candidates, limit: @limit)
+        adapter.rank(query_vector: @query_vector, candidates: embedding_candidates, limit: @limit, collection: @collection, model_id: @model_id)
           .map do |embedding, similarity|
             chunk = embedding.knowledge_chunk
             Result.new(chunk:, score: similarity.round(4), matched_terms: [], lexical_score: nil, similarity: similarity.round(4))
@@ -107,8 +107,12 @@ module Ai
       end
 
       def semantic_matches(limit)
-        VectorStore.default.rank(query_vector: @query_vector, candidates: embedding_candidates, limit: limit)
+        adapter.rank(query_vector: @query_vector, candidates: embedding_candidates, limit: limit, collection: @collection, model_id: @model_id)
           .map { |embedding, similarity| [ embedding, similarity ] }
+      end
+
+      def adapter
+        @adapter ||= Ai::Knowledge::VectorStore.default
       end
 
       def semantic_available?

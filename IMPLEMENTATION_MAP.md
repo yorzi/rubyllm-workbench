@@ -164,7 +164,9 @@ complete distributed event stream, a cost dashboard or a historical backfill sys
   disabled/explained rather than simulated.
 - M4 retrieval is intentionally SQLite-bounded. Semantic mode requires a
   configured provider embedding model and stored vectors; otherwise `Search`
-  degrades to lexical evidence and records the reason. No fake
+  degrades to lexical evidence and records the reason. The sqlite-vector adapter
+  is a spike: exact cosine only, external binary not shipped with the app, and
+  not yet benchmarked, so it is not the default. No fake
   embedding vectors, universal semantic score, rerank claim, remote URL fetch,
   file upload or OCR result is created by this slice.
 - No direct provider SDK/HTTP calls, arbitrary shell execution, auth, billing,

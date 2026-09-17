@@ -6,6 +6,61 @@
 原则上只追加，不静默改写历史。代码细节回到对应 commit 和
 [IMPLEMENTATION_MAP.md](../IMPLEMENTATION_MAP.md)。
 
+## 2026-09-17 — sqlite-vector adapter spike（opt-in，默认不变）
+
+### 为什么做
+
+Specs 允许“应用侧 cosine 或兼容的 SQLite vector extension”，但不允许为了让状态看起来
+完成就提前引入基础设施。上一刀已经把 adapter 接口留出来了，所以这次是把它接上真实扩展
+做一次有边界的验证：证明换 adapter 不需要改 `Embedder`/`Retriever`/`Search`/页面，同时
+把新依赖的风险显式暴露出来。
+
+### 人能看到的变化
+
+- `Ai::Knowledge::VectorStore` 现在注册两个 adapter：`sqlite_application_cosine`
+  （默认）与 `sqlite_vector_extension`（opt-in spike）。
+- 通过设置 `KNOWLEDGE_VECTOR_ADAPTER=sqlite_vector_extension` 并提供
+  `SQLITE_VECTOR_PATH`（或 `vendor/sqlite-vector/vector.dylib|so`）启用扩展扫描。
+- 扩展不可用时不会静默失败：registry 回退到默认 adapter，Inspector 与结果头显示
+  effective adapter 和回退原因。
+- 检索证据语义不变：spike 只用 `vector_full_scan` 的 exact cosine，不使用量化近似，
+  所以页面上 cosine 的含义与默认 adapter 完全一致。
+
+### 实现地图
+
+- `Ai::Knowledge::VectorStore::Base` 收敛共用的 Float32 pack/unpack 与 cosine；
+  两个 adapter 只负责 `key` 与 `rank`。
+- `SqliteExtension` 不直接扫 `knowledge_embeddings.vector`：该列混合了不同模型的维度，
+  而 sqlite-vector 是“每列一个固定 dimension”且不检查单行 blob 长度，因此它读写一个按
+  维度划分的派生索引表 `knowledge_vector_index_<dimension>`，可由源表重建。
+- 索引维护：按需对比计数并在事务内重建；每次扫描前对当前连接执行 `vector_init`
+  （扩展要求每个连接都初始化）；扩展按连接 `load_extension` 一次并记忆。
+- `Ai::Knowledge::Search::Outcome` 暴露 `adapter_key` / `adapter_note`；页面展示。
+
+### 验证证据
+
+- 真实扩展验证：macOS arm64 的 `vector-macos-arm64-1.1.2`（NEON）可以加载；探针确认
+  `distance=cosine` 返回 `1 - cosine`，`vector_full_scan` 的 top-k 与 streaming 模式
+  都可用。
+- 同一 1024 维真实语料、同一 query 向量下，两个 adapter 的排序一致，cosine 差
+  ≤ 3.5e-07（Float32 精度内）；单次扫描 2.6ms vs 5.7ms（2 行，仅量级参考）。
+- 端到端 `Search`（真实 OpenRouter query embedding + 扩展扫描）得到与默认 adapter
+  完全相同的 0.5373 / 0.2334。
+- 回退验证：二进制缺失时 fresh process 显示
+  `sqlite_vector_extension unavailable (...); using sqlite_application_cosine`。
+- 回归：112 tests、700 assertions、0 failures、0 errors、1 skip；zeitwerk 与 rubocop 通过。
+- HTTP 渲染检查确认开启扩展时的 semantic/hybrid 页面 200 且显示
+  `sqlite_vector_extension`；本会话仍没有 headless browser，未做桌面/390px 视觉复核。
+
+### 还没有证明什么
+
+- 二进制不入库，也不由 Gemfile 管理；Linux VPS/Kamal/Docker/CI 仍需各自提供匹配平台的
+  二进制，跨平台分发没有解决。
+- 没有量化（INT8/TurboQuant）路径，因此没有 recall、内存和大规模语料的性能结论。
+- 没有 benchmark：切换默认值前仍缺 Specs 要求的“先记录性能”。
+- 只验证了 macOS arm64 + OpenRouter 一个 1024 维模型；跨维度、跨 provider 未验证。
+- 派生索引表是运行时创建的，不在 `db/schema.rb` 中；它是缓存，可删除重建。
+
 ## 2026-09-17 — M4 provider embedding 与 lexical/semantic/hybrid 检索证据
 
 ### 为什么做
