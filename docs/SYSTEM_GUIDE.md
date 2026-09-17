@@ -4,9 +4,9 @@
 AI agent 持续修改系统之后，仍能快速回答：系统为什么存在、现在有什么、一次
 操作如何完成、数据在哪里、哪些能力还不能宣称已经存在。
 
-更新时间：2026-09-16
-当前实现：M0–M3 核心闭环和 M4 本地文本基础切片
-当前代码基线：`main` 上的 M3 生命周期/并行策略与 M4 Knowledge foundation
+更新时间：2026-09-17
+当前实现：M0–M3 核心闭环、M4 本地文本基础与 embedding/语义检索切片
+当前代码基线：`main` 上的 M3 生命周期/并行策略与 M4 Knowledge embedding/retrieval
 
 ## 两套文档体系：先确认你正在读哪一种“真相”
 
@@ -48,8 +48,9 @@ Artifact，并把文本来源保存为可追溯的 KnowledgeItem/KnowledgeChunk�
 - 不是已经部署给公众使用的 SaaS，也没有账号、团队、计费或多租户。
 - 不是 M5 Agent/Deep Research 平台；Agent、工作流和 provider-hosted/server tools
   仍然延期。
-- 不是完整的 M4 知识库/RAG/文档 OCR 系统：当前只有本地文本 collection、chunk
-  和词法证据检索；embedding、语义检索、rerank、文件/OCR 仍未实现。
+- 不是完整的 M4 知识库/RAG/文档 OCR 系统：当前有本地文本 collection、chunk、
+  provider embedding、SQLite vector adapter 和 lexical/semantic/hybrid 证据检索；
+  rerank、文件/OCR 提取和 provenance Artifact 仍未实现。
 - 不接受浏览器上传的任意 Ruby，也不执行任意本地 shell/code。
 - 本地测试通过、OpenRouter dogfood 成功、Git commit 存在，都不等于生产部署、
   公众可用、业务结果或 provider 长期稳定。
@@ -65,7 +66,8 @@ Artifact，并把文本来源保存为可追溯的 KnowledgeItem/KnowledgeChunk�
 | M3 观测切片 | 在 Run inspector 查看执行时间线 | LifecycleEvent、事件名称、关联记录、脱敏元数据和去重 key | `IMPLEMENTED` · `LOCAL_VERIFIED` |
 | M3 并行 tool calls | 通过显式策略验证多个调用的应用侧记录和安全降级 | 冻结的 calls/concurrency 选项、多调用 ToolInvocation 和生命周期事件 | `IMPLEMENTED` · `LOCAL_VERIFIED`；live provider 兼容性仍 `PARTIAL` |
 | M4 本地文本基础 | 创建知识集合、摄取文本、chunk、checksum、词法检索和证据查看 | KnowledgeCollection、KnowledgeItem、KnowledgeChunk、来源引用与 offset | `IMPLEMENTED` · `LOCAL_VERIFIED` |
-| M4 完整目标 | embedding、语义检索、rerank、文件/OCR 提取和引用 Artifact | embedding metadata、rerank evidence、provenance artifacts | `PARTIAL`；其余 `PLANNED` |
+| M4 embedding + 检索 | 选择已配置的 embedding model 入库向量，并用 lexical/semantic/hybrid 查看证据 | KnowledgeEmbedding（model/dimensions/packed vector/checksum）、collection embedding 状态、降级原因 | `IMPLEMENTED` · `LOCAL_VERIFIED` + `OPENROUTER_DOGFOOD` |
+| M4 完整目标 | rerank、文件/OCR 提取和引用 Artifact | rerank evidence、provenance artifacts | `PARTIAL`；其余 `PLANNED` |
 | M5 | Agent、Durable Research、远程工具和可恢复长任务 | AgentDefinition、AgentRunStep、citation/research Artifact | `PLANNED` |
 
 这里的状态是项目当前实现层的判断；Specs 人类基线中的 `PLANNED` 状态仍保留其
@@ -126,14 +128,21 @@ Tool Lab 为 Project 保存一个新 Chat Run 的默认执行模式，默认为 
 - **Artifact**：耐久产物，例如 JSON、文本、报告或未来的引用/媒体；Artifact 不
   取代原始 Run/Attempt，而是和原始证据并存。
 
-### KnowledgeCollection / KnowledgeItem / KnowledgeChunk
+### KnowledgeCollection / KnowledgeItem / KnowledgeChunk / KnowledgeEmbedding
 
 - **KnowledgeCollection**：Project 之下的本地知识边界；它不跨 Project 共享来源。
+  它同时记录 embedding 状态、model、dimensions、coverage 和最近 embed 时间。
 - **KnowledgeItem**：一条规范化后的文本来源，保存 `source_kind`、可选的
   `source_reference`、SHA-256 checksum 和 `pending/ingesting/ready/failed` 状态。
 - **KnowledgeChunk**：由 `Ai::Knowledge::Chunker` 生成的确定性字符窗口，保存
-  position、`char_start`/`char_end` 和 chunker metadata。当前 Retriever 使用精确
-  token 的词法 coverage/frequency 评分；结果是证据片段，不是模型答案。
+  position、`char_start`/`char_end` 和 chunker metadata。
+- **KnowledgeEmbedding**：一个 chunk 在一个 embedding model 下的向量，保存
+  provider、dimensions、packed Float32 vector、content checksum 和 usage metadata。
+  同 model 重新 embed 会替换行；不同 model 各自成行，检索只在同一 model 内比较，
+  checksum 不匹配的 stale 向量会被跳过。
+- **检索模式**：`lexical` 是精确 token 的 coverage/frequency 信号；`semantic` 是
+  provider embedding 上的 cosine similarity；`hybrid` 同时保留两个分量。任一模式
+  的结果都是证据片段，不是模型答案。
 
 ### ToolDefinition / ToolInvocation / Approval
 
@@ -188,8 +197,10 @@ Tool Lab 只管理代码中已注册的 allowlist 条目。它不是在线执行
 - **Tool Lab**：查看 registry schema、approval policy、并行安全标记和 enabled 状态，
   还可以为新 Chat Run 选择串行/并行默认模式；开关和模式都只影响新 Run。
 - **Knowledge workspace**：创建 Project-scoped collection，粘贴 bounded text，
-  同步生成可替换的 chunks，并按 query 查看匹配词、分数、来源和字符 offset。该产品
-  页面不会创建 Chat Run/Attempt，也不会偷偷调用 provider。
+  同步生成可替换的 chunks，选择已配置的 embedding model 入库向量，并按
+  `lexical/semantic/hybrid` 查看 score、cosine、lexical 分量、匹配词、来源和字符
+  offset。该产品页面不会创建 Chat Run/Attempt，也不会在没有明确 embed 操作时
+  偷偷调用 provider；semantic/hybrid 不可用时页面会写明降级原因。
 - **Run inspector**：稳定查看单次证据。即使页面不是当前 Chat，也可以从全局 Runs
   回到同一个执行；Lifecycle events 时间线展示状态、流式首字节、工具/审批和
   Artifact 事件的本地顺序。
@@ -231,9 +242,13 @@ Agent 定义、多步运行、远程/provider-hosted 工具、研究引用和更
 - 当前本地回归覆盖并行策略的能力门控、side-effect 工具串行降级、冻结的 RubyLLM
   options，以及多个 tool calls 的独立 ToolInvocation/request/completion 事件。
 - 当前本地回归覆盖 Knowledge collection、文本 checksum、确定性 chunk offset、ready
-  状态和词法检索证据；这只证明 M4 本地文本基础切片。
+  状态、embedding 记录/provenance、vector adapter、三种检索模式的证据分量和降级
+  原因；这只证明 M4 本地文本与 embedding 检索切片。
+- 真实 provider dogfood：OpenRouter 免费 embedding model
+  `liquid/lfm-2.5-embedding-350m:free` 成功 embed 2 个 chunk（1024 维），语义排序
+  把相关段落在 cosine 0.5373 排在 0.2334 之前；只覆盖一个 provider 与一个 model。
 - 当前仍没有 live provider 返回多个 parallel tool calls 的兼容性结论，也没有 M4
-  provider embedding/rerank/OCR 或 M5 的实现证据。
+  rerank/OCR 或 M5 的实现证据。
 
 这些是本地、点时的验证，不是生产承诺。
 

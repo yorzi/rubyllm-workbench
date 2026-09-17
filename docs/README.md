@@ -8,9 +8,9 @@
 项目发展过程中记录实现事实、证据和偏差的增长层。`docs/` 不会因为当前代码已经
 变化就反向改写 Specs。
 
-更新时间：2026-09-16
-当前实现：M0–M3 核心闭环和 M4 本地文本基础切片 `IMPLEMENTED`
-当前边界：M3 并行 tool-call 应用路径 `IMPLEMENTED`、live provider 兼容性 `PARTIAL`；M4 完整语义/文档能力 `PARTIAL`；M5–M8 `PLANNED`
+更新时间：2026-09-17
+当前实现：M0–M3 核心闭环、M4 本地文本基础与 embedding/检索切片 `IMPLEMENTED`
+当前边界：M3 并行 tool-call 应用路径 `IMPLEMENTED`、live provider 兼容性 `PARTIAL`；M4 embedding/检索 `IMPLEMENTED`（含一次 OpenRouter dogfood）、跨 provider embedding 兼容性与 rerank/文档能力 `PARTIAL`；M5–M8 `PLANNED`
 
 ## 两套文档体系的边界
 

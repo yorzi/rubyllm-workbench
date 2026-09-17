@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_16_140000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_17_100000) do
   create_table "active_storage_attachments", force: :cascade do |t|
     t.bigint "blob_id", null: false
     t.datetime "created_at", null: false
@@ -161,11 +161,35 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_140000) do
   create_table "knowledge_collections", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.text "description"
+    t.datetime "embedded_at"
+    t.integer "embedding_dimensions"
+    t.text "embedding_error"
+    t.string "embedding_model_id"
+    t.string "embedding_provider"
+    t.string "embedding_status", default: "none", null: false
     t.string "name", null: false
     t.integer "project_id", null: false
     t.datetime "updated_at", null: false
     t.index ["project_id", "name"], name: "index_knowledge_collections_on_project_id_and_name"
     t.index ["project_id"], name: "index_knowledge_collections_on_project_id"
+  end
+
+  create_table "knowledge_embeddings", force: :cascade do |t|
+    t.string "content_checksum", null: false
+    t.datetime "created_at", null: false
+    t.integer "dimensions", null: false
+    t.integer "input_tokens"
+    t.integer "knowledge_chunk_id", null: false
+    t.json "metadata_json", default: {}, null: false
+    t.string "model_id", null: false
+    t.string "provider", null: false
+    t.decimal "reported_cost", precision: 16, scale: 10
+    t.string "status", default: "ready", null: false
+    t.datetime "updated_at", null: false
+    t.binary "vector", null: false
+    t.index ["knowledge_chunk_id", "model_id"], name: "index_knowledge_embeddings_on_chunk_and_model", unique: true
+    t.index ["knowledge_chunk_id"], name: "index_knowledge_embeddings_on_knowledge_chunk_id"
+    t.index ["model_id", "status"], name: "index_knowledge_embeddings_on_model_and_status"
   end
 
   create_table "knowledge_items", force: :cascade do |t|
@@ -399,6 +423,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_140000) do
   add_foreign_key "experiments", "projects"
   add_foreign_key "knowledge_chunks", "knowledge_items"
   add_foreign_key "knowledge_collections", "projects"
+  add_foreign_key "knowledge_embeddings", "knowledge_chunks"
   add_foreign_key "knowledge_items", "knowledge_collections"
   add_foreign_key "lifecycle_events", "approvals", on_delete: :nullify
   add_foreign_key "lifecycle_events", "artifacts", on_delete: :nullify

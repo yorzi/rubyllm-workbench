@@ -201,7 +201,7 @@ module Ai
     end
 
     def redact(message)
-      message.to_s.gsub(/\b(sk|rk|xai|AIza|gsk|pplx|r8)_[A-Za-z0-9_-]{12,}\b/i, "[REDACTED]")
+      Ai::ErrorText.redact(message)
     end
 
     def normalized_status(status, fallback)

@@ -3,7 +3,7 @@
   <div class="sticky top-0">
     <div class="flex items-center justify-between gap-3">
       <p class="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Knowledge inspector</p>
-      <span class="rounded-full bg-accent-soft px-2 py-1 text-[10px] font-medium text-accent">lexical-v1</span>
+      <span class="rounded-full bg-accent-soft px-2 py-1 text-[10px] font-medium text-accent"><%= @mode %>-v1</span>
     </div>
     <div class="mt-5 rounded-xl border border-line bg-panel p-4">
       <p class="font-mono text-xs text-muted">/<%= @project.slug %>/knowledge/<%= @collection.id %></p>
@@ -11,13 +11,28 @@
       <p class="mt-2 text-xs leading-5 text-muted"><%= @collection.description.presence || "No collection description yet." %></p>
       <dl class="mt-4 divide-y divide-line border-t border-line text-xs">
         <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Sources</dt><dd class="font-mono text-ink"><%= @items.size %></dd></div>
-        <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Chunks</dt><dd class="font-mono text-ink"><%= @collection.knowledge_chunks.count %></dd></div>
+        <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Chunks</dt><dd class="font-mono text-ink"><%= @collection.chunk_count %></dd></div>
         <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Matches</dt><dd class="font-mono text-ink"><%= @results.size %></dd></div>
       </dl>
     </div>
+    <div class="mt-4 rounded-xl border border-line bg-panel p-4">
+      <div class="flex items-center justify-between gap-3">
+        <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">Embeddings</p>
+        <span class="rounded-full px-2 py-1 text-[10px] font-medium <%= @collection.embedding_ready? ? 'bg-emerald-50 text-success' : @collection.embedding_status == 'failed' ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-muted' %>"><%= @collection.embedding_status %></span>
+      </div>
+      <dl class="mt-3 divide-y divide-line border-t border-line text-xs">
+        <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Model</dt><dd class="truncate font-mono text-ink"><%= @collection.embedding_model_id.presence || "none" %></dd></div>
+        <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Dimensions</dt><dd class="font-mono text-ink"><%= @collection.embedding_dimensions || "—" %></dd></div>
+        <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Coverage</dt><dd class="font-mono text-ink"><%= @collection.embedded_chunk_count %>/<%= @collection.chunk_count %></dd></div>
+        <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Similarity</dt><dd class="font-mono text-ink"><%= Ai::Knowledge::VectorStore.default.key %></dd></div>
+      </dl>
+      <% if @collection.embedding_error.present? %>
+        <p class="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700"><%= @collection.embedding_error %></p>
+      <% end %>
+    </div>
     <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-800">
       <p class="font-medium">Evidence boundary</p>
-      <p class="mt-1">Scores are lexical coverage/frequency signals. They are not embedding similarity, rerank output, or an LLM answer.</p>
+      <p class="mt-1">Lexical scores are coverage/frequency signals. Semantic scores are cosine similarity over provider embeddings. Neither is a rerank output or an LLM answer.</p>
     </div>
   </div>
 <% end %>
@@ -31,6 +46,7 @@
         <div class="flex flex-wrap items-center gap-2">
           <h1 class="text-3xl font-semibold tracking-tight text-ink"><%= @collection.name %></h1>
           <span class="rounded-full bg-slate-100 px-2 py-1 font-mono text-[10px] text-muted">local text</span>
+          <span class="rounded-full bg-slate-100 px-2 py-1 font-mono text-[10px] text-muted"><%= @collection.embedding_status %></span>
         </div>
         <p class="mt-2 max-w-3xl text-sm leading-6 text-muted"><%= @collection.description.presence || "Searchable local source material for this Project." %></p>
       </div>
@@ -66,23 +82,80 @@
       <% end %>
     </section>
 
+    <section class="mt-8 rounded-2xl border border-line bg-panel p-5 shadow-sm sm:p-6" aria-labelledby="embeddings-heading">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <h2 id="embeddings-heading" class="text-sm font-semibold text-ink">Embeddings</h2>
+          <p class="mt-1 text-xs leading-5 text-muted">Embedding a collection stores one vector per ready chunk, tied to the model id and chunk checksum.</p>
+        </div>
+        <span class="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-muted"><%= Ai::Knowledge::VectorStore.default.key %></span>
+      </div>
+
+      <% if @embedding_models.any? %>
+        <%= form_with url: project_knowledge_collection_embeddings_path(@project, @collection), scope: :embedding, class: "mt-5 flex flex-col gap-3 sm:flex-row sm:items-end" do |form| %>
+          <div class="min-w-0 flex-1">
+            <%= form.label :model_id, "Embedding model", class: "text-xs font-medium text-ink" %>
+            <%= form.select :model_id,
+                  options_for_select(@embedding_models.map { |entry| [ "#{entry.name} · #{entry.id}", entry.id ] }, @collection.embedding_model_id),
+                  {},
+                  class: "mt-2 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm outline-none ring-accent/20 focus:border-accent focus:ring-4" %>
+          </div>
+          <%= form.submit "Embed collection", class: "inline-flex cursor-pointer items-center justify-center rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700" %>
+        <% end %>
+        <p class="mt-3 text-xs leading-5 text-muted"><%= @embedding_models.size %> configured embedding model(s). Unconfigured providers are hidden; re-embedding replaces rows for the same model and leaves other models untouched.</p>
+      <% else %>
+        <div class="mt-5 rounded-xl border border-dashed border-line bg-canvas p-5 text-sm text-muted">
+          No configured embedding model is available. Configure a provider embedding model to enable semantic and hybrid retrieval; lexical retrieval still works without one.
+        </div>
+      <% end %>
+
+      <% if @collection.knowledge_embeddings.exists? %>
+        <div class="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+          <p class="text-xs leading-5 text-muted">
+            <%= @collection.embedded_chunk_count %> embedded chunk(s) for <span class="font-mono"><%= @collection.embedding_model_id %></span>
+            <% if @collection.embedded_at.present? %> · <%= @collection.embedded_at.strftime("%Y-%m-%d %H:%M") %><% end %>
+          </p>
+          <%= button_to "Clear embeddings", project_knowledge_collection_embeddings_path(@project, @collection),
+                method: :delete,
+                class: "inline-flex cursor-pointer items-center rounded-lg border border-line bg-white px-3 py-2 text-xs font-medium text-ink hover:border-rose-300 hover:text-rose-700" %>
+        </div>
+      <% end %>
+    </section>
+
     <section class="mt-10 rounded-2xl border border-line bg-panel p-5 shadow-sm sm:p-6" aria-labelledby="search-heading">
       <div class="flex items-start justify-between gap-3">
         <div>
           <h2 id="search-heading" class="text-sm font-semibold text-ink">Search evidence</h2>
-          <p class="mt-1 text-xs leading-5 text-muted">Search ready chunks only. Each match shows score, matched terms, source, and offsets.</p>
+          <p class="mt-1 text-xs leading-5 text-muted">Search ready chunks only. Each match shows its score components, source, and offsets.</p>
         </div>
         <span class="rounded-full bg-accent-soft px-2 py-1 text-[10px] font-medium text-accent">bounded · top 8</span>
       </div>
-      <%= form_with url: project_knowledge_collection_path(@project, @collection), method: :get, class: "mt-5 flex flex-col gap-3 sm:flex-row" do |form| %>
-        <%= form.search_field :q, value: @query, placeholder: "e.g. SQLite retrieval", class: "min-w-0 flex-1 rounded-lg border border-line bg-white px-3 py-2.5 text-sm outline-none ring-accent/20 placeholder:text-slate-400 focus:border-accent focus:ring-4" %>
+      <%= form_with url: project_knowledge_collection_path(@project, @collection), method: :get, class: "mt-5 flex flex-col gap-3 sm:flex-row sm:items-end" do |form| %>
+        <div class="min-w-0 flex-1">
+          <%= form.label :q, "Query", class: "text-xs font-medium text-ink" %>
+          <%= form.search_field :q, value: @query, placeholder: "e.g. SQLite retrieval", class: "mt-2 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm outline-none ring-accent/20 placeholder:text-slate-400 focus:border-accent focus:ring-4" %>
+        </div>
+        <div class="sm:w-44">
+          <%= form.label :mode, "Retrieval mode", class: "text-xs font-medium text-ink" %>
+          <%= form.select :mode,
+                options_for_select(Ai::Knowledge::Search::MODES.map { |mode| [ mode.humanize, mode ] }, @mode),
+                {},
+                class: "mt-2 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm outline-none ring-accent/20 focus:border-accent focus:ring-4" %>
+        </div>
         <%= form.submit "Search", class: "inline-flex cursor-pointer items-center justify-center rounded-lg border border-line bg-white px-4 py-2.5 text-sm font-medium text-ink hover:border-accent hover:text-accent" %>
       <% end %>
 
+      <% if @outcome && @outcome.degraded_reason.present? %>
+        <div class="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-800">
+          <p class="font-medium"><%= @outcome.requested_mode.humanize %> retrieval was unavailable — lexical evidence shown</p>
+          <p class="mt-1"><%= @outcome.degraded_reason %></p>
+        </div>
+      <% end %>
+
       <% if @query.present? %>
-        <div class="mt-6 flex items-center justify-between gap-3 border-b border-line pb-3">
+        <div class="mt-6 flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
           <h3 class="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Results for “<%= @query %>”</h3>
-          <span class="font-mono text-xs text-muted"><%= @results.size %> matches</span>
+          <span class="font-mono text-xs text-muted"><%= @results.size %> matches · <%= @outcome.mode %><% if @outcome.embedding_model_id.present? %> · <%= @outcome.embedding_model_id %><% end %></span>
         </div>
         <div class="mt-3 space-y-3">
           <% @results.each do |result| %>
@@ -94,7 +167,15 @@
                 </div>
                 <div class="shrink-0 text-left text-xs sm:text-right">
                   <p class="font-mono font-semibold text-accent">score <%= result.score %></p>
-                  <p class="mt-1 text-muted">terms: <%= result.matched_terms.join(", ") %></p>
+                  <% if result.similarity.present? %>
+                    <p class="mt-1 font-mono text-muted">cosine <%= result.similarity %></p>
+                  <% end %>
+                  <% if result.lexical_score.present? %>
+                    <p class="mt-1 font-mono text-muted">lexical <%= result.lexical_score %></p>
+                  <% end %>
+                  <% if result.matched_terms.present? %>
+                    <p class="mt-1 text-muted">terms: <%= result.matched_terms.join(", ") %></p>
+                  <% end %>
                 </div>
               </div>
               <pre class="mt-3 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-line bg-white p-3 font-mono text-xs leading-5 text-ink"><%= result.chunk.content_text %></pre>
@@ -105,7 +186,7 @@
           <% end %>
         </div>
       <% else %>
-        <div class="mt-5 rounded-xl border border-dashed border-line bg-canvas p-5 text-sm text-muted">Enter a query to inspect lexical evidence from this collection.</div>
+        <div class="mt-5 rounded-xl border border-dashed border-line bg-canvas p-5 text-sm text-muted">Enter a query to inspect retrieval evidence from this collection.</div>
       <% end %>
     </section>
 
@@ -123,7 +204,7 @@
                   <h3 class="truncate text-sm font-semibold text-ink"><%= item.title %></h3>
                   <span class="rounded-full px-2 py-1 text-[10px] font-medium <%= item.ready? ? 'bg-emerald-50 text-success' : item.failed? ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-warning' %>"><%= item.ingestion_status %></span>
                 </div>
-                <p class="mt-2 text-xs text-muted"><%= item.source_reference.presence || "Inline text source" %> · <%= item.chunk_count %> chunks</p>
+                <p class="mt-2 text-xs text-muted"><%= item.source_reference.presence || "Inline text source" %> · <%= item.chunk_count %> chunks · <%= item.knowledge_embeddings.ready.count %> embedded</p>
               </div>
               <p class="shrink-0 font-mono text-[10px] text-muted">sha256:<%= item.checksum.first(12) %></p>
             </div>

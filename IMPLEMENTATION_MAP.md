@@ -7,13 +7,16 @@ This implementation covers the M0, M1, M2, M3 and current M4 foundation slice:
 `Project -> Chat/Tool Lab/Knowledge -> persisted execution and evidence records -> inspectors`
 
 The M4 foundation currently covers local text collections, deterministic chunks,
-checksums and explainable lexical retrieval. Provider embeddings, semantic
-retrieval, rerank, file/OCR ingestion, agents, media, batch/evals and operational
-polish stay deferred until each boundary is extended deliberately.
+checksums, provider embeddings in a SQLite vector adapter, explainable
+lexical/semantic/hybrid retrieval and explicit degradation. Rerank, file/OCR
+ingestion, agents, media, batch/evals and operational polish stay deferred until
+each boundary is extended deliberately.
 
-Current status: M0–M3 core and the M4 local-text foundation are `IMPLEMENTED` for
-their verified slices; live M3 parallel provider compatibility is `PARTIAL`; full
-M4 semantic/document acceptance and M5–M8 remain `PLANNED`.
+Current status: M0–M3 core, the M4 local-text foundation and the M4
+embedding/retrieval slice are `IMPLEMENTED` for their verified slices with one
+OpenRouter free-embedding dogfood; live M3 parallel provider compatibility and
+cross-provider embedding compatibility are `PARTIAL`; M4 rerank/document
+acceptance and M5–M8 remain `PLANNED`.
 
 ## Human understanding layer
 
@@ -70,6 +73,10 @@ look complete.
   and optional source reference.
 - **KnowledgeChunk:** one deterministic searchable slice with position, character
   offsets and chunker metadata. It is evidence, not an LLM answer.
+- **KnowledgeEmbedding:** one vector per chunk per embedding model, storing
+  provider, dimensions, packed Float32 vector and content checksum. Retrieval
+  compares vectors only inside one model id and skips stale checksums, so
+  incompatible dimensions/models are never mixed.
 
 ## Core flows and pages
 
@@ -91,12 +98,15 @@ look complete.
 8. Run lifecycle timeline: inspect the ordered local event catalog alongside the
    Run's original records.
 9. Knowledge workspace: create a local collection, paste bounded text, ingest
-   deterministic chunks, and search ready chunks with matched terms and offsets.
+   deterministic chunks, embed ready chunks with a configured embedding model,
+   and search ready chunks in lexical/semantic/hybrid mode with score
+   components, matched terms, source and offsets.
 
 ## Data and service boundaries
 
 - Rails application records: `Project`, `Chat`, `Run`, `Attempt`, `Artifact`,
-  `LifecycleEvent`, `KnowledgeCollection`, `KnowledgeItem`, `KnowledgeChunk` and
+  `LifecycleEvent`, `KnowledgeCollection`, `KnowledgeItem`, `KnowledgeChunk`,
+  `KnowledgeEmbedding` and
   the minimum message association needed to preserve durable history.
 - RubyLLM remains responsible for provider abstraction and conversation
   semantics where its Rails persistence helpers fit.
@@ -125,8 +135,17 @@ look complete.
   rows and deduplicates repeated notifications by `event_key`.
 - `Ai::Knowledge::Chunker` normalizes text into deterministic character windows;
   `Ai::Knowledge::Ingestor` replaces a source's chunks transactionally and keeps
-  checksum/status/error metadata; `Ai::Knowledge::Retriever` performs bounded
-  exact-token lexical scoring and returns inspectable evidence.
+  checksum/status/error metadata; `Ai::Knowledge::VectorStore` provides the vector
+  adapter interface with the bounded `sqlite_application_cosine` adapter;
+  `Ai::Knowledge::EmbeddingCatalog` gates models on capability and provider
+  configuration; `Ai::Knowledge::Embedder` stores one vector per ready chunk per
+  model with per-chunk fallback and partial/failed state;
+  `Ai::Knowledge::Retriever` performs bounded exact-token lexical scoring, cosine
+  ranking over stored vectors and a hybrid blend, returning score, cosine,
+  lexical score and matched terms as inspectable evidence;
+  `Ai::Knowledge::Search` resolves the requested mode, embeds the query when
+  needed and records an explicit degradation reason when semantic or hybrid
+  retrieval is unavailable.
 
 The current M3 inspector records application lifecycle events for Run, Attempt,
 ToolInvocation, Approval and Artifact transitions. The M4 Knowledge workspace is
@@ -143,7 +162,9 @@ complete distributed event stream, a cost dashboard or a historical backfill sys
   are never rendered, persisted as plaintext or copied into logs.
 - Provider capability differences are runtime-visible. Unsupported actions are
   disabled/explained rather than simulated.
-- M4 local retrieval is intentionally lexical and SQLite-bounded. No fake
+- M4 retrieval is intentionally SQLite-bounded. Semantic mode requires a
+  configured provider embedding model and stored vectors; otherwise `Search`
+  degrades to lexical evidence and records the reason. No fake
   embedding vectors, universal semantic score, rerank claim, remote URL fetch,
   file upload or OCR result is created by this slice.
 - No direct provider SDK/HTTP calls, arbitrary shell execution, auth, billing,
@@ -161,8 +182,9 @@ keyboard-friendly.
 
 - Milestone: M0 + M1 + M2 + M3 plus M4 local-text foundation.
 - Scope: local chat, structured experiment comparison, code-defined tools,
-  durable approval continuation, and Project-scoped text evidence retrieval;
-  full M4 semantic/document work and M5-M8 remain explicitly deferred.
+  durable approval continuation, and Project-scoped text evidence retrieval with
+  provider embeddings and lexical/semantic/hybrid modes; M4 rerank/document work
+  and M5-M8 remain explicitly deferred.
 - Runtime verified: Ruby 4.0.2 and Rails 8.1.3.1.
 - Baseline difference: RubyLLM 2.0.0.rc3 is not installed globally; RubyLLM
   1.16.0 is currently available. The Gemfile must target 2.0.0.rc3 and the

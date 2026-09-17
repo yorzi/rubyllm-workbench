@@ -6,6 +6,69 @@
 原则上只追加，不静默改写历史。代码细节回到对应 commit 和
 [IMPLEMENTATION_MAP.md](../IMPLEMENTATION_MAP.md)。
 
+## 2026-09-17 — M4 provider embedding 与 lexical/semantic/hybrid 检索证据
+
+### 为什么做
+
+上一刀把“能搜到”和“语义检索已验证”分开，但 lexical coverage 仍然无法回答语义相近
+的问题。Specs 要求 M4 提供 embedding、retrieval 和 inspectable evidence，同时明确
+“不要为了向量而提前引入 PostgreSQL/pgvector”。本次因此先定义 vector adapter 接口，
+再用 SQLite 内的 Float32 blob + 应用侧 cosine 实现有界语料上的语义检索，并让每一次
+降级都给出可检查的原因。
+
+### 人能看到的变化
+
+- Knowledge collection 新增 Embeddings 区：列出已配置 provider 的 embedding model，
+  一键 embed/re-embed，并显示 status、model、dimensions、coverage、adapter 和
+  最近 embed 时间；可一键 clear embeddings。
+- Search evidence 新增 retrieval mode：`lexical`、`semantic`、`hybrid`。结果同时展示
+  score、cosine similarity、lexical score、matched terms、source 和字符 offset。
+- semantic/hybrid 不可用时，页面明确显示“requested mode → 实际 lexical”和原因，
+  不会把 lexical 证据标成语义结果。
+- Inspector 新增 embedding 状态块；Evidence boundary 说明区分 lexical 信号、
+  cosine similarity、rerank 输出和 LLM answer。
+
+### 实现地图
+
+- 迁移与模型：`knowledge_embeddings`（chunk + model 唯一、dimensions、packed vector、
+  content checksum、status、usage metadata）与 `knowledge_collections` 的
+  embedding 状态列。
+- 服务：`Ai::Knowledge::VectorStore`（adapter 接口 + `sqlite_application_cosine`）、
+  `EmbeddingCatalog`（model capability + provider 配置门控）、`Embedder`（批量 embed、
+  逐 chunk 回退、partial/failed 状态、secret 过滤）、`Retriever`（三种 mode 与
+  score 分量）、`Search`（mode 解析、query embedding、显式降级）。
+- 控制器与路由：`KnowledgeEmbeddingsController#create/#destroy`；既有
+  `KnowledgeCollectionsController#show` 增加 mode 解析。
+- 一致性：把散落四处的 provider key 过滤正则收敛为 `Ai::ErrorText`，并让 `sk-`/`sk_`
+  两种前缀都能被 redact。
+
+### 验证证据
+
+- 定向回归覆盖 vector encode/decode、cosine、ranking、零向量与维度不匹配、
+  embedding 记录唯一性与 checksum provenance、re-embed 替换、未配置/未知 model 拒绝、
+  partial 覆盖、失败状态与 secret redaction、三种 mode 的证据分量、stale checksum
+  跳过、降级原因和 Project boundary：新增 30 tests，全套 105 tests、670 assertions、
+  0 failures、0 errors、1 skip。
+- 真实 provider dogfood（`OPENROUTER_DOGFOOD`）：OpenRouter 免费 embedding model
+  `liquid/lfm-2.5-embedding-350m:free` 成功 embed 2 个 chunk（1024 维、130 input
+  tokens、1.4s）；同一 query 下语义排序为 SQLite 段落 cosine 0.5373 > Tool approval
+  段落 0.2334，hybrid 同时保留 lexical 0.6963 与 cosine 0.5373。单次 semantic 查询
+  约 1.7s，其中绝大部分是 query embedding 的网络往返。
+- HTTP 渲染检查确认 semantic 结果页、降级提示页、hybrid 结果页与 collection 索引
+  均 200；本会话没有可用的 headless browser，因此**没有**执行本次的桌面/390px 视觉
+  与 `scrollWidth` 复核；响应式类名沿用既有已验证的页面结构。
+- 当前条目状态：embedding + semantic/hybrid 检索 `IMPLEMENTED` ·
+  `LOCAL_VERIFIED` + `OPENROUTER_DOGFOOD`；完整 M4 仍为 `PARTIAL`。
+
+### 还没有证明什么
+
+- 没有 rerank、file/Active Storage ingestion、OCR/extraction 与 provenance Artifact。
+- 只验证了 OpenRouter 一个免费 embedding model；跨 provider embedding 兼容性、
+  维度差异和批量失败语义仍未验收。
+- 应用侧 cosine 只适用于有界语料；没有测量大规模 corpus、并发或迁移到
+  SQLite vector extension/pgvector 的收益。
+- dogfood 只说明本次本地行为，不等于生产部署、provider SLA、公众可用性或业务收益。
+
 ## 2026-09-16 — M4 本地文本 Knowledge 基础切片
 
 ### 为什么做

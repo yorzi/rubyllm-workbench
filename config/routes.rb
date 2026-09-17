@@ -12,6 +12,7 @@ Rails.application.routes.draw do
     patch "tool-settings", to: "tool_definitions#update_settings", as: :tool_settings
     resources :knowledge_collections, path: "knowledge", only: %i[index create show] do
       resources :items, only: :create, controller: :knowledge_items
+      resource :embeddings, only: %i[create destroy], controller: :knowledge_embeddings
     end
     resources :experiments, only: %i[index new create show edit update] do
       resources :executions, only: :create, controller: :experiment_executions

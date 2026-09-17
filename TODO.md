@@ -1,4 +1,4 @@
-# TODO — M0/M1/M2/M3 core complete; M4 foundation partial; later milestones pending
+# TODO — M0/M1/M2/M3 core complete; M4 embedding/retrieval done; rerank + documents pending
 
 ## Human understanding layer
 
@@ -112,8 +112,51 @@
 ### M4 gate status: `PARTIAL` · local text slice `LOCAL_VERIFIED`
 
 This slice satisfies the small local document-set ingestion/search foundation
-without claiming the complete M4 Specs gate. It does not yet create embedding
+without claiming the complete M4 Specs gate. It did not yet create embedding
 records or call a provider for embeddings/reranking.
+
+## M4 embeddings + retrieval — 2026-09-17
+
+- [x] Add a `KnowledgeEmbedding` record per chunk and embedding model, storing
+      provider, dimensions, packed vector, content checksum, status and usage
+      metadata; re-embedding the same model replaces rows instead of mixing
+      dimensions or models.
+- [x] Define a vector adapter interface and ship the bounded
+      `sqlite_application_cosine` adapter (Float32 blobs + application-side
+      cosine) rather than introducing PostgreSQL/pgvector.
+- [x] Add `Ai::Knowledge::EmbeddingCatalog` capability/configuration gating so
+      unconfigured or non-embedding models are refused with a readable reason.
+- [x] Add `Ai::Knowledge::Embedder` with batched embedding, per-chunk fallback,
+      partial/failed collection state and secret-filtered error summaries.
+- [x] Extend retrieval with `lexical`, `semantic` and `hybrid` modes that keep
+      score, cosine similarity, lexical score and matched terms inspectable, and
+      skip stale embeddings whose checksum no longer matches their chunk.
+- [x] Add `Ai::Knowledge::Search` mode resolution with explicit degradation:
+      semantic/hybrid falls back to lexical evidence and states why.
+- [x] Add embed/re-embed/clear controls, embedding status, coverage and mode
+      selection to the Knowledge workspace UI with project-boundary coverage.
+- [x] Consolidate provider-key redaction into `Ai::ErrorText` and cover both
+      `sk-` and `sk_` key prefixes.
+- [x] Verify with targeted model/service/integration tests and one real
+      OpenRouter free-embedding dogfood run.
+
+### M4 gate status: `PARTIAL` · embedding + retrieval slice `LOCAL_VERIFIED` + `OPENROUTER_DOGFOOD`
+
+Embedding, semantic/hybrid retrieval and evidence are implemented for the
+bounded local corpus. Rerank, file/Active Storage ingestion, OCR/extraction and
+provenance artifacts remain outstanding, so this is still not the complete M4
+Specs gate.
+
+### M4 embedding dogfood record — 2026-09-17
+
+- [x] OpenRouter `liquid/lfm-2.5-embedding-350m:free` embedded 2 chunks at 1024
+      dimensions (130 input tokens) in roughly 1.4s; collection status `ready`
+      with 2/2 coverage.
+- [x] One semantic query ranked the SQLite corpus paragraph at cosine 0.5373
+      above the tool-approval paragraph at 0.2334; hybrid retained both the
+      lexical 0.6963 and cosine 0.5373 components.
+- [x] Only one provider and one free embedding model were exercised; cross-
+      provider embedding compatibility is still unaccepted.
 
 ## Known implementation gap
 
@@ -129,8 +172,11 @@ records or call a provider for embeddings/reranking.
 - [ ] M3 parallel tool calls and deeper provider/tool compatibility dogfooding;
       the explicit local path and multiple-call recorder are verified, but live
       provider behavior is still not accepted.
-- [ ] M4 provider embeddings and a SQLite-compatible vector retrieval adapter;
-      application-side lexical retrieval is the current bounded fallback slice.
+- [ ] M4 cross-provider embedding compatibility, batch-failure semantics and a
+      measured corpus/query-scale record before considering a SQLite vector
+      extension or PostgreSQL/pgvector; the current adapter is bounded by design.
+- [ ] M4 provider embeddings for providers other than OpenRouter; only one free
+      OpenRouter embedding model has been dogfooded so far.
 - [ ] M4 compatible-provider rerank with explicit capability checks and evidence.
 - [ ] M4 file references, Active Storage ingestion, OCR/extraction jobs, and
       provenance artifacts.

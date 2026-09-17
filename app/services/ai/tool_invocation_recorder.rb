@@ -143,7 +143,7 @@ module Ai
     end
 
     def safe_error_message(error)
-      error.message.to_s.gsub(/\b(sk|rk|xai|AIza|gsk|pplx|r8)_[A-Za-z0-9_-]{12,}\b/i, "[REDACTED]").truncate(2_000)
+      Ai::ErrorText.safe(error.message)
     end
 
     def notify(event, invocation, tool_call_id: nil)

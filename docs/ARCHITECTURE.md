@@ -64,11 +64,11 @@ flowchart TD
     StructuredJob["StructuredResponseJob"]
     ChatExecutor["Ai::ChatExecutor"]
     Tooling["ToolRegistry + ChatTooling\n+ ToolExecutionPolicy"]
-    KnowledgeServices["Ai::Knowledge::Chunker\n+ Ingestor + Retriever"]
+    KnowledgeServices["Ai::Knowledge::Chunker + Ingestor\n+ Embedder + Retriever + Search\n+ VectorStore adapter"]
     Audit["ToolInvocationRecorder + ApprovalService"]
     Events["LifecycleEventRecorder\nActiveSupport Notifications"]
     Records["Project / Chat / Run / Attempt\n/ Artifact / tool / Knowledge records / LifecycleEvent"]
-    RubyLLM["RubyLLM Chat + provider boundary"]
+    RubyLLM["RubyLLM Chat + embed + provider boundary"]
 
     ChatUI --> RunExecutor
     ExperimentUI --> ExperimentExecutor
@@ -90,6 +90,7 @@ flowchart TD
     RunExecutor --> Records
     StructuredExecutor --> Records
     KnowledgeServices --> Records
+    KnowledgeServices --> RubyLLM
 ```
 
 代码职责的简化记忆：
@@ -248,6 +249,16 @@ erDiagram
         integer char_end
         json metadata_json
     }
+    KNOWLEDGE_EMBEDDING {
+        bigint knowledge_chunk_id
+        string provider
+        string model_id
+        integer dimensions
+        binary vector
+        string content_checksum
+        string status
+        json metadata_json
+    }
 ```
 
 读取关系时记住：
@@ -261,8 +272,11 @@ erDiagram
   幂等去重，旧 Run 不做迁移后的合成回填。
 
 KnowledgeItem 保存规范化后的文本与 checksum；KnowledgeChunk 保存可重复生成的
-内容窗口、位置和字符 offset。当前没有 EmbeddingRecord，避免把未使用的假向量
-伪装成 M4 语义检索能力。
+内容窗口、位置和字符 offset。KnowledgeEmbedding 按 (chunk, model_id) 唯一保存
+provider、dimensions、packed Float32 vector 与 content checksum；检索只在同一
+model_id 内比较，stale checksum 会被跳过，所以不同模型或维度的向量不会被混用。
+向量读写经过 `Ai::Knowledge::VectorStore` adapter 接口，当前默认实现是应用侧
+cosine，只适用于有界语料。
 
 ### 仍未进入当前关系图的扩展
 
@@ -383,11 +397,12 @@ Artifact，因此声明为 sequential-only。若使用 parallel 模式但启用�
 串行结果。此图有本地 deterministic tests 的证据；尚无 live provider 返回多个并行
 调用的验收证据。
 
-## 4.2 Runtime — M4 本地文本知识检索
+## 4.2 Runtime — M4 知识检索（lexical / semantic / hybrid）
 
 Knowledge collection 是 Project 下独立的产品数据流，不是一次 Chat Run。用户粘贴
-文本后，应用先规范化并计算 SHA-256，再在一个事务内替换该来源的 chunks；查询只读
-`ready` 来源并返回可检查的词法证据。
+文本后，应用先规范化并计算 SHA-256，再在一个事务内替换该来源的 chunks；embed 时
+按 chunk 向 provider embedding model 取向量并落库；查询只读 `ready` 来源，按 mode
+返回可检查的证据分量。
 
 ```mermaid
 flowchart TD
@@ -397,15 +412,26 @@ flowchart TD
     Item --> Ingestor["Ai::Knowledge::Ingestor"]
     Ingestor --> Chunker["Ai::Knowledge::Chunker\n800 chars / 120 overlap"]
     Chunker --> Chunks[("SQLite KnowledgeChunk\nposition + char offsets")]
-    CollectionUI --> Query["query"]
-    Query --> Retriever["Ai::Knowledge::Retriever\nexact-token lexical score"]
+    CollectionUI --> Embed["embed / re-embed / clear"]
+    Embed --> Catalog["Ai::Knowledge::EmbeddingCatalog\ncapability + configuration gate"]
+    Catalog --> Embedder["Ai::Knowledge::Embedder\nbatch + per-chunk fallback"]
+    Embedder --> RubyLLM["RubyLLM.embed"]
+    Chunks --> Embedder
+    Embedder --> Vectors[("SQLite KnowledgeEmbedding\nchunk + model_id unique\nFloat32 vector + checksum")]
+    CollectionUI --> Query["query + mode"]
+    Query --> Search["Ai::Knowledge::Search\nmode resolution + degradation"]
+    Search --> Embedder
+    Search --> Retriever["Ai::Knowledge::Retriever\nlexical / semantic / hybrid"]
     Chunks --> Retriever
-    Retriever --> Evidence["matched terms + score + source chunk"]
+    Vectors --> Retriever
+    Retriever --> Adapter["Ai::Knowledge::VectorStore\nsqlite_application_cosine"]
+    Retriever --> Evidence["score + cosine + lexical\n+ matched terms + source chunk"]
 ```
 
-当前路径不创建 `Run`/`Attempt`，不调用 RubyLLM，不生成 EmbeddingRecord，也不宣称
-semantic RAG、rerank、文件上传或 OCR。这样可以先验证“来源能否稳定入库、检索结果能否
-被人复核”，再为 provider-specific embedding 和文档提取增加独立的 evidence boundary。
+每次查询的降级都是显式的：semantic/hybrid 需要已选择的 embedding model、已配置的
+provider、已存储的向量和一次 query embedding；任一项缺失时 `Search` 返回 lexical
+证据并在页面上写明 requested mode 与实际原因。该路径不创建 `Run`/`Attempt`，
+也不宣称 rerank、文件上传或 OCR。
 
 ## 5. Runtime — 状态如何推进
 
@@ -469,15 +495,16 @@ flowchart LR
     M1 --> M2["M2 Structured Compare\nIMPLEMENTED"]
     M2 --> M3["M3 Tools + Approval\nIMPLEMENTED"]
     M3 --> M3P["M3 Parallel Calls\nAPP PATH IMPLEMENTED"]
-    M3P --> M4["M4 Knowledge\nLOCAL TEXT PARTIAL"]
+    M3P --> M4["M4 Knowledge\nEMBEDDING + RETRIEVAL PARTIAL"]
     M4 --> M5["M5 Agents + Research\nPLANNED"]
     M5 --> M6["M6+ Media / Batch / Ops\nPLANNED"]
 ```
 
 `APP PATH IMPLEMENTED` 的含义是：Project opt-in、能力/安全门控、Run snapshot 和
 多调用本地审计路径已经存在并通过 deterministic tests；live provider 的并行返回和
-跨 provider 兼容性仍是 `PARTIAL`。M4 当前只实现本地 text collection、chunk 和 lexical
-evidence；embedding、semantic retrieval、rerank、file/OCR ingestion 仍未完成，不能
+跨 provider 兼容性仍是 `PARTIAL`。M4 当前已实现本地 text collection、chunk、
+embedding 记录、SQLite vector adapter 与 lexical/semantic/hybrid 证据，并有
+OpenRouter 免费 embedding model 的 dogfood 记录；rerank、file/OCR ingestion 仍未完成，不能
 被简化成完整 M4，也不能把当前本地检索误写成 provider RAG。
 
 ## 8. 如何保持图表可信

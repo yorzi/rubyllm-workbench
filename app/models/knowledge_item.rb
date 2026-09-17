@@ -6,6 +6,7 @@ class KnowledgeItem < ApplicationRecord
 
   belongs_to :knowledge_collection
   has_many :knowledge_chunks, -> { order(:position, :id) }, dependent: :destroy
+  has_many :knowledge_embeddings, through: :knowledge_chunks
 
   enum :ingestion_status, INGESTION_STATUSES.index_with(&:itself), validate: true
 

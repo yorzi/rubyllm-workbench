@@ -112,7 +112,7 @@ Run 时检查当前模型是否声明 `parallel_tool_calls`，并检查所有 en
 sequential-only，避免把 SQLite 写入和本地副作用未经专门验证地并行化。此策略并不等于
 某个 provider 已经承诺会返回多个调用。
 
-## Knowledge workspace：本地文本基础切片
+## Knowledge workspace：本地文本 + embedding 检索
 
 从 Project 打开 **Knowledge**，按下面的顺序做一次最小验证：
 
@@ -121,15 +121,25 @@ sequential-only，避免把 SQLite 写入和本地副作用未经专门验证地
 3. 点击 **Ingest source**。应用会规范化换行和首尾空白，计算 SHA-256，并在事务中
    用确定性的 800-character window / 120-character overlap 生成 chunks。
 4. 在 Sources 区域检查 `ready`、chunk 数量和 checksum 前缀；打开 Search evidence，
-   输入 query，查看每个结果的 lexical score、matched terms、source title 和
+   输入 query，查看每个结果的 score、matched terms、source title 和
    `char_start`/`char_end`。
+5. （可选，需要已配置的 provider）在 Embeddings 区选择一个 embedding model，点
+   **Embed collection**。Inspector 会显示 status、model、dimensions、coverage 和
+   adapter；失败时显示脱敏后的原因。
+6. 用 `semantic` 或 `hybrid` 再查一次。semantic 结果是 provider embedding 上的
+   cosine similarity；hybrid 同时展示 cosine 与 lexical 分量。
 
-这个页面是独立的同步产品数据流，不会创建 `Run`/`Attempt`，也不会调用 provider。当前
-`lexical-v1` 是精确 token 的 coverage/frequency 评分，只能回答“哪些已存 chunk 包含
-查询词”，不能回答语义相似度、rerank 结果或模型生成答案。
+这个页面是独立的同步产品数据流，不会创建 `Run`/`Attempt`。它只在显式 embed 或
+semantic/hybrid 查询时才调用 provider embedding 接口：
+`lexical` 是精确 token 的 coverage/frequency 评分，只能回答“哪些已存 chunk 包含
+查询词”；`semantic` 只能回答“哪些已存向量与 query 向量方向接近”；两者都不是
+rerank 结果或模型生成答案。semantic/hybrid 缺少 model、配置、已存向量或 query
+embedding 时，页面会退回 lexical 并写明原因。
 
-当前 M4 尚未开放远程 URL 抓取、文件上传、Active Storage 文档处理、OCR、provider
-embedding 或 rerank；这些能力进入时必须补充各自的 provenance、失败状态和兼容性证据。
+当前向量以 Float32 blob 存在 SQLite，由 `sqlite_application_cosine` adapter 在应用侧
+算 cosine，只适用于有界语料；换 provider 或 model 前先 clear 或重新 embed，避免把
+不同维度的向量混在一起。当前 M4 尚未开放远程 URL 抓取、文件上传、Active Storage
+文档处理、OCR 或 rerank；这些能力进入时必须补充各自的 provenance、失败状态和兼容性证据。
 
 ## 当前可观测性边界
 
@@ -177,7 +187,8 @@ payload 只保留 ID、状态、provider/model、时长、错误类别等允许�
 | Run 进入 failed | Run diagnostic、Attempt error、provider/model | 不要只看页面异常，也不要重写失败历史 |
 | Run waiting for approval | Chat 的 Tool approvals、Approval status | 不要把等待当成功，也不要重复点击触发多个 continuation |
 | 页面刷新后消息仍在 | RubyLLM Message 和 Run inspector | 不要把浏览器 DOM 当唯一数据源 |
-| Knowledge 搜不到结果 | source 是否为 `ready`、query token、chunk offsets | 不要把 lexical-v1 当成 semantic embedding 或 rerank |
+| Knowledge 搜不到结果 | source 是否为 `ready`、query token、chunk offsets、embedding coverage | 不要把 lexical 当成 semantic embedding 或 rerank |
+| Knowledge embedding 失败 | collection embedding status/error、provider 配置、model capability | 不要把脱敏后的错误当成完整 provider 日志，也不要混合不同 model 的向量 |
 | Tool 参数不完整 | ToolInvocation 的 secret filtering | 不要为“调试方便”恢复 secret |
 | 390px 出现横向滚动 | 页面实际 `scrollWidth/clientWidth`、长 JSON/table | 不要用截图裁剪掩盖布局问题 |
 | live test 失败 | 网络、provider availability、model capability、credentials | 不要把一次网络失败改写成代码永远错误 |
@@ -194,6 +205,8 @@ payload 只保留 ID、状态、provider/model、时长、错误类别等允许�
   不等于本地工具，也不应被隐含为安全。
 - Knowledge source 当前只接受用户粘贴的 text；不要把任意 URL、上传文件或 OCR
   输出当成已经存在的来源 provenance。
+- embedding 错误摘要、collection 状态和事件只保存脱敏后的文本；不要把 provider
+  credential、原始响应体或完整 key 写进数据库或日志。
 - 任何新建的长期进程都要记录 PID、端口和停止方式；任务结束时清理。
 
 ## 变更后最小检查清单

@@ -21,7 +21,10 @@ class KnowledgeCollectionsController < ApplicationController
   def show
     @items = @collection.knowledge_items.order(created_at: :desc, id: :desc)
     @query = params[:q].to_s.strip.truncate(500)
-    @results = @query.present? ? Ai::Knowledge::Retriever.search(collection: @collection, query: @query) : []
+    @mode = Ai::Knowledge::Search::MODES.include?(params[:mode].to_s) ? params[:mode].to_s : "lexical"
+    @embedding_models = Ai::Knowledge::EmbeddingCatalog.configured_entries
+    @outcome = @query.present? ? Ai::Knowledge::Search.call(collection: @collection, query: @query, mode: @mode) : nil
+    @results = @outcome&.results || []
   end
 
   private
