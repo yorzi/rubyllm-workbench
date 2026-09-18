@@ -1,0 +1,7 @@
+<% content_for :title, "#{@topic.title} · RubyLLM Workbench" %>
+
+<%= render "shared/shell" do %>
+  <div class="mx-auto max-w-4xl px-5 py-8 sm:px-8 lg:px-10">
+    <%= render "learning_topics/panel", frame: false, topic: @topic, snippets: @snippets, return_to: @return_to %>
+  </div>
+<% end %>

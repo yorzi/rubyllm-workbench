@@ -1,0 +1,108 @@
+<% if frame %>
+  <turbo-frame id="learning-panel">
+<% end %>
+
+<article class="space-y-5" data-learning-topic="<%= topic.key %>">
+  <div class="flex items-start justify-between gap-3">
+    <div class="min-w-0">
+      <%= link_to return_to, data: { turbo_frame: "learning-panel" }, class: "text-[11px] font-medium text-accent hover:underline" do %>
+        ← Back to feature
+      <% end %>
+      <p class="mt-4 text-[10px] font-semibold uppercase tracking-[0.15em] text-accent"><%= topic.kicker %></p>
+      <h1 class="mt-2 text-lg font-semibold leading-6 tracking-tight text-ink"><%= topic.title %></h1>
+    </div>
+    <span class="shrink-0 rounded-full bg-indigo-50 px-2 py-1 font-mono text-[10px] text-accent">learn</span>
+  </div>
+
+  <p class="text-xs leading-5 text-muted"><%= topic.summary %></p>
+
+  <section class="rounded-xl border border-line bg-canvas p-3" aria-labelledby="learning-version-heading">
+    <div class="flex items-center justify-between gap-3">
+      <h2 id="learning-version-heading" class="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">Source snapshot</h2>
+      <span class="font-mono text-[10px] text-muted"><%= workbench_app_version %></span>
+    </div>
+    <dl class="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[11px]">
+      <div><dt class="text-muted">Rails</dt><dd class="mt-0.5 font-mono text-ink"><%= Rails::VERSION::STRING %></dd></div>
+      <div><dt class="text-muted">RubyLLM</dt><dd class="mt-0.5 font-mono text-ink"><%= ruby_llm_version %></dd></div>
+    </dl>
+    <p class="mt-3 border-t border-line pt-3 text-[10px] leading-4 text-muted">Code references are allowlisted, line-bounded, and validated against an anchor in this checkout.</p>
+  </section>
+
+  <section aria-labelledby="learning-steps-heading">
+    <div class="flex items-center justify-between gap-3">
+      <h2 id="learning-steps-heading" class="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">Flow</h2>
+      <span class="font-mono text-[10px] text-muted"><%= topic.steps.size %> steps</span>
+    </div>
+    <ol class="mt-3 space-y-2">
+      <% topic.steps.each do |step| %>
+        <li class="rounded-xl border border-line bg-panel p-3">
+          <h3 class="text-xs font-semibold text-ink"><%= step.title %></h3>
+          <p class="mt-1.5 text-[11px] leading-5 text-muted"><%= step.body %></p>
+        </li>
+      <% end %>
+    </ol>
+  </section>
+
+  <section aria-labelledby="learning-code-heading">
+    <div class="flex items-center justify-between gap-3">
+      <h2 id="learning-code-heading" class="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">App code</h2>
+      <span class="font-mono text-[10px] text-muted"><%= snippets.size %> references</span>
+    </div>
+    <div class="mt-3 space-y-2">
+      <% snippets.each_with_index do |snippet, index| %>
+        <% reference = snippet.reference %>
+        <details class="overflow-hidden rounded-xl border border-line bg-panel" <%= "open" if index.zero? %>>
+          <summary class="cursor-pointer list-none px-3 py-3 hover:bg-slate-50">
+            <div class="flex items-start justify-between gap-3">
+              <span class="min-w-0"><span class="block text-xs font-semibold text-ink"><%= reference.label %></span><span class="mt-1 block break-all font-mono text-[10px] text-muted"><%= reference.path %>:<%= reference.start_line %>-<%= reference.end_line %></span></span>
+              <span class="shrink-0 text-[10px] text-accent">view</span>
+            </div>
+            <span class="mt-2 block text-[10px] leading-4 text-muted"><%= reference.role %></span>
+          </summary>
+          <ol class="max-h-72 overflow-auto border-t border-line bg-slate-950 py-2 font-mono text-[10px] leading-5 text-slate-200">
+            <% snippet.lines.each do |line| %>
+              <li class="grid grid-cols-[2.5rem_minmax(0,1fr)] px-2 hover:bg-slate-800">
+                <span class="select-none pr-2 text-right text-slate-500"><%= line.number %></span>
+                <code class="min-w-0 whitespace-pre-wrap break-words"><%= line.text %></code>
+              </li>
+            <% end %>
+          </ol>
+        </details>
+      <% end %>
+    </div>
+  </section>
+
+  <section aria-labelledby="learning-evidence-heading">
+    <h2 id="learning-evidence-heading" class="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">What to inspect</h2>
+    <div class="mt-3 space-y-2">
+      <% topic.evidence.each do |note| %>
+        <div class="rounded-xl border border-line bg-panel p-3"><p class="text-xs font-semibold text-ink"><%= note.label %></p><p class="mt-1 text-[11px] leading-5 text-muted"><%= note.body %></p></div>
+      <% end %>
+    </div>
+  </section>
+
+  <section class="rounded-xl border border-amber-200 bg-amber-50 p-3" aria-labelledby="learning-boundary-heading">
+    <h2 id="learning-boundary-heading" class="text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-800">Boundary</h2>
+    <ul class="mt-2 space-y-2 text-[11px] leading-5 text-amber-800">
+      <% topic.boundaries.each do |boundary| %>
+        <li class="flex gap-2"><span aria-hidden="true">•</span><span><%= boundary %></span></li>
+      <% end %>
+    </ul>
+  </section>
+
+  <section aria-labelledby="learning-upstream-heading">
+    <h2 id="learning-upstream-heading" class="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">Official background</h2>
+    <div class="mt-3 space-y-2">
+      <% topic.external_references.each do |reference| %>
+        <%= link_to reference.url, target: "_blank", rel: "noreferrer", class: "block rounded-xl border border-line bg-panel p-3 hover:border-accent" do %>
+          <span class="block text-xs font-medium text-accent"><%= reference.label %> ↗</span>
+          <span class="mt-1 block text-[10px] leading-4 text-muted"><%= reference.role %></span>
+        <% end %>
+      <% end %>
+    </div>
+  </section>
+</article>
+
+<% if frame %>
+  </turbo-frame>
+<% end %>

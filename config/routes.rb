@@ -21,4 +21,5 @@ Rails.application.routes.draw do
 
   resources :runs, only: %i[index show]
   get "models", to: "models#index", as: :models
+  get "learn/:id", to: "learning_topics#show", as: :learning_topic
 end

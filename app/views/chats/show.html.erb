@@ -6,6 +6,7 @@
       <p class="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Run inspector</p>
       <% if @latest_run %><%= render "runs/status", run: @latest_run %><% end %>
     </div>
+    <%= render "shared/learning_link", topic: "chat_run" %>
 
     <% if @latest_run %>
       <div class="mt-5 rounded-xl border border-line bg-panel p-4">

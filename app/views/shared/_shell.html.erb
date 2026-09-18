@@ -1,7 +1,7 @@
 <% project = local_assigns[:project] %>
 <% active = local_assigns.fetch(:active, nil) %>
 
-<div class="min-h-screen lg:grid lg:grid-cols-[15rem_minmax(0,1fr)_18rem]">
+<div class="min-h-screen lg:grid lg:grid-cols-[15rem_minmax(0,1fr)_minmax(18rem,26rem)]">
   <aside class="border-b border-line bg-panel px-4 py-5 lg:min-h-screen lg:border-b-0 lg:border-r">
     <div class="flex items-center justify-between gap-3">
       <%= link_to root_path, class: "flex items-center gap-2 text-sm font-semibold tracking-tight text-ink" do %>
@@ -70,6 +70,8 @@
   </main>
 
   <aside class="border-t border-line bg-panel px-4 py-5 lg:min-h-screen lg:border-l lg:border-t-0">
-    <%= content_for?(:inspector) ? yield(:inspector) : render("shared/runtime_inspector") %>
+    <turbo-frame id="learning-panel">
+      <%= content_for?(:inspector) ? yield(:inspector) : render("shared/runtime_inspector") %>
+    </turbo-frame>
   </aside>
 </div>
