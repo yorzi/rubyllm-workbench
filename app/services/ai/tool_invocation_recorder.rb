@@ -26,6 +26,16 @@ module Ai
 
     private
 
+    # RubyLLM 2.0 marks provider-hosted tools as remote; the Specs require
+    # those calls to be labelled explicitly rather than treated as local code.
+    def remote?(tool_call)
+      return false unless tool_call.respond_to?(:remote?)
+
+      tool_call.remote? == true
+    rescue StandardError
+      false
+    end
+
     def persisted_tool_calls
       RubyLLM::ActiveRecord::ToolCall.where(
         message_type: Message.polymorphic_name,
@@ -40,7 +50,8 @@ module Ai
           attempt: @attempt,
           status: :running,
           arguments_json: Ai::ToolPayloadSanitizer.call(tool_call.arguments),
-          started_at: invocation.started_at || Time.current
+          started_at: invocation.started_at || Time.current,
+          remote: remote?(tool_call)
         )
         invocation.save!
         notify("ai.tool.requested", invocation, tool_call_id: tool_call.id)
@@ -57,7 +68,8 @@ module Ai
         attempt: invocation.attempt || @attempt,
         tool_definition: definition,
         arguments_json: Ai::ToolPayloadSanitizer.call(tool_call_record.arguments || {}),
-        started_at: invocation.started_at || tool_call_record.created_at || Time.current
+        started_at: invocation.started_at || tool_call_record.created_at || Time.current,
+        remote: remote?(tool_call_record)
       )
 
       if failure && result_record.nil?

@@ -10,7 +10,11 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_17_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_18_120000) do
+# Could not dump table "_sqliteai_vector" because of following StandardError
+#   Unknown type 'ANY' for column 'value'
+
+
   create_table "active_storage_attachments", force: :cascade do |t|
     t.bigint "blob_id", null: false
     t.datetime "created_at", null: false
@@ -209,6 +213,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_17_100000) do
     t.index ["knowledge_collection_id"], name: "index_knowledge_items_on_knowledge_collection_id"
   end
 
+  create_table "knowledge_vector_index_1024", primary_key: "knowledge_embedding_id", id: :integer, default: nil, force: :cascade do |t|
+    t.integer "knowledge_collection_id", null: false
+    t.text "model_id", null: false
+    t.binary "vector", null: false
+  end
+
   create_table "lifecycle_events", force: :cascade do |t|
     t.integer "approval_id"
     t.integer "artifact_id"
@@ -394,6 +404,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_17_100000) do
     t.string "error_class"
     t.text "error_message"
     t.datetime "finished_at"
+    t.boolean "remote", default: false, null: false
     t.json "result_json"
     t.integer "run_id", null: false
     t.datetime "started_at"
@@ -403,6 +414,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_17_100000) do
     t.string "tool_key", null: false
     t.datetime "updated_at", null: false
     t.index ["attempt_id"], name: "index_tool_invocations_on_attempt_id"
+    t.index ["remote"], name: "index_tool_invocations_on_remote"
     t.index ["run_id", "status"], name: "index_tool_invocations_on_run_id_and_status"
     t.index ["run_id", "tool_call_id"], name: "index_tool_invocations_on_run_id_and_tool_call_id", unique: true
     t.index ["run_id"], name: "index_tool_invocations_on_run_id"

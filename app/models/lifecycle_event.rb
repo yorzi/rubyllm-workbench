@@ -15,6 +15,10 @@ class LifecycleEvent < ApplicationRecord
     ai.approval.requested
     ai.approval.decided
     ai.artifact.created
+    ai.provider.chat
+    ai.provider.tool
+    ai.provider.embedding
+    ai.provider.rerank
   ].freeze
 
   belongs_to :run

@@ -67,6 +67,7 @@ flowchart TD
     KnowledgeServices["Ai::Knowledge::Chunker + Ingestor\n+ Embedder + Retriever + Search\n+ VectorStore adapter"]
     Audit["ToolInvocationRecorder + ApprovalService"]
     Events["LifecycleEventRecorder\nActiveSupport Notifications"]
+    ProviderEvents["Ai::RubyLlmInstrumentation\n*.ruby_llm adapter + ExecutionContext"]
     Records["Project / Chat / Run / Attempt\n/ Artifact / tool / Knowledge records / LifecycleEvent"]
     RubyLLM["RubyLLM Chat + embed + provider boundary"]
 
@@ -86,6 +87,8 @@ flowchart TD
     ChatExecutor --> Events
     StructuredExecutor --> Events
     Events --> Records
+    ProviderEvents --> Records
+    RubyLLM -. "instrumentation" .-> ProviderEvents
     Tooling --> ChatExecutor
     RunExecutor --> Records
     StructuredExecutor --> Records
@@ -482,6 +485,13 @@ flowchart LR
     Filter --> Dedupe["event_key 去重"]
     Dedupe --> Catalog
 ```
+
+来自 provider 的通知走独立路径：RubyLLM 2.0 会发出 `chat.ruby_llm`、
+`tool_call.ruby_llm` 等事件，但 payload 里的 `chat` 是它自己的 `RubyLLM::Chat`，
+拿不到应用记录。`Ai::ExecutionContext` 因此在执行期间发布当前 Run/Attempt，
+`Ai::RubyLlmInstrumentation` 用这个上下文关联，并只白名单少量标量，写成
+`ai.provider.*` 事件（`source = ruby_llm`）。没有 Run 可挂的事件（知识流的
+embedding/rerank）按设计不写入目录。
 
 当前应用侧事件名称按五组组织：
 

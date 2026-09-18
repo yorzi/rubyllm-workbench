@@ -108,6 +108,9 @@ look complete.
 
 ## Data and service boundaries
 
+- RubyLLM version: `2.0.0.rc4`; provider interactions go through the 2.0 APIs
+  (`with_schema`, `with_tool_options(calls:, concurrency:)`, `approve`/`deny`/
+  `complete`, `RubyLLM.embed`, `RubyLLM.rerank`, `chunk.content`).
 - Rails application records: `Project`, `Chat`, `Run`, `Attempt`, `Artifact`,
   `LifecycleEvent`, `KnowledgeCollection`, `KnowledgeItem`, `KnowledgeChunk`,
   `KnowledgeEmbedding` and
@@ -137,6 +140,11 @@ look complete.
 - `Ai::LifecycleEventRecorder` subscribes to application lifecycle
   notifications, filters payloads to safe metadata, persists `LifecycleEvent`
   rows and deduplicates repeated notifications by `event_key`.
+- `Ai::RubyLlmInstrumentation` subscribes to RubyLLM's `*.ruby_llm`
+  notifications and maps a whitelisted subset onto `ai.provider.*` events with
+  `source = ruby_llm`; because the notification payload's chat is RubyLLM's own
+  object, `Ai::ExecutionContext` publishes the Run/Attempt being executed and the
+  adapter correlates on that rather than on payload internals.
 - `Ai::Knowledge::Chunker` normalizes text into deterministic character windows;
   `Ai::Knowledge::Ingestor` replaces a source's chunks transactionally and keeps
   checksum/status/error metadata; `Ai::Knowledge::VectorStore` provides the vector
@@ -161,7 +169,7 @@ complete distributed event stream, a cost dashboard or a historical backfill sys
 
 ## Integrations and constraints
 
-- Rails 8.1.3.1, RubyLLM 2.0.0.rc3 target, SQLite, Active Storage local disk,
+- Rails 8.1.3.1, RubyLLM 2.0.0.rc4 target, SQLite, Active Storage local disk,
   Hotwire/Turbo/Stimulus, Tailwind and Vite following the loaded Rails MVP
   conventions.
 - Provider credentials are read from environment/Rails credentials only; they
@@ -188,15 +196,18 @@ keyboard-friendly.
 
 ## Pre-flight record
 
-- Milestone: M0 + M1 + M2 + M3 plus M4 local-text foundation.
+- Milestone: M0 + M1 + M2 + M3 plus the M4 local-text, embedding/retrieval and
+  rerank slices.
 - Scope: local chat, structured experiment comparison, code-defined tools,
   durable approval continuation, and Project-scoped text evidence retrieval with
-  provider embeddings and lexical/semantic/hybrid modes; M4 rerank/document work
-  and M5-M8 remain explicitly deferred.
+  provider embeddings, lexical/semantic/hybrid modes and a compatible-provider
+  rerank stage; M4 document/OCR work and M5-M8 remain explicitly deferred.
 - Runtime verified: Ruby 4.0.2 and Rails 8.1.3.1.
-- Baseline difference: RubyLLM 2.0.0.rc3 is not installed globally; RubyLLM
-  1.16.0 is currently available. The Gemfile must target 2.0.0.rc3 and the
-  installed API/source must be checked before implementation.
+- Baseline difference: RubyLLM 2.0.0.rc4 is a prerelease and is not installed
+  globally; RubyLLM 1.16.0 is the newest stable release. The Gemfile must target
+  2.0.0.rc4 and the installed API/source must be checked before implementation.
+- RubyLLM instrumentation is consumed through an adapter
+  (`Ai::RubyLlmInstrumentation`) rather than by reading payload internals.
 - Provider boundary: every provider operation goes through RubyLLM; no escape
   hatch is planned.
 - Storage: SQLite remains sufficient; no external database/service is needed.

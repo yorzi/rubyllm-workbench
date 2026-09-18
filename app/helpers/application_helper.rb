@@ -50,6 +50,13 @@ module ApplicationHelper
       [ payload["kind"], payload["name"] ].compact.join(" · ").presence || "Artifact"
     when "ai.run.failed"
       [ payload["failure_kind"], payload["error_class"] ].compact.join(" · ").presence || "Run failed"
+    when "ai.provider.chat", "ai.provider.tool", "ai.provider.embedding", "ai.provider.rerank"
+      summary = [ payload["operation"], payload["provider"], payload["model_id"] ].compact.join(" / ")
+      details = []
+      details << "#{payload["input_tokens"]} in / #{payload["output_tokens"]} out" if payload["input_tokens"] || payload["output_tokens"]
+      details << payload["finish_reason"] if payload["finish_reason"].present?
+      details << payload["status"] if payload["status"].present?
+      [ summary.presence, details.join(" · ").presence ].compact.join(" — ")
     else
       payload["status"].presence || "Recorded in the local event catalog"
     end

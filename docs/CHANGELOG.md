@@ -110,6 +110,55 @@ M4 Specs 要求“reranking can be toggled only for compatible providers”。�
   provider 往返（本次约 +3s）。
 - 未验证 Cohere 等其他 rerank provider，也未验证 top_n / 大候选集行为。
 
+## 2026-09-18 — 升级到 RubyLLM 2.0.0.rc4 并按 2.0 方式接 provider 遥测
+
+### 为什么做
+
+Specs 要求“Subscribe to RubyLLM/ActiveSupport instrumentation when available and
+map events to Runs/Attempts”，并且要求用 adapter 隔离不稳定的 payload 字段。此前应用
+只发出自己的 `ai.*` 事件，完全没有消费 RubyLLM 2.0 的 `*.ruby_llm` 通知；同时 provider
+托管的工具调用没有被标记成 remote。借升级到 2.0.0.rc4 的机会把这两件事补齐。
+
+### 人能看到的变化
+
+- Run inspector 的 Lifecycle events 里出现 `ai.provider.*` 事件，`source` 为 `ruby_llm`：
+  显示 operation、provider、provider class、model、streaming、input/output tokens、
+  finish reason 与失败类别。它们和原有 `ai.*` 应用事件并列，但来源可区分。
+- 工具调用如果是 provider 托管/远端执行，会在 Run inspector 上标记
+  “provider-executed · remote”。
+- RubyLLM 从 2.0.0.rc3 升到 2.0.0.rc4（rc4 只调整了 instrumentation 里
+  `provider_class` 的取值，无破坏性变更）。
+
+### 实现地图
+
+- `Ai::RubyLlmInstrumentation`：订阅 `/\.ruby_llm\z/`，只白名单少量标量字段，写
+  `ai.provider.chat` / `ai.provider.tool` / `ai.provider.embedding` / `ai.provider.rerank`。
+- `Ai::ExecutionContext`（CurrentAttributes）：RubyLLM 通知里的 `chat:` 是它自己的
+  `RubyLLM::Chat`，拿不到应用记录，所以由 executor 在执行期间发布 run/attempt，
+  adapter 用这个上下文关联，而不是去猜 payload 内部结构。
+- `Ai::LifecycleEventRecorder.persist`：给非 `ai.*` 起源的事件提供同样的 catalog 校验
+  与 payload 白名单写入路径；`source` 可区分 application / ruby_llm。
+- `tool_invocations.remote`：来自 RubyLLM 2.0 的 `ToolCall#remote?`，并在页面显式标记。
+
+### 验证证据
+
+- 全套回归：130 tests、784 assertions、0 failures、0 errors、1 skip；zeitwerk 与
+  rubocop 通过。
+- 真实 provider dogfood（`OPENROUTER_DOGFOOD`）：一次真实 `openrouter/free` chat Run
+  产生了 1 条 `ai.provider.chat`（`source=ruby_llm`，831 in / 5 out、finish_reason
+  stop），Run inspector 正确渲染；嵌入式/独立进程两种路径都验证过通知确实会触发。
+- 复查现有集成方式：`with_schema(name/schema/strict)`、`with_tool_options(calls,
+  concurrency)`、`approve/deny/complete`、`chunk.content` 均与 2.0 一致，无需改写。
+
+### 还没有证明什么
+
+- 只消费了 chat/tool 两类事件并只验证了 chat；embedding/rerank 事件没有 Run 可挂，
+  按设计不写入生命周期目录（知识流不是 Run）。
+- 没有把 provider 事件反向写回 Attempt 的 usage/cost；Attempt 仍以 RubyLLM usage 记录
+  为准，两者可能在不同时间点落库。
+- `tool_call.ruby_llm` 只在有工具调用时才会出现，本次 dogfood 未覆盖。
+- 仍然没有 headless browser，页面结论来自 HTTP 渲染检查。
+
 ## 2026-09-17 — M4 provider embedding 与 lexical/semantic/hybrid 检索证据
 
 ### 为什么做

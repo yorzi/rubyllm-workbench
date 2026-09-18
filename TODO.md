@@ -210,6 +210,25 @@ model property, not an app guarantee.
 - [ ] Other rerank providers (Cohere, Voyage non-free tiers) and `top_n`
   behaviour on larger candidate sets remain unverified.
 
+## RubyLLM 2.0 alignment — 2026-09-18
+
+- [x] Move the pinned gem from `ruby_llm 2.0.0.rc3` to `2.0.0.rc4` and re-check
+      every provider interaction against the 2.0 API.
+- [x] Consume RubyLLM instrumentation through an adapter:
+      `Ai::RubyLlmInstrumentation` maps `*.ruby_llm` notifications onto
+      `ai.provider.*` lifecycle events with a whitelisted payload and
+      `source = ruby_llm`.
+- [x] Correlate notifications with Runs through `Ai::ExecutionContext`, because
+      the notification payload's chat is RubyLLM's own object rather than an
+      application record.
+- [x] Label provider-hosted tool calls explicitly (`tool_invocations.remote`)
+      and surface it in the Run inspector.
+
+### RubyLLM alignment status: `IMPLEMENTED` · `LOCAL_VERIFIED` + `OPENROUTER_DOGFOOD`
+
+Only chat-provider notifications were exercised live; tool-call notifications
+and provider-hosted/remote tools were covered by tests only.
+
 ## Known implementation gap
 
 - [x] Add a unified local lifecycle event catalog for `ai.run`, `ai.attempt`,

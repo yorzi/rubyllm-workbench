@@ -14,7 +14,7 @@ provider secret，也不把本地成功包装成部署或业务结果。
 
 - Ruby `4.0.2`
 - Rails `8.1.3.1`
-- RubyLLM `2.0.0.rc3`
+- RubyLLM `2.0.0.rc4`
 - SQLite、Tailwind、Vite、Hotwire、Solid Queue
 - provider 通过环境变量或 Rails credentials 提供配置
 
@@ -210,6 +210,7 @@ payload 只保留 ID、状态、provider/model、时长、错误类别等允许�
 | Knowledge 搜不到结果 | source 是否为 `ready`、query token、chunk offsets、embedding coverage | 不要把 lexical 当成 semantic embedding 或 rerank |
 | Knowledge embedding 失败 | collection embedding status/error、provider 配置、model capability | 不要把脱敏后的错误当成完整 provider 日志，也不要混合不同 model 的向量 |
 | Rerank 没有生效 | 页面 “Rerank was not applied” 原因、rerank model 是否已配置 | 不要把 rerank 分数当成语义正确性，也不要认为重排会改写检索证据 |
+| Run 时间线缺少 `ai.provider.*` | 该 Run 是否由当前进程执行（关联依赖 ExecutionContext）、provider 是否真的被调用 | 不要假设没有 provider 事件就等于没有调用；知识流的 embedding/rerank 本就没有 Run 可挂 |
 | Tool 参数不完整 | ToolInvocation 的 secret filtering | 不要为“调试方便”恢复 secret |
 | 390px 出现横向滚动 | 页面实际 `scrollWidth/clientWidth`、长 JSON/table | 不要用截图裁剪掩盖布局问题 |
 | live test 失败 | 网络、provider availability、model capability、credentials | 不要把一次网络失败改写成代码永远错误 |

@@ -3,9 +3,11 @@ module Ai
     EVENT_PATTERN = /\Aai\.(?:run|attempt|tool|approval|artifact)\./
     PAYLOAD_KEYS = %w[
       run_id attempt_id artifact_id tool_invocation_id approval_id
-      project_id operation status provider model_id tool_key tool_call_id
-      decision actor kind error_class error_code failure_kind duration_ms
-      time_to_first_output_ms schema_name schema_validation pending_tool_count
+      project_id operation status provider provider_class model_id tool_key
+      tool_call_id tool_name streaming remote decision actor kind error_class
+      error_code failure_kind duration_ms input_tokens output_tokens
+      total_cost finish_reason time_to_first_output_ms schema_name
+      schema_validation pending_tool_count
     ].freeze
 
     class << self
@@ -23,22 +25,48 @@ module Ai
         end
       end
 
-      def emit(name, payload = {})
+      # Accepts the payload either as a positional hash or as bare keywords,
+      # because callers in this codebase use both forms.
+      def emit(name, payload = nil, source: "application", **kwargs)
         event_name = name.to_s
         unless LifecycleEvent::EVENT_NAMES.include?(event_name)
           raise ArgumentError, "Unknown AI lifecycle event: #{event_name}"
         end
 
-        ActiveSupport::Notifications.instrument(event_name, payload)
+        attributes = (payload.is_a?(Hash) ? payload : {}).merge(kwargs)
+        ActiveSupport::Notifications.instrument(event_name, attributes.merge(source: source.to_s))
+      end
+
+      # Writes an event that did not originate from our own `ai.*` instrument
+      # calls, such as one mapped from a RubyLLM notification. The catalog
+      # validation and payload whitelist are identical either way.
+      def persist(name, payload: {}, started_at: nil, finished_at: nil, notification_id: nil, source: "application")
+        event_name = name.to_s
+        unless LifecycleEvent::EVENT_NAMES.include?(event_name)
+          raise ArgumentError, "Unknown AI lifecycle event: #{event_name}"
+        end
+
+        new.record_with(
+          name: event_name,
+          started_at: started_at,
+          finished_at: finished_at,
+          notification_id: notification_id,
+          payload: payload.merge(source: source.to_s)
+        )
       end
     end
 
     def record(name:, started_at:, finished_at:, notification_id:, payload:)
+      record_with(name: name, started_at: started_at, finished_at: finished_at, notification_id: notification_id, payload: payload)
+    end
+
+    def record_with(name:, started_at:, finished_at:, notification_id:, payload:)
       event_name = name.to_s
       return unless LifecycleEvent::EVENT_NAMES.include?(event_name)
       return unless LifecycleEvent.table_exists?
 
       raw_payload = payload.to_h.stringify_keys
+      source = raw_payload.delete("source").to_s.presence || "application"
       run_id = integer_id(raw_payload["run_id"])
       return unless run_id
 
@@ -53,7 +81,7 @@ module Ai
         approval_id: integer_id(raw_payload["approval_id"]),
         name: event_name,
         event_key: key,
-        source: "application",
+        source: source,
         occurred_at: Time.current,
         duration_ms: duration_ms(started_at, finished_at),
         payload_json: normalized_payload(raw_payload)

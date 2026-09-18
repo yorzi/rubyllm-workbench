@@ -43,7 +43,7 @@ current behavior and boundaries remain legible to a human.
 
 ## Local setup
 
-The app targets Ruby 4.0.2, Rails 8.1.3.1, RubyLLM 2.0.0.rc3, SQLite, Tailwind,
+The app targets Ruby 4.0.2, Rails 8.1.3.1, RubyLLM 2.0.0.rc4, SQLite, Tailwind,
 Vite, Hotwire, and Solid Queue.
 
 ```sh

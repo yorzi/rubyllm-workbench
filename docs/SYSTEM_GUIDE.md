@@ -150,6 +150,9 @@ Tool Lab 为 Project 保存一个新 Chat Run 的默认执行模式，默认为 
 - **rerank**：可选第二阶段，只对已配置的兼容 rerank model 开放；它只重排，不改变
   retrieval score、cosine、lexical 分量或 chunk 证据，并记录 `pre_rank` 与 rerank
   score。rerank 分数是重排信号，不等于语义正确性。
+- **provider 遥测**：除了应用自己的 `ai.*` 事件，RubyLLM 的 `*.ruby_llm` 通知会被
+  adapter 映射成 `ai.provider.*` 事件（source 为 `ruby_llm`），两者在 Run inspector 里
+  并列但可区分来源。provider 托管的工具调用会被标成 remote。
 
 ### ToolDefinition / ToolInvocation / Approval
 

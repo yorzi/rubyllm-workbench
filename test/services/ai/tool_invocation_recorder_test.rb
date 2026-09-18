@@ -96,15 +96,26 @@ class Ai::ToolInvocationRecorderTest < ActiveSupport::TestCase
     assert_includes invocation.error_message, "Local tool execution failed"
   end
 
+  test "labels provider-hosted tool calls as remote and local ones as local" do
+    remote_call = create_tool_call(arguments: { "query" => "rubyllm" }, name: "web_search", remote: true)
+    local_call = create_tool_call(arguments: { "note" => "local" })
+
+    Ai::ToolInvocationRecorder.new(run: @run, chat: @chat, attempt: @attempt).sync!
+
+    assert @run.tool_invocations.find_by(tool_call_id: remote_call.tool_call_id).remote?
+    assert_not @run.tool_invocations.find_by(tool_call_id: local_call.tool_call_id).remote?
+    assert_equal 1, @run.tool_invocations.where(remote: true).count
+  end
+
   private
 
-  def create_tool_call(arguments:, tool_call_id: "call-#{SecureRandom.hex(6)}", name: "save_run_note")
+  def create_tool_call(arguments:, tool_call_id: "call-#{SecureRandom.hex(6)}", name: "save_run_note", remote: false)
     RubyLLM::ActiveRecord::ToolCall.create!(
       message: @assistant,
       tool_call_id: tool_call_id,
       name: name,
       arguments: arguments,
-      remote: false
+      remote: remote
     )
   end
 end

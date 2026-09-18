@@ -15,7 +15,7 @@ gem "vite_rails"
 # Use Turbo for Rails-native navigation and streaming updates.
 gem "turbo-rails"
 # RubyLLM is the sole provider abstraction for AI operations.
-gem "ruby_llm", "2.0.0.rc3"
+gem "ruby_llm", "2.0.0.rc4"
 # Build JSON APIs with ease [https://github.com/rails/jbuilder]
 gem "jbuilder"
 

@@ -16,12 +16,14 @@ module Ai
       response = nil
 
       completion = @resuming_approval ? :complete : :ask
-      response = @chat.public_send(completion, *([ prompt ] if completion == :ask)) do |chunk|
-        content = chunk.content.to_s
-        next if content.blank?
+      response = Ai::ExecutionContext.with(run_id: @run.id, attempt_id: attempt.id) do
+        @chat.public_send(completion, *([ prompt ] if completion == :ask)) do |chunk|
+          content = chunk.content.to_s
+          next if content.blank?
 
-        recorder.observe!(content)
-        latest_assistant_message&.broadcast_append_chunk(content)
+          recorder.observe!(content)
+          latest_assistant_message&.broadcast_append_chunk(content)
+        end
       end
       tool_recorder.sync!
 

@@ -15,12 +15,14 @@ module Ai
       definition = @experiment.schema_definition
       configure_chat(definition)
 
-      response = @chat.ask(prompt) do |chunk|
-        content = chunk.content.to_s
-        next if content.blank?
+      response = Ai::ExecutionContext.with(run_id: @run.id, attempt_id: @run.attempts.order(:sequence, :id).last&.id) do
+        @chat.ask(prompt) do |chunk|
+          content = chunk.content.to_s
+          next if content.blank?
 
-        recorder.observe!(content)
-        latest_assistant_message&.broadcast_append_chunk(content)
+          recorder.observe!(content)
+          latest_assistant_message&.broadcast_append_chunk(content)
+        end
       end
 
       parsed = parse_and_validate!(response, definition)
