@@ -8,9 +8,9 @@
 项目发展过程中记录实现事实、证据和偏差的增长层。`docs/` 不会因为当前代码已经
 变化就反向改写 Specs。
 
-更新时间：2026-09-17
-当前实现：M0–M3 核心闭环、M4 本地文本基础与 embedding/检索切片 `IMPLEMENTED`
-当前边界：M3 并行 tool-call 应用路径 `IMPLEMENTED`、live provider 兼容性 `PARTIAL`；M4 embedding/检索 `IMPLEMENTED`（含一次 OpenRouter dogfood）、跨 provider embedding 兼容性与 rerank/文档能力 `PARTIAL`；M5–M8 `PLANNED`
+更新时间：2026-09-18
+当前实现：M0–M3 核心闭环、M4 本地 Knowledge 检索/rerank/文件来源切片 `IMPLEMENTED`
+当前边界：M3 并行 tool-call 应用路径 `IMPLEMENTED`、live provider 兼容性 `PARTIAL`；M4 本地 embedding/检索、兼容 provider rerank、文件上传/本地抽取与 provenance `IMPLEMENTED`（含 OpenRouter dogfood 与本地回归），provider file reference、真实 OCR dogfood、页级 provenance 和更广跨 provider 兼容性仍为 `PARTIAL` 或 `PLANNED`；M5–M8 `PLANNED`
 
 ## 两套文档体系的边界
 
@@ -46,6 +46,7 @@ changelog 中记录两边的关系。
 | `docs/SYSTEM_GUIDE.md` | 系统是什么、现在能做什么、用户如何理解它 | 当前实现的阅读入口；不覆盖 Specs 基线 |
 | `docs/ARCHITECTURE.md` | 模块、数据、事件、时序和状态如何连接 | 当前实现结构图；具体字段以代码/迁移为准 |
 | `docs/OPERATIONS.md` | 如何启动、测试、配置 provider、判断证据 | 当前本地操作手册；不包含任何 secret |
+| `docs/LEARNING.md` | 页面中的 “How this works” 学习层如何维护、如何绑定代码证据 | 学习层的内容与漂移约束 |
 | `docs/CHANGELOG.md` | 每次主题迭代改变了什么、为什么、证据是什么 | 面向人的增长历史，原则上只追加 |
 | `IMPLEMENTATION_MAP.md` | Specs 基线到当前代码的实现映射和技术边界 | 当前实现合同与偏差入口 |
 | `TODO.md` | 下一步工作、验收门槛和明确延期项 | 当前执行清单 |

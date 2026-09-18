@@ -4,9 +4,9 @@
 AI agent 持续修改系统之后，仍能快速回答：系统为什么存在、现在有什么、一次
 操作如何完成、数据在哪里、哪些能力还不能宣称已经存在。
 
-更新时间：2026-09-17
-当前实现：M0–M3 核心闭环、M4 本地文本基础与 embedding/语义检索切片
-当前代码基线：`main` 上的 M3 生命周期/并行策略与 M4 Knowledge embedding/retrieval
+更新时间：2026-09-18
+当前实现：M0–M3 核心闭环、M4 Knowledge 检索/rerank/文件来源与本地抽取切片
+当前代码基线：`main` 上的 M3 生命周期/并行策略与 M4 Knowledge embedding/retrieval/rerank/document paths
 
 ## 两套文档体系：先确认你正在读哪一种“真相”
 
@@ -40,8 +40,8 @@ Artifact，并把文本来源保存为可追溯的 KnowledgeItem/KnowledgeChunk�
 - 让一次 AI 执行在刷新页面、失败或需要审批后仍然可解释、可恢复。
 - 让实验结果和工具副作用成为耐久 Artifact，而不是只存在于一次页面响应里。
 - 让人能够看到模型做了什么、系统替它记录了什么、哪里需要人介入。
-- 先用本地、可检查的文本证据验证 Knowledge 工作流，再决定 provider embedding、
-  rerank 和文档提取的边界。
+- 先用本地、可检查的文本证据验证 Knowledge 工作流，再逐步验证 provider embedding、
+  rerank 和文档提取的边界；页面中的学习入口应同时解释功能、代码路径和证据边界。
 
 ### 当前不做什么
 
@@ -49,8 +49,9 @@ Artifact，并把文本来源保存为可追溯的 KnowledgeItem/KnowledgeChunk�
 - 不是 M5 Agent/Deep Research 平台；Agent、工作流和 provider-hosted/server tools
   仍然延期。
 - 不是完整的 M4 知识库/RAG/文档 OCR 系统：当前有本地文本 collection、chunk、
-  provider embedding、SQLite vector adapter 和 lexical/semantic/hybrid 证据检索；
-  rerank、文件/OCR 提取和 provenance Artifact 仍未实现。
+  provider embedding、SQLite vector adapter、lexical/semantic/hybrid 证据检索、
+  兼容 provider rerank，以及文件上传后的本地抽取和 provenance Artifact；provider
+  file reference、真实 OCR dogfood、页级 provenance 和更广的跨 provider 兼容性仍未完成。
 - 不接受浏览器上传的任意 Ruby，也不执行任意本地 shell/code。
 - 本地测试通过、OpenRouter dogfood 成功、Git commit 存在，都不等于生产部署、
   公众可用、业务结果或 provider 长期稳定。

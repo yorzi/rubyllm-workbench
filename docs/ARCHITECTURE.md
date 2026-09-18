@@ -4,8 +4,8 @@
 数据库自动生成的 ERD，也不是 Specs 的未来架构宣言；具体字段和行为仍以代码、
 迁移、测试和运行证据为准。
 
-更新时间：2026-09-16
-当前实现：M0–M3 核心闭环、本地 LifecycleEvent 目录、并行策略切片和 M4 本地文本基础 `IMPLEMENTED`
+更新时间：2026-09-18
+当前实现：M0–M3 核心闭环、本地 LifecycleEvent 目录、并行策略切片和 M4 Knowledge 检索/rerank/文件来源 `IMPLEMENTED`
 当前图表范围：已验证的本地运行路径；未来节点全部显式标为 `PLANNED`
 校准依据：routes、models、migrations、jobs、services、测试、M3 OpenRouter
 dogfood（Run #11、Run #13）和 M4 Knowledge 本地回归
@@ -447,7 +447,9 @@ provider、已存储的向量和一次 query embedding；任一项缺失时 `Sea
 证据并在页面上写明 requested mode 与实际原因。rerank 是可选的第二阶段：只有通过
 `RerankCatalog` 的能力门控（registry 的 `rerank` output modality + provider 已配置）
 才会调用，它只改变顺序并记录 `rerank_score` 与 `pre_rank`；不可用或失败时保留原证据并
-说明理由。该路径不创建 `Run`/`Attempt`，也不宣称文件上传或 OCR。
+说明理由。该路径不创建 `Run`/`Attempt`；文件上传和本地抽取属于独立的 Knowledge
+ingestion path，并通过 provenance Artifact 表达，provider file reference、真实
+OCR/page-level evidence 仍是边界外能力。
 
 ## 5. Runtime — 状态如何推进
 
@@ -518,7 +520,7 @@ flowchart LR
     M1 --> M2["M2 Structured Compare\nIMPLEMENTED"]
     M2 --> M3["M3 Tools + Approval\nIMPLEMENTED"]
     M3 --> M3P["M3 Parallel Calls\nAPP PATH IMPLEMENTED"]
-    M3P --> M4["M4 Knowledge\nEMBEDDING + RETRIEVAL PARTIAL"]
+    M3P --> M4["M4 Knowledge\nRETRIEVAL + RERANK + DOCUMENT SOURCES\nLOCAL PATH IMPLEMENTED"]
     M4 --> M5["M5 Agents + Research\nPLANNED"]
     M5 --> M6["M6+ Media / Batch / Ops\nPLANNED"]
 ```
@@ -527,8 +529,9 @@ flowchart LR
 多调用本地审计路径已经存在并通过 deterministic tests；live provider 的并行返回和
 跨 provider 兼容性仍是 `PARTIAL`。M4 当前已实现本地 text collection、chunk、
 embedding 记录、SQLite vector adapter 与 lexical/semantic/hybrid 证据，并有
-OpenRouter 免费 embedding model 的 dogfood 记录；rerank、file/OCR ingestion 仍未完成，不能
-被简化成完整 M4，也不能把当前本地检索误写成 provider RAG。
+OpenRouter embedding/rerank model 的 dogfood 记录，以及文件上传、本地抽取和 provenance
+Artifact 的本地回归；provider file references、真实 OCR/page-level evidence 和更广跨
+provider 兼容性仍未完成，不能被简化成完整 M4，也不能把当前本地检索误写成 provider RAG。
 
 ## 8. 如何保持图表可信
 

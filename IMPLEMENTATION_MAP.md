@@ -2,21 +2,23 @@
 
 ## Scope
 
-This implementation covers the M0, M1, M2, M3 and current M4 foundation slice:
+This implementation covers the M0, M1, M2, M3 and current M4 Knowledge slice:
 
 `Project -> Chat/Tool Lab/Knowledge -> persisted execution and evidence records -> inspectors`
 
-The M4 foundation currently covers local text collections, deterministic chunks,
+The M4 slice currently covers local text collections, deterministic chunks,
 checksums, provider embeddings in a SQLite vector adapter, explainable
-lexical/semantic/hybrid retrieval and explicit degradation. Rerank, file/OCR
-ingestion, agents, media, batch/evals and operational polish stay deferred until
-each boundary is extended deliberately.
+lexical/semantic/hybrid retrieval, compatible-provider rerank, file upload/local
+extraction and provenance artifacts, with explicit degradation. Provider file
+references, real OCR/page-level provenance, agents, media, batch/evals and
+operational polish stay deferred until each boundary is extended deliberately.
 
 Current status: M0–M3 core, the M4 local-text foundation and the M4
-embedding/retrieval slice are `IMPLEMENTED` for their verified slices with one
-OpenRouter free-embedding dogfood; live M3 parallel provider compatibility and
-cross-provider embedding compatibility are `PARTIAL`; M4 rerank/document
-acceptance and M5–M8 remain `PLANNED`.
+embedding/retrieval/rerank/document slices are `IMPLEMENTED` for their verified
+local paths with OpenRouter embedding/rerank dogfood; live M3 parallel provider
+compatibility, provider file references, real OCR/page-level provenance and
+cross-provider embedding compatibility are `PARTIAL` or deferred; M5–M8 remain
+`PLANNED`.
 
 ## Human understanding layer
 
@@ -186,8 +188,9 @@ complete distributed event stream, a cost dashboard or a historical backfill sys
   degrades to lexical evidence and records the reason. The sqlite-vector adapter
   is a spike: exact cosine only, external binary not shipped with the app, and
   not yet benchmarked, so it is not the default. No fake
-  embedding vectors, universal semantic score, rerank claim, remote URL fetch,
-  file upload or OCR result is created by this slice.
+  embedding vectors, universal semantic score, remote URL fetch or provider file
+  reference lifecycle is created by this slice. File upload, local extraction and
+  provenance records are implemented; real OCR/page-level evidence remains bounded.
 - No direct provider SDK/HTTP calls, arbitrary shell execution, auth, billing,
   PostgreSQL, pgvector, Redis, batch endpoints or remote deployment in this
   slice. Registry models marked `:batch` are excluded from interactive M2 runs.
@@ -201,8 +204,8 @@ keyboard-friendly.
 
 ## Pre-flight record
 
-- Milestone: M0 + M1 + M2 + M3 plus the M4 local-text, embedding/retrieval and
-  rerank slices.
+- Milestone: M0 + M1 + M2 + M3 plus the M4 local-text, embedding/retrieval,
+  rerank and document-source slices.
 - Scope: local chat, structured experiment comparison, code-defined tools,
   durable approval continuation, and Project-scoped text evidence retrieval with
   provider embeddings, lexical/semantic/hybrid modes, a compatible-provider

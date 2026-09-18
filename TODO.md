@@ -1,4 +1,8 @@
-# TODO — M0/M1/M2/M3 core complete; M4 embedding/retrieval done; rerank + documents pending
+# TODO — M0/M1/M2/M3 core complete; M4 rerank/documents implemented; provider breadth and page-level evidence pending
+
+> Current correction (2026-09-18): M4 rerank plus file upload/local extraction/provenance
+> are implemented and locally verified. Provider file references, real OCR dogfood,
+> page-level provenance, and broader cross-provider compatibility remain partial or deferred.
 
 ## Human understanding layer
 
@@ -13,7 +17,7 @@
 
 - [x] Initialize the Rails 8.1.3.1 app with SQLite, Tailwind, Vite, Hotwire,
       and the local Solid Queue baseline.
-- [x] Lock Ruby 4.0.2 and RubyLLM 2.0.0.rc3 in the project.
+- [x] Lock Ruby 4.0.2 and RubyLLM 2.0.0.rc4 in the project.
 - [x] Add the project shell, navigation, responsive states, and empty states.
 - [x] Add SQLite migrations/models for Project, Chat, Run, and Attempt with
       indexes and validated status transitions.

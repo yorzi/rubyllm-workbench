@@ -161,8 +161,9 @@ Inspector 写明原因；这不是错误，也不是降级为近似搜索——s
 
 当前向量以 Float32 blob 存在 SQLite，默认由 `sqlite_application_cosine` adapter 在应用侧
 算 cosine，只适用于有界语料；换 provider 或 model 前先 clear 或重新 embed，避免把
-不同维度的向量混在一起。当前 M4 尚未开放远程 URL 抓取、文件上传、Active Storage
-文档处理、OCR 或 rerank；这些能力进入时必须补充各自的 provenance、失败状态和兼容性证据。
+不同维度的向量混在一起。当前 M4 尚未开放远程 URL 抓取、provider file reference
+lifecycle、真实 OCR dogfood 或页级 provenance；文件上传、Active Storage 文档处理
+和 rerank 已有本地实现，但 provider 兼容性与真实 OCR 证据仍需单独验证。
 
 ## 当前可观测性边界
 
@@ -229,8 +230,9 @@ payload 只保留 ID、状态、provider/model、时长、错误类别等允许�
   或文件内容加入事件通知。
 - provider-hosted/server tools 是远程执行能力，未来如果加入必须单独标注；它们
   不等于本地工具，也不应被隐含为安全。
-- Knowledge source 当前只接受用户粘贴的 text；不要把任意 URL、上传文件或 OCR
-  输出当成已经存在的来源 provenance。
+- Knowledge source 当前接受用户粘贴的 text 和受应用入口约束的文件上传；文件会经过
+  Active Storage 与本地抽取路径，并保存 provenance Artifact。不要把任意 URL、provider
+  file reference、未验证的 OCR 输出或页级引用当成已经存在的能力。
 - embedding 错误摘要、collection 状态和事件只保存脱敏后的文本；不要把 provider
   credential、原始响应体或完整 key 写进数据库或日志。
 - sqlite-vector 二进制是外部可执行代码：只从官方 release 获取，不要入库、不要在 CI 里

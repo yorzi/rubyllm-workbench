@@ -6,6 +6,28 @@
 原则上只追加，不静默改写历史。代码细节回到对应 commit 和
 [IMPLEMENTATION_MAP.md](../IMPLEMENTATION_MAP.md)。
 
+## 2026-09-18 — M4 current-reality correction
+
+### 为什么做
+
+近期 M4 的 rerank、文件来源、本地抽取和 provenance 路径已经进入代码与测试，
+但多个当前实现入口仍停留在“rerank/文档尚未实现”的旧描述。先校准这条人类理解
+基线，才能让后续的页面学习层引用真实能力边界，而不会把历史计划误当成当前事实。
+
+### 当前结论
+
+- 本地 Knowledge 检索、兼容 provider rerank、文件上传/本地抽取和 provenance Artifact
+  是已实现的本地路径；对应状态仍不等于完整 M4 或 provider RAG。
+- provider file reference lifecycle、真实 OCR dogfood、页级 provenance 和更广的
+  cross-provider compatibility 仍是 `PARTIAL` 或 deferred。
+- 历史 milestone 记录保留不改写；当前状态同步到 README、SYSTEM_GUIDE、OPERATIONS、
+  ARCHITECTURE、IMPLEMENTATION_MAP 和 TODO。
+
+### 验证证据
+
+- 代码与测试现状以当前 `main` 工作区为准；本次变更只修正文档，没有声称新的部署、
+  公众可用性或业务结果。
+
 ## 2026-09-17 — sqlite-vector adapter spike（opt-in，默认不变）
 
 ### 为什么做
