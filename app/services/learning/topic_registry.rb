@@ -1,21 +1,4 @@
 module Learning
-  CodeReference = Data.define(:path, :label, :role, :start_line, :end_line, :anchor)
-  ExternalReference = Data.define(:label, :url, :role)
-  Note = Data.define(:label, :body)
-  Step = Data.define(:title, :body)
-
-  Topic = Data.define(
-    :key,
-    :title,
-    :kicker,
-    :summary,
-    :steps,
-    :code_references,
-    :external_references,
-    :evidence,
-    :boundaries
-  )
-
   class TopicRegistry
     class << self
       def all
