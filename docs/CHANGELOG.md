@@ -21,7 +21,7 @@
 - provider file reference lifecycle、真实 OCR dogfood、页级 provenance 和更广的
   cross-provider compatibility 仍是 `PARTIAL` 或 deferred。
 - 历史 milestone 记录保留不改写；当前状态同步到 README、SYSTEM_GUIDE、OPERATIONS、
-  ARCHITECTURE、IMPLEMENTATION_MAP 和 TODO。
+  ARCHITECTURE、IMPLEMENTATION_MAP、TODO，以及 Project/Knowledge 页面上的边界文案。
 
 ### 验证证据
 

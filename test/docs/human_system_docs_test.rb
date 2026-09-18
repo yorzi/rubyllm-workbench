@@ -1,7 +1,7 @@
 require "test_helper"
 
 class HumanSystemDocsTest < ActiveSupport::TestCase
-  DOCS = %w[README.md SYSTEM_GUIDE.md ARCHITECTURE.md OPERATIONS.md CHANGELOG.md].freeze
+  DOCS = %w[README.md SYSTEM_GUIDE.md ARCHITECTURE.md OPERATIONS.md LEARNING.md CHANGELOG.md].freeze
 
   test "human documentation entrypoint and core documents remain linked" do
     docs_root = Rails.root.join("docs")
@@ -10,6 +10,7 @@ class HumanSystemDocsTest < ActiveSupport::TestCase
     assert_includes sources.fetch("README.md"), "SYSTEM_GUIDE.md"
     assert_includes sources.fetch("README.md"), "ARCHITECTURE.md"
     assert_includes sources.fetch("README.md"), "OPERATIONS.md"
+    assert_includes sources.fetch("README.md"), "LEARNING.md"
     assert_includes sources.fetch("README.md"), "CHANGELOG.md"
     assert_includes File.read(Rails.root.join("README.md")), "docs/README.md"
     assert_includes File.read(Rails.root.join("README.md")), "rubyllm-workbench/ai/00_ENTRYPOINT.md"
@@ -32,6 +33,9 @@ class HumanSystemDocsTest < ActiveSupport::TestCase
     assert_includes sources.fetch("OPERATIONS.md"), "PARALLEL_WORKERS=1"
     assert_includes sources.fetch("OPERATIONS.md"), "Tool Lab 执行模式"
     assert_includes sources.fetch("OPERATIONS.md"), "Knowledge workspace"
+    assert_includes sources.fetch("LEARNING.md"), "How this works"
+    assert_includes sources.fetch("LEARNING.md"), "SourceReader"
+    assert_includes sources.fetch("LEARNING.md"), "credentials"
     assert_includes sources.fetch("CHANGELOG.md"), "多调用审计"
     assert_includes sources.fetch("CHANGELOG.md"), "M4 本地文本 Knowledge 基础切片"
   end
