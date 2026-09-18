@@ -77,6 +77,11 @@ look complete.
   and optional source reference.
 - **KnowledgeChunk:** one deterministic searchable slice with position, character
   offsets and chunker metadata. It is evidence, not an LLM answer.
+- **File source:** a KnowledgeItem backed by an Active Storage attachment. Its
+  text is produced by a background extraction (local reader for text-like files,
+  provider OCR for PDFs/images) and every extraction writes an `ocr_document`
+  Artifact carrying extractor, provider/model, page count and both the blob and
+  content checksums.
 - **KnowledgeEmbedding:** one vector per chunk per embedding model, storing
   provider, dimensions, packed Float32 vector and content checksum. Retrieval
   compares vectors only inside one model id and skips stale checksums, so
@@ -200,8 +205,9 @@ keyboard-friendly.
   rerank slices.
 - Scope: local chat, structured experiment comparison, code-defined tools,
   durable approval continuation, and Project-scoped text evidence retrieval with
-  provider embeddings, lexical/semantic/hybrid modes and a compatible-provider
-  rerank stage; M4 document/OCR work and M5-M8 remain explicitly deferred.
+  provider embeddings, lexical/semantic/hybrid modes, a compatible-provider
+  rerank stage, and file sources with extraction provenance; provider file
+  references, real OCR dogfood and M5-M8 remain explicitly deferred.
 - Runtime verified: Ruby 4.0.2 and Rails 8.1.3.1.
 - Baseline difference: RubyLLM 2.0.0.rc4 is a prerelease and is not installed
   globally; RubyLLM 1.16.0 is the newest stable release. The Gemfile must target

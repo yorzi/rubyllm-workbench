@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_18_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_18_130000) do
 # Could not dump table "_sqliteai_vector" because of following StandardError
 #   Unknown type 'ANY' for column 'value'
 
@@ -62,11 +62,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_120000) do
     t.text "content_text"
     t.datetime "created_at", null: false
     t.string "kind", null: false
+    t.integer "knowledge_item_id"
     t.json "metadata_json", default: {}, null: false
     t.string "name"
-    t.integer "run_id", null: false
+    t.integer "run_id"
     t.datetime "updated_at", null: false
     t.index ["attempt_id"], name: "index_artifacts_on_attempt_id"
+    t.index ["knowledge_item_id"], name: "index_artifacts_on_knowledge_item_id"
     t.index ["run_id", "kind"], name: "index_artifacts_on_run_id_and_kind"
     t.index ["run_id"], name: "index_artifacts_on_run_id"
   end
@@ -201,6 +203,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_120000) do
     t.text "content_text", null: false
     t.datetime "created_at", null: false
     t.text "error_summary"
+    t.datetime "extracted_at"
+    t.text "extraction_error"
+    t.json "extraction_metadata_json", default: {}, null: false
+    t.string "extraction_status", default: "not_required", null: false
+    t.string "extractor"
     t.string "ingestion_status", default: "pending", null: false
     t.integer "knowledge_collection_id", null: false
     t.json "metadata_json", default: {}, null: false
@@ -208,6 +215,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_120000) do
     t.string "source_reference"
     t.string "title", null: false
     t.datetime "updated_at", null: false
+    t.index ["extraction_status"], name: "index_knowledge_items_on_extraction_status"
     t.index ["knowledge_collection_id", "checksum"], name: "index_knowledge_items_on_knowledge_collection_id_and_checksum"
     t.index ["knowledge_collection_id", "ingestion_status"], name: "idx_on_knowledge_collection_id_ingestion_status_6361f5fa8c"
     t.index ["knowledge_collection_id"], name: "index_knowledge_items_on_knowledge_collection_id"
@@ -426,6 +434,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_120000) do
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "approvals", "tool_invocations"
   add_foreign_key "artifacts", "attempts"
+  add_foreign_key "artifacts", "knowledge_items"
   add_foreign_key "artifacts", "runs"
   add_foreign_key "attempts", "runs"
   add_foreign_key "chats", "projects"

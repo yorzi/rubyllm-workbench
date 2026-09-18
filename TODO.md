@@ -229,6 +229,27 @@ model property, not an app guarantee.
 Only chat-provider notifications were exercised live; tool-call notifications
 and provider-hosted/remote tools were covered by tests only.
 
+## M4 documents — 2026-09-18
+
+- [x] Add file sources: `KnowledgeItem` gains `source_kind: file`, an Active
+      Storage attachment, MIME/size validation and upload from the workspace.
+- [x] Add `Ai::Knowledge::Extractor` with a local reader for text-like files and
+      `RubyLLM.ocr` for PDFs/images behind `Ai::Knowledge::OcrCatalog` gating.
+- [x] Run extraction in `DocumentExtractionJob` (Active Job, per the Specs) and
+      keep failures on the item instead of raising inside the web request.
+- [x] Write a durable `ocr_document` Artifact with provenance: extractor,
+      filename, content type, byte size, page count, provider/model, blob
+      checksum and content checksum.
+- [x] Make `Artifact` ownable by a KnowledgeItem (`run_id` now optional) so
+      document provenance does not need a Run.
+- [x] Verify locally with service/integration tests, one real upload-to-search
+      dogfood run and an HTTP render check.
+
+### M4 document status: `IMPLEMENTED` · `LOCAL_VERIFIED`
+
+Local extraction is proven; the provider OCR path has test coverage only,
+because no OCR-capable provider is configured in this environment.
+
 ## Known implementation gap
 
 - [x] Add a unified local lifecycle event catalog for `ai.run`, `ai.attempt`,
@@ -254,8 +275,10 @@ and provider-hosted/remote tools were covered by tests only.
       OpenRouter embedding model has been dogfooded so far.
 - [ ] M4 rerank breadth: other rerank providers, `top_n` on larger candidate
       sets, and a persisted rerank record for cost/latency comparison.
-- [ ] M4 file references, Active Storage ingestion, OCR/extraction jobs, and
-      provenance artifacts.
+- [ ] M4 provider file references: track provider-side file id, lifecycle and
+      expiry when a file is uploaded to a provider for OCR or later use.
+- [ ] M4 real OCR dogfood against a configured OCR provider (Cohere `parse-v5.0`
+      or Mistral OCR) and page/offset level provenance per chunk.
 - [ ] M5 agents, durable research, and provider-hosted/server tools.
 - [ ] M6-M8 media, batch/evals, exports, deployment, and
       public-reference polish.

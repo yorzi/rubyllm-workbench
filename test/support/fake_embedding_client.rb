@@ -54,6 +54,21 @@ class FakeEmbeddingClient
 
   RerankRow = Struct.new(:index, :score, :document, keyword_init: true)
 
+  OcrPage = Struct.new(:index, :markdown, :images, :tables, :raw, keyword_init: true)
+  OcrResult = Struct.new(:markdown, :pages, :model, :raw, keyword_init: true)
+
+  def ocr(file, model:, provider: nil, pages: nil, **)
+    @calls << { file: file, model: model, provider: provider }
+    raise @error if @error
+
+    OcrResult.new(
+      markdown: "extracted page one\n\nextracted page two",
+      pages: [ OcrPage.new(index: 0, markdown: "extracted page one", images: nil, tables: nil, raw: nil) ],
+      model: model,
+      raw: nil
+    )
+  end
+
   def vector_for(text)
     downcased = text.to_s.downcase
     VOCABULARY.map { |term| downcased.scan(term).length.to_f }

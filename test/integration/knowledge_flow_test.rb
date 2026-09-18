@@ -128,6 +128,60 @@ class KnowledgeFlowTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "uploads a file source and completes extraction through the workspace" do
+    project = create_project(name: "Document flow project")
+    collection = project.knowledge_collections.create!(name: "Documents")
+
+    get project_knowledge_collection_path(project, collection)
+    assert_response :success
+    assert_includes response.body, "Add file source"
+
+    file = Rack::Test::UploadedFile.new(StringIO.new("# Notes\n\nSQLite retrieval evidence in a file.\n"), "text/markdown", original_filename: "notes.md")
+
+    assert_enqueued_with(job: DocumentExtractionJob) do
+      post project_knowledge_collection_items_path(project, collection), params: {
+        knowledge_item: { title: "Uploaded notes", document: file }
+      }
+      assert_response :redirect
+    end
+
+    item = collection.knowledge_items.last
+    assert item.file_source?
+    assert item.document.attached?
+    assert_equal "Uploaded notes", item.title
+    assert_equal "pending", item.extraction_status
+
+    perform_enqueued_jobs
+
+    item.reload
+    assert_equal "ready", item.extraction_status
+    assert_equal "local_text", item.extractor
+    assert_equal "ready", item.ingestion_status
+    assert_operator item.knowledge_chunks.count, :>, 0
+
+    get project_knowledge_collection_path(project, collection), params: { q: "SQLite retrieval" }
+    assert_response :success
+    assert_includes response.body, "Uploaded notes"
+    assert_includes response.body, "Extraction provenance"
+  end
+
+  test "reports an unsupported upload without leaving a ready source" do
+    project = create_project(name: "Unsupported upload project")
+    collection = project.knowledge_collections.create!(name: "Documents")
+    file = Rack::Test::UploadedFile.new(StringIO.new("PK\x03\x04binary"), "application/zip", original_filename: "archive.zip")
+
+    assert_enqueued_with(job: DocumentExtractionJob) do
+      post project_knowledge_collection_items_path(project, collection), params: { knowledge_item: { document: file } }
+      assert_response :redirect
+    end
+
+    perform_enqueued_jobs
+
+    item = collection.knowledge_items.last
+    assert_equal "failed", item.reload.extraction_status
+    assert_includes item.extraction_error, "Unsupported attachment type"
+  end
+
   test "does not cross project collection boundaries" do
     project = create_project(name: "Knowledge owner project")
     other_project = create_project(name: "Other knowledge project")

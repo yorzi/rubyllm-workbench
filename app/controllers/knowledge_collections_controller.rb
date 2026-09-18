@@ -24,6 +24,7 @@ class KnowledgeCollectionsController < ApplicationController
     @mode = Ai::Knowledge::Search::MODES.include?(params[:mode].to_s) ? params[:mode].to_s : "lexical"
     @embedding_models = Ai::Knowledge::EmbeddingCatalog.configured_entries
     @rerank_models = Ai::Knowledge::RerankCatalog.configured_entries
+    @ocr_models = Ai::Knowledge::OcrCatalog.configured_entries
     @rerank_model_id = params[:rerank_model_id].to_s.truncate(200).presence
     @rerank = params[:rerank].to_s.in?(%w[1 true])
     @adapter_selection = Ai::Knowledge::VectorStore.selection

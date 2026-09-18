@@ -274,7 +274,11 @@ erDiagram
   prompt、工具参数、工具结果和 Artifact 内容仍由原始记录负责。`event_key` 用于
   幂等去重，旧 Run 不做迁移后的合成回填。
 
-KnowledgeItem 保存规范化后的文本与 checksum；KnowledgeChunk 保存可重复生成的
+KnowledgeItem 保存规范化后的文本与 checksum，文本可以来自粘贴，也可以来自 Active Storage
+附件（`source_kind: file`）：附件先经 `DocumentExtractionJob` 抽取（本地读取或
+provider OCR），抽取结果写成 `ocr_document` Artifact 作为 provenance，再交给同一个
+`Ingestor` 分块。Artifact 因此有两种 owner：Run（执行证据）或 KnowledgeItem（文档
+provenance），`run_id` 已改为可选。KnowledgeChunk 保存可重复生成的
 内容窗口、位置和字符 offset。KnowledgeEmbedding 按 (chunk, model_id) 唯一保存
 provider、dimensions、packed Float32 vector 与 content checksum；检索只在同一
 model_id 内比较，stale checksum 会被跳过，所以不同模型或维度的向量不会被混用。

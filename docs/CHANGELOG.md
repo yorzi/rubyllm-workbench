@@ -159,6 +159,60 @@ map events to Runs/Attempts”，并且要求用 adapter 隔离不稳定的 payl
 - `tool_call.ruby_llm` 只在有工具调用时才会出现，本次 dogfood 未覆盖。
 - 仍然没有 headless browser，页面结论来自 HTTP 渲染检查。
 
+## 2026-09-18 — M4 文档来源：Active Storage 上传、抽取/OCR 与 provenance Artifact
+
+### 为什么做
+
+M4 Specs 还差一条：“OCR/extraction creates durable artifacts with provenance”。此前
+knowledge 只接受粘贴文本，文件没有入口，也没有“这段被索引的文本来自哪个文件、由谁抽取”
+的证据。这一刀把文件来源接进来，并且明确区分本地可读文件与需要 provider OCR 的文件。
+
+### 人能看到的变化
+
+- Knowledge collection 新增 “Add file source”：上传文件（限 10 MB），后台 job 抽取，
+  然后走既有的 chunking / embedding 流程，上传的文件也能被检索到。
+- 文本类文件（txt/md/csv/json/yaml/tsv/log）在本地读取；PDF 与图片必须走已配置的
+  OCR model。没有已配置 OCR model 时，页面会说明“只有文本类文件可入库”，上传不支持的
+  类型会得到明确失败原因，而不是静默空内容。
+- 每次抽取都会写一个 `ocr_document` Artifact 作为 provenance：extractor、filename、
+  content type、字节数、页数、provider/model（OCR 时）、blob checksum 与内容 checksum。
+- Sources 列表显示文件名、抽取状态与 extractor；可展开查看 provenance 与抽取文本预览。
+
+### 实现地图
+
+- `KnowledgeItem`：`source_kind` 增加 `file`；`has_one_attached :document`；新增
+  `extraction_status`（not_required/pending/extracting/ready/failed，enum 带 prefix 以避开
+  ActiveRecord 冲突）、`extractor`、`extracted_at`、`extraction_error` 与 metadata。
+- `Ai::Knowledge::Extractor`：本地读取或 `RubyLLM.ocr`；`Unsupported` 与 `Error` 分开；
+  错误信息经 `Ai::ErrorText` 脱敏。
+- `Ai::Knowledge::OcrCatalog`：与 embedding/rerank 一样的 capability + 配置门控。
+- `Ai::Knowledge::DocumentIngestor`：抽取 → 写 provenance Artifact → 调既有 `Ingestor`。
+- `DocumentExtractionJob`：Specs 要求 OCR/长流程用 Active Job；job 内失败只记日志并让
+  item 停在 failed，不影响 web 请求。
+- `Artifact`：`run_id` 改为可选并新增 `knowledge_item_id`，因为文档 provenance 不属于任何
+  Run；仍然要求至少有一个 owner，且没有 Run 时不发 `ai.artifact.created` 事件。
+
+### 验证证据
+
+- 定向回归覆盖本地抽取、分块后可检索、无 OCR model 时的明确失败、不支持类型失败、
+  通过已配置 OCR model 抽取并记录 provider 页数、provider 失败时脱敏：新增 6 tests；
+  集成覆盖上传 → enqueue → perform → 可检索与失败路径；全套 138 tests、853 assertions、
+  0 failures、0 errors、1 skip；zeitwerk 与 rubocop 通过。
+- 真实端到端 dogfood：上传 400 B markdown，抽取为 `local_text`，生成 provenance
+  Artifact（blob checksum 与内容 checksum 均在），分块后可用 query 检索到该来源。
+- HTTP 渲染检查确认上传表单、provenance 折叠区与状态显示正确；本会话仍无 headless
+  browser，未做桌面/390px 视觉复核。
+
+### 还没有证明什么
+
+- 本地环境没有已配置的 OCR provider（registry 里只有 Cohere `parse-v5.0` 带 ocr 能力，
+  本项目未配置 Cohere），所以 OCR 路径只有 fake client 的测试证据，没有真实 provider
+  dogfood。
+- 没有 provider 文件引用（file ref lifecycle）跟踪：上传走的是 Active Storage，没有把
+  provider 侧 file id/过期写回记录。
+- 没有真实 PDF/图片抽取：本地解析器只处理文本类文件，PDF 需要 OCR 或额外的本地解析库。
+- 抽取没有页数/页码到 chunk offset 的映射（provenance 只有整体元信息）。
+
 ## 2026-09-17 — M4 provider embedding 与 lexical/semantic/hybrid 检索证据
 
 ### 为什么做

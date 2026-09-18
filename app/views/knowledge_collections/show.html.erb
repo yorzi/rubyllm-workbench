@@ -126,6 +126,32 @@
       <% end %>
     </section>
 
+    <section class="mt-8 rounded-2xl border border-line bg-panel p-5 shadow-sm sm:p-6" aria-labelledby="add-document-heading">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <h2 id="add-document-heading" class="text-sm font-semibold text-ink">Add file source</h2>
+          <p class="mt-1 text-xs leading-5 text-muted">Text-like files are extracted locally; PDFs and images need a configured OCR model. Extraction runs in a background job and writes a provenance Artifact.</p>
+        </div>
+        <span class="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-muted">source_kind: file</span>
+      </div>
+      <%= form_with url: project_knowledge_collection_items_path(@project, @collection), scope: :knowledge_item, html: { multipart: true }, class: "mt-5 space-y-4" do |form| %>
+        <div class="grid gap-4 md:grid-cols-2">
+          <div>
+            <%= form.label :title, "Source title (optional)", class: "text-xs font-medium text-ink" %>
+            <%= form.text_field :title, placeholder: "Defaults to the filename", class: "mt-2 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm outline-none ring-accent/20 placeholder:text-slate-400 focus:border-accent focus:ring-4" %>
+          </div>
+          <div>
+            <%= form.label :document, "File (max 10 MB)", class: "text-xs font-medium text-ink" %>
+            <%= form.file_field :document, required: true, class: "mt-2 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-ink" %>
+          </div>
+        </div>
+        <div class="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+          <p class="text-xs leading-5 text-muted">Local: <%= Ai::Knowledge::Extractor::LOCALLY_EXTRACTABLE_EXTENSIONS.join(", ") %>. OCR: <%= Ai::Knowledge::Extractor::OCR_EXTRACTABLE_EXTENSIONS.join(", ") %><% if @ocr_models.none? %> — no configured OCR model, so only text-like files can be ingested.<% end %></p>
+          <%= form.submit "Upload and extract", class: "inline-flex cursor-pointer items-center rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700" %>
+        </div>
+      <% end %>
+    </section>
+
     <section class="mt-10 rounded-2xl border border-line bg-panel p-5 shadow-sm sm:p-6" aria-labelledby="search-heading">
       <div class="flex items-start justify-between gap-3">
         <div>
@@ -233,12 +259,27 @@
                   <h3 class="truncate text-sm font-semibold text-ink"><%= item.title %></h3>
                   <span class="rounded-full px-2 py-1 text-[10px] font-medium <%= item.ready? ? 'bg-emerald-50 text-success' : item.failed? ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-warning' %>"><%= item.ingestion_status %></span>
                 </div>
-                <p class="mt-2 text-xs text-muted"><%= item.source_reference.presence || "Inline text source" %> · <%= item.chunk_count %> chunks · <%= item.knowledge_embeddings.ready.count %> embedded</p>
+                <p class="mt-2 text-xs text-muted"><%= item.filename.presence || "Inline text source" %> · <%= item.chunk_count %> chunks · <%= item.knowledge_embeddings.ready.count %> embedded<% if item.file_source? %> · extraction <%= item.extraction_status %><% if item.extractor.present? %> via <%= item.extractor %><% end %><% end %></p>
               </div>
               <p class="shrink-0 font-mono text-[10px] text-muted">sha256:<%= item.checksum.first(12) %></p>
             </div>
             <% if item.error_summary.present? %>
               <p class="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700"><%= item.error_summary %></p>
+            <% end %>
+            <% if item.extraction_error.present? %>
+              <p class="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700"><%= item.extraction_error %></p>
+            <% end %>
+            <% artifact = item.extraction_artifact %>
+            <% if artifact %>
+              <details class="mt-3 rounded-lg border border-line bg-canvas p-3">
+                <summary class="cursor-pointer text-xs font-medium text-ink">Extraction provenance · <%= artifact.metadata_json["extractor"] %><% if artifact.metadata_json["model_id"].present? %> · <%= artifact.metadata_json["model_id"] %><% end %></summary>
+                <dl class="mt-3 grid gap-2 text-[11px] text-muted sm:grid-cols-2">
+                  <% artifact.metadata_json.slice("filename", "content_type", "bytes", "page_count", "provider", "model_id", "blob_checksum", "content_checksum", "extracted_at").each do |key, value| %>
+                    <div class="min-w-0"><dt class="inline"><%= key.humanize %>: </dt><dd class="inline break-all font-mono text-ink"><%= value %></dd></div>
+                  <% end %>
+                </dl>
+                <pre class="mt-3 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-white p-3 font-mono text-[11px] leading-5 text-muted"><%= artifact.content_text.to_s.truncate(1_500) %></pre>
+              </details>
             <% end %>
           </article>
         <% end %>

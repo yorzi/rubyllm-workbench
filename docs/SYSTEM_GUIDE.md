@@ -68,7 +68,8 @@ Artifact，并把文本来源保存为可追溯的 KnowledgeItem/KnowledgeChunk�
 | M4 本地文本基础 | 创建知识集合、摄取文本、chunk、checksum、词法检索和证据查看 | KnowledgeCollection、KnowledgeItem、KnowledgeChunk、来源引用与 offset | `IMPLEMENTED` · `LOCAL_VERIFIED` |
 | M4 embedding + 检索 | 选择已配置的 embedding model 入库向量，并用 lexical/semantic/hybrid 查看证据 | KnowledgeEmbedding（model/dimensions/packed vector/checksum）、collection embedding 状态、降级原因 | `IMPLEMENTED` · `LOCAL_VERIFIED` + `OPENROUTER_DOGFOOD` |
 | M4 rerank | 对已配置的兼容 rerank model 打开第二阶段重排，查看 pre/post rank | rerank score、pre_rank、未应用原因 | `IMPLEMENTED` · `LOCAL_VERIFIED` + `OPENROUTER_DOGFOOD` |
-| M4 完整目标 | 文件/OCR 提取和引用 Artifact | provenance artifacts | `PARTIAL`；其余 `PLANNED` |
+| M4 文档来源 | 上传文件、本地抽取或 provider OCR、查看 provenance Artifact | `ocr_document` Artifact、extractor、页数、blob/内容 checksum | `IMPLEMENTED` · `LOCAL_VERIFIED`（OCR 路径仅测试证据） |
+| M4 完整目标 | provider 文件引用与更细的引用 Artifact | provider file ref lifecycle | `PLANNED` |
 | M5 | Agent、Durable Research、远程工具和可恢复长任务 | AgentDefinition、AgentRunStep、citation/research Artifact | `PLANNED` |
 
 这里的状态是项目当前实现层的判断；Specs 人类基线中的 `PLANNED` 状态仍保留其
@@ -137,6 +138,10 @@ Tool Lab 为 Project 保存一个新 Chat Run 的默认执行模式，默认为 
   `source_reference`、SHA-256 checksum 和 `pending/ingesting/ready/failed` 状态。
 - **KnowledgeChunk**：由 `Ai::Knowledge::Chunker` 生成的确定性字符窗口，保存
   position、`char_start`/`char_end` 和 chunker metadata。
+- **文件来源与 provenance**：文件来源先经后台 job 抽取（文本类本地读取，PDF/图片需要
+  已配置的 OCR model），抽取结果会写成 `ocr_document` Artifact，记录 extractor、文件名、
+  字节数、页数、provider/model 与两个 checksum（附件 blob 与抽取文本），因此任何 chunk
+  都能追溯到文件和那次抽取。
 - **KnowledgeEmbedding**：一个 chunk 在一个 embedding model 下的向量，保存
   provider、dimensions、packed Float32 vector、content checksum 和 usage metadata。
   同 model 重新 embed 会替换行；不同 model 各自成行，检索只在同一 model 内比较，

@@ -128,7 +128,10 @@ sequential-only，避免把 SQLite 写入和本地副作用未经专门验证地
    adapter；失败时显示脱敏后的原因。
 6. 用 `semantic` 或 `hybrid` 再查一次。semantic 结果是 provider embedding 上的
    cosine similarity；hybrid 同时展示 cosine 与 lexical 分量。
-7. （可选）选择一个已配置的 rerank model 再查一次。rerank 只重排：结果会显示
+7. （可选）上传一个文件来源：文本类文件（txt/md/csv/json/yaml/tsv/log，≤10 MB）在本地
+   抽取；PDF 与图片需要已配置的 OCR model，否则会明确失败并在 Sources 显示原因。抽取是
+   后台 job，页面刷新后看状态；成功后会生成一个 `ocr_document` provenance Artifact。
+8. （可选）选择一个已配置的 rerank model 再查一次。rerank 只重排：结果会显示
    `rank N (was M)` 与 rerank score，而 retrieval score / cosine / lexical 分量保持
    不变。没有已配置 rerank model 时该控件不会出现。
 
@@ -207,7 +210,8 @@ payload 只保留 ID、状态、provider/model、时长、错误类别等允许�
 | Run 进入 failed | Run diagnostic、Attempt error、provider/model | 不要只看页面异常，也不要重写失败历史 |
 | Run waiting for approval | Chat 的 Tool approvals、Approval status | 不要把等待当成功，也不要重复点击触发多个 continuation |
 | 页面刷新后消息仍在 | RubyLLM Message 和 Run inspector | 不要把浏览器 DOM 当唯一数据源 |
-| Knowledge 搜不到结果 | source 是否为 `ready`、query token、chunk offsets、embedding coverage | 不要把 lexical 当成 semantic embedding 或 rerank |
+| Knowledge 搜不到结果 | source 是否为 `ready`、query token、chunk offsets、embedding coverage、抽取状态 | 不要把 lexical 当成 semantic embedding 或 rerank |
+| 文件抽取失败 | item 的 extraction status/error、文件类型是否在允许列表、OCR model 是否已配置 | 不要把“没有 OCR model”当成文件已入库，也不要绕过 Active Storage 直接读磁盘 |
 | Knowledge embedding 失败 | collection embedding status/error、provider 配置、model capability | 不要把脱敏后的错误当成完整 provider 日志，也不要混合不同 model 的向量 |
 | Rerank 没有生效 | 页面 “Rerank was not applied” 原因、rerank model 是否已配置 | 不要把 rerank 分数当成语义正确性，也不要认为重排会改写检索证据 |
 | Run 时间线缺少 `ai.provider.*` | 该 Run 是否由当前进程执行（关联依赖 ExecutionContext）、provider 是否真的被调用 | 不要假设没有 provider 事件就等于没有调用；知识流的 embedding/rerank 本就没有 Run 可挂 |

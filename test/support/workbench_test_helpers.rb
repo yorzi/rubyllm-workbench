@@ -43,12 +43,15 @@ module WorkbenchTestHelpers
   def with_knowledge_client(client)
     embed = RubyLLM.method(:embed)
     rerank = RubyLLM.method(:rerank)
+    ocr = RubyLLM.method(:ocr)
     RubyLLM.define_singleton_method(:embed) { |text, **options| client.embed(text, **options) }
     RubyLLM.define_singleton_method(:rerank) { |query, documents, **options| client.rerank(query, documents, **options) }
+    RubyLLM.define_singleton_method(:ocr) { |file, **options| client.ocr(file, **options) }
     yield
   ensure
     RubyLLM.define_singleton_method(:embed, embed)
     RubyLLM.define_singleton_method(:rerank, rerank)
+    RubyLLM.define_singleton_method(:ocr, ocr)
   end
 
   def with_provider_configuration(provider, value: "test-only-key")
