@@ -1,9 +1,19 @@
 require "test_helper"
 
 class LearningTopicRegistryTest < ActiveSupport::TestCase
-  EXPECTED_KEYS = %w[chat_run tool_approval knowledge_search].freeze
+  EXPECTED_KEYS = %w[
+    model_explorer
+    chat_setup
+    chat_run
+    tool_approval
+    experiment_comparison
+    run_inspector
+    project_boundary
+    knowledge_ingestion
+    knowledge_search
+  ].freeze
 
-  test "registry exposes the first learning topics in a stable order" do
+  test "registry exposes the learning topics in a stable order" do
     assert_equal EXPECTED_KEYS, Learning::TopicRegistry.keys
     assert_equal EXPECTED_KEYS, Learning::TopicRegistry.all.map(&:key)
   end

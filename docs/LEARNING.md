@@ -1,16 +1,23 @@
 # 页面学习层（How this works）
 
 页面学习层把 Workbench 的功能入口和它的实现证据连起来：使用者仍然在原页面完成
-Chat、工具审批或 Knowledge Search，同时可以打开一个局部说明面板，看到人类说明、
-执行步骤、版本、允许展示的源码片段、Rails/RubyLLM 官方资料和当前能力边界。
+Model Explorer、Chat、Experiment、工具审批或 Knowledge 操作，同时可以打开一个局部
+说明面板，看到人类说明、执行步骤、版本、允许展示的源码片段、Rails/RubyLLM 官方资料
+和当前能力边界。
 
 ## 当前实现
 
 学习主题是版本控制中的静态注册表，位于 `app/services/learning/topic_registry.rb`：
 
+- `model_explorer`：RubyLLM catalog、provider 配置状态、能力筛选与可运行性边界；
+- `chat_setup`：Project 如何建立 Chat，以及 provider/model 如何进入第一次 Run；
 - `chat_run`：Rails action 如何进入 durable Run/Attempt，再进入 RubyLLM ChatExecutor；
 - `tool_approval`：代码定义工具如何经过 allowlist、RubyLLM tool call 和 durable approval；
-- `knowledge_search`：来源如何经过 extraction、chunk、retrieval 和可选 rerank。
+- `experiment_comparison`：冻结定义、选择结构化模型、每个目标建立独立 Run 并验证 Artifact；
+- `run_inspector`：Run/Attempt 生命周期、usage/cost/diagnostics 和安全的本地事件时间线；
+- `project_boundary`：Project 如何组织 Chat、Experiment、Knowledge、Tool 和 Run；
+- `knowledge_ingestion`：文本/文件如何经过 extraction、provenance 和 deterministic chunks；
+- `knowledge_search`：已就绪来源如何经过 retrieval 和可选 rerank。
 
 页面不让运行时模型生成系统解释，也不提供任意文件浏览器。每个主题只引用显式的
 源码路径、行号和 anchor；`Learning::SourceReader` 只允许仓库内的固定顶层目录、限制
@@ -33,6 +40,9 @@ Chat、工具审批或 Knowledge Search，同时可以打开一个局部说明�
 
 - 代码路径变更时，同一主题迭代必须更新 registry 的源码引用、说明和测试。
 - 新增主题时，先确定稳定的 topic key，再接入实际页面；不要为每个按钮复制一套说明。
+- 同一功能存在多个阶段时，按可验证边界拆题：例如 Knowledge ingestion 负责“如何进入”，
+  Knowledge search 负责“如何被检索”；Experiment comparison 负责“如何比较”，Run Inspector
+  负责“如何检查一次执行”。
 - `docs/` 继续记录当前现实，Specs 继续作为原始意图基线；学习层不能静默改写 Specs。
 - 源码片段不得包含 credentials、原始 prompt、provider secret、未脱敏 tool payload 或
   任意用户内容。

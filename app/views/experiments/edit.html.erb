@@ -5,6 +5,7 @@
     <%= link_to "← #{@experiment.name}", project_experiment_path(@project, @experiment), class: "text-xs font-medium text-accent hover:underline" %>
     <h1 class="mt-3 text-3xl font-semibold tracking-tight text-ink">Edit experiment</h1>
     <p class="mt-2 text-sm leading-6 text-muted">Saving creates a new revision for future executions. Existing Run snapshots remain unchanged.</p>
+    <%= render "shared/learning_link", topic: "experiment_comparison" %>
     <%= render "form" %>
   </div>
 <% end %>

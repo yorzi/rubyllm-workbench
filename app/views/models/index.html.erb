@@ -5,6 +5,7 @@
       <p class="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Catalog inspector</p>
       <span class="rounded-full bg-slate-100 px-2 py-1 font-mono text-[10px] text-muted"><%= @model_count %></span>
     </div>
+    <%= render "shared/learning_link", topic: "model_explorer" %>
     <div class="mt-5 rounded-xl border border-line bg-panel p-4 text-xs leading-5">
       <p class="font-medium text-ink">Provider state is explicit</p>
       <p class="mt-2 text-muted">A model can be browsed from the bundled RubyLLM registry before its provider credentials are configured.</p>

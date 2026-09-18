@@ -49,6 +49,56 @@ class LearningExplanationFlowTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "app/services/ai/knowledge/retriever.rb"
   end
 
+  test "primary workbench surfaces expose the expanded learning topics" do
+    project = create_project(name: "Expanded learning project")
+
+    get models_path
+    assert_response :success
+    assert_includes response.body, learning_topic_path("model_explorer", return_to: models_path)
+
+    chat_setup_url = new_project_chat_path(project)
+    get chat_setup_url
+    assert_response :success
+    assert_includes response.body, learning_topic_path("chat_setup", return_to: chat_setup_url)
+
+    project_url = project_path(project)
+    get project_url
+    assert_response :success
+    assert_includes response.body, learning_topic_path("project_boundary", return_to: project_url)
+
+    experiments_url = project_experiments_path(project)
+    get experiments_url
+    assert_response :success
+    assert_includes response.body, learning_topic_path("experiment_comparison", return_to: experiments_url)
+
+    runs_url = runs_path
+    get runs_url
+    assert_response :success
+    assert_includes response.body, learning_topic_path("run_inspector", return_to: runs_url)
+
+    knowledge_index_url = project_knowledge_collections_path(project)
+    get knowledge_index_url
+    assert_response :success
+    assert_includes response.body, learning_topic_path("knowledge_ingestion", return_to: knowledge_index_url)
+  end
+
+  test "expanded topics render their own evidence panels" do
+    %w[
+      model_explorer
+      chat_setup
+      experiment_comparison
+      run_inspector
+      project_boundary
+      knowledge_ingestion
+    ].each do |topic|
+      get learning_topic_path(topic), headers: { "Turbo-Frame" => "learning-panel" }
+
+      assert_response :success
+      assert_select "article[data-learning-topic='#{topic}']"
+      assert_includes response.body, "Source snapshot"
+    end
+  end
+
   test "direct topic URLs remain readable outside a frame" do
     get learning_topic_path("chat_run")
 

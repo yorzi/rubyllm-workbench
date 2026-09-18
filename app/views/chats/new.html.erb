@@ -2,6 +2,7 @@
 <% content_for :inspector do %>
   <div class="sticky top-0">
     <p class="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Chat setup</p>
+    <%= render "shared/learning_link", topic: "chat_setup" %>
     <div class="mt-5 rounded-xl border border-line bg-panel p-4 text-xs leading-5">
       <p class="font-medium text-ink">Choose one model</p>
       <p class="mt-2 text-muted">The selected provider and canonical model id are persisted with the chat and every later Run.</p>

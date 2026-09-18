@@ -5,7 +5,8 @@
       <p class="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Knowledge inspector</p>
       <span class="rounded-full bg-accent-soft px-2 py-1 text-[10px] font-medium text-accent"><%= @mode %>-v1</span>
     </div>
-    <%= render "shared/learning_link", topic: "knowledge_search" %>
+    <%= render "shared/learning_link", topic: "knowledge_ingestion", label: "How ingestion works" %>
+    <%= render "shared/learning_link", topic: "knowledge_search", label: "How search works" %>
     <div class="mt-5 rounded-xl border border-line bg-panel p-4">
       <p class="font-mono text-xs text-muted">/<%= @project.slug %>/knowledge/<%= @collection.id %></p>
       <h2 class="mt-2 text-base font-semibold text-ink"><%= @collection.name %></h2>

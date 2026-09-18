@@ -5,6 +5,7 @@
       <p class="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Experiment inspector</p>
       <span class="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-medium text-success"><%= @experiment.status %></span>
     </div>
+    <%= render "shared/learning_link", topic: "experiment_comparison" %>
     <div class="mt-5 rounded-xl border border-line bg-panel p-4">
       <p class="font-mono text-xs text-muted">v<%= @experiment.revision %> · <%= @experiment.schema_definition.name %></p>
       <h2 class="mt-2 text-base font-semibold text-ink"><%= @experiment.name %></h2>

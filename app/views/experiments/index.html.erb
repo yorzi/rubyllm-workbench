@@ -2,6 +2,7 @@
 <% content_for :inspector do %>
   <div class="sticky top-0">
     <p class="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Experiment workspace</p>
+    <%= render "shared/learning_link", topic: "experiment_comparison" %>
     <div class="mt-5 rounded-xl border border-line bg-panel p-4 text-xs leading-5">
       <p class="font-medium text-ink">Freeze once, compare repeatedly</p>
       <p class="mt-2 text-muted">Each execution snapshots the prompt and schema, then records one independent Run per selected model.</p>

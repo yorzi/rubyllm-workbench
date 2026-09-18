@@ -6,7 +6,8 @@
       <p class="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Run inspector</p>
       <%= render "runs/status", run: @run %>
     </div>
-    <%= render "shared/learning_link", topic: "chat_run" %>
+    <%= render "shared/learning_link", topic: "run_inspector", label: "How the inspector works" %>
+    <%= render "shared/learning_link", topic: "chat_run", label: "How the Chat Run works" %>
     <div class="mt-5 rounded-xl border border-line bg-panel p-4">
       <dl class="divide-y divide-line text-xs">
         <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Project</dt><dd class="max-w-[10rem] truncate text-right text-ink"><%= @run.project.name %></dd></div>

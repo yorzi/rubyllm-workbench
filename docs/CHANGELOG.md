@@ -6,6 +6,30 @@
 原则上只追加，不静默改写历史。代码细节回到对应 commit 和
 [IMPLEMENTATION_MAP.md](../IMPLEMENTATION_MAP.md)。
 
+## 2026-09-18 — contextual learning coverage expansion
+
+### 为什么做
+
+第一版页面学习层已经把 Chat Run、工具审批和 Knowledge Search 连到源码，但用户仍然
+需要离开当前功能页，才能理解模型目录、Chat 创建、Experiment 对比、Run Inspector、
+Project 边界，以及 Knowledge 文件/文本是如何进入检索系统的。这会让“功能可用”和
+“实现可理解”之间留下断层。
+
+### 人能看到的变化
+
+- Model Explorer、Chat setup、Experiment comparison、Run Inspector、Project boundary、
+  Knowledge ingestion 新增稳定主题和源码证据。
+- Model、Chat、Experiment、Project、Runs、Knowledge 的实际操作页都出现上下文
+  `How this works` 链接；Run 和 Knowledge 页面按阶段提供两个不同主题。
+- 说明内容明确区分 browse 与 runnable、ingestion 与 search、Run audit 与 provider
+  tracing、schema validity 与 answer quality。
+
+### 验证证据
+
+- TopicRegistry 测试现在覆盖 9 个稳定 key，并验证所有源码片段仍可读取且 anchor 未漂移。
+- Integration 测试覆盖六个新增页面入口和六个新增 Turbo Frame 主题面板。
+- 本次变更仍然只提供本地实现解释，没有声称 provider SLA、生产部署、模型质量或业务结果。
+
 ## 2026-09-18 — M4 current-reality correction
 
 ### 为什么做

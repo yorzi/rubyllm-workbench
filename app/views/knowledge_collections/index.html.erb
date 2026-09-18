@@ -2,6 +2,7 @@
 <% content_for :inspector do %>
   <div class="sticky top-0">
     <p class="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Knowledge workspace</p>
+    <%= render "shared/learning_link", topic: "knowledge_ingestion" %>
     <div class="mt-5 rounded-xl border border-line bg-panel p-4 text-xs leading-5">
       <p class="font-medium text-ink">M4 foundation · local evidence</p>
       <p class="mt-2 text-muted">This slice stores text and file sources in SQLite, records deterministic offsets and provenance, and exposes lexical, semantic, hybrid, and optional rerank evidence.</p>
