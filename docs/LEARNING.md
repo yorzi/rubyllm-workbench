@@ -15,13 +15,17 @@ Model Explorer、Chat、Experiment、工具审批或 Knowledge 操作，同时�
 - `tool_approval`：代码定义工具如何经过 allowlist、RubyLLM tool call 和 durable approval；
 - `experiment_comparison`：冻结定义、选择结构化模型、每个目标建立独立 Run 并验证 Artifact；
 - `run_inspector`：Run/Attempt 生命周期、usage/cost/diagnostics 和安全的本地事件时间线；
-- `project_boundary`：Project 如何组织 Chat、Experiment、Knowledge、Tool 和 Run；
+- `project_boundary`：从 Projects 列表/新建开始，解释 slug 路由、资源归属、Project 级工具策略和 Run 快照；入口接在 Projects 列表与 Project inspector；
 - `knowledge_ingestion`：文本/文件如何经过 extraction、provenance 和 deterministic chunks；
 - `knowledge_search`：已就绪来源如何经过 retrieval 和可选 rerank。
 
 页面不让运行时模型生成系统解释，也不提供任意文件浏览器。每个主题只引用显式的
 源码路径、行号和 anchor；`Learning::SourceReader` 只允许仓库内的固定顶层目录、限制
 片段长度，并要求 anchor 仍然存在。源码行号或 anchor 漂移时，注册表测试会失败。
+
+主要页面入口与解释主题保持一对多而非一按钮一主题：Projects 列表与 Project workspace
+共用 Project boundary 说明；Run Inspector 与 Chat/Knowledge 则按创建、执行、检查、摄入和
+检索等不同阶段分别链接，避免把相邻但不同的生命周期压成一篇笼统说明。
 
 ## 内容合同
 

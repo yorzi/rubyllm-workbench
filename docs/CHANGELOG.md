@@ -6,6 +6,32 @@
 原则上只追加，不静默改写历史。代码细节回到对应 commit 和
 [IMPLEMENTATION_MAP.md](../IMPLEMENTATION_MAP.md)。
 
+## 2026-09-19 — Project 创建入口接入页面学习层
+
+### 为什么做
+
+页面学习层已经解释 Project 如何组织 Chat、Experiment、Knowledge、Tool 和 Run，
+但首次进入 Workbench 的 Projects 列表/创建页面没有相邻的解释入口。用户能创建工作区，
+却需要离开页面去查为什么它是后续资源的持有边界、slug 又怎样成为路由身份。
+
+### 人能看到的变化
+
+- Projects 页面右侧 inspector 保留 runtime/credential 信息，并新增 `How Projects work`
+  链接；Turbo Frame 说明可从当前页打开并返回。
+- 同一 Project boundary 主题现在沿完整路径解释列表与表单、Rails 参数许可、模型校验、
+  slug 派生与 `to_param`、嵌套资源归属和每个 Run 冻结的工具策略。
+- 解释代码新增 ProjectsController、Projects 表单与 Project 模型片段；仍然只读取注册表
+  明确允许的源码范围。
+
+### 验证证据与边界
+
+- TopicRegistry 集成测试检查 Projects 首页入口、Turbo Frame 主题及其代码片段；注册表测试
+  继续验证源码引用和 anchor。
+- 本地验证：全量 Rails 测试 149 runs / 976 assertions（0 failures、0 errors、1 skip），
+  RuboCop 156 files 无 offenses，Zeitwerk eager-load 检查通过。
+- 本次只是学习入口和说明覆盖扩展；Project 的数据模型、路由授权能力和执行行为均未改变。
+- Project 仍是本地组织边界，不是身份认证、授权或多租户隔离承诺。
+
 ## 2026-09-18 — contextual learning coverage expansion
 
 ### 为什么做

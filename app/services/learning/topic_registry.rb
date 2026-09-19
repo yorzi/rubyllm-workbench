@@ -258,16 +258,23 @@ module Learning
           Topic.new(
             key: "project_boundary",
             title: "How Project boundaries work",
-            kicker: "Project → scoped chats/tools/knowledge/runs",
-            summary: "Project is the Workbench's local ownership and navigation boundary. Chats, experiments, knowledge collections, runs, and tool definitions are scoped through it so related evidence can be inspected together.",
+            kicker: "Projects → slug route → scoped workbench resources",
+            summary: "A Project is the durable local starting point for Workbench activity. The Projects page lists and creates records, a missing slug is derived from the name, and the resulting slug identifies the workspace routes. Chats, experiments, Knowledge collections, Runs, and tool definitions then stay associated with that Project so related evidence can be inspected together.",
             steps: list(
-              step("1. The route resolves a Project by slug", "Nested Rails resources use the Project slug as the stable human-facing boundary before loading a Chat, tool surface, Knowledge collection, or Experiment."),
-              step("2. Associations define the owned surface", "Project declares its chats, experiments, executions, knowledge collections, runs, tool definitions, and tool invocations. Dependent behavior makes the ownership model explicit."),
-              step("3. Controllers keep reads in scope", "Project pages load recent Chats and Runs through the current Project, while nested controllers find child records through the same association rather than accepting a global child id."),
-              step("4. Tool execution policy belongs to the Project", "The Project stores a small settings document for sequential or parallel tool execution. RunExecutor snapshots the effective policy so later settings changes do not rewrite history."),
-              step("5. The inspector reconnects the graph", "Project, Chat, Run, Experiment, and Knowledge pages link back to the same slug and durable ids, making the relationship visible while the feature is in use.")
+              step("1. The Projects action prepares the index and form", "ProjectsController loads the ordered Project list and builds an unsaved Project for the model-backed creation form. Model browsing remains available before a Project or provider key exists."),
+              step("2. Rails validates and saves the submitted boundary", "The controller permits only name, slug, and description. Project validates the name and slug, derives a blank slug from the name, and redirects to the new workspace after a successful save."),
+              step("3. The slug becomes the human-facing route identity", "Project#to_param returns the slug, and nested Rails resources resolve the Project before loading a Chat, Tool Lab, Knowledge collection, or Experiment."),
+              step("4. Associations define the owned surface", "Project declares its chats, experiments, executions, knowledge collections, runs, tool definitions, and tool invocations. Dependent behavior makes the ownership model explicit."),
+              step("5. Nested controllers keep reads in scope", "Project pages load recent Chats and Runs through the current Project, while nested controllers find child records through that same association rather than accepting a global child id."),
+              step("6. Tool execution policy is frozen per Run", "The Project stores the requested sequential or parallel mode. RunExecutor snapshots the effective policy and enabled tool definitions so later settings changes do not rewrite history."),
+              step("7. The workspace and inspector reconnect the graph", "Project, Chat, Run, Experiment, and Knowledge pages link back to the same slug and durable records, making ownership visible as each feature is used.")
             ),
             code_references: list(
+              reference("app/controllers/projects_controller.rb", "Project index", "Loads the ordered list and unsaved model for the creation form.", 2, 5, "@projects = Project.order(:name)"),
+              reference("app/views/projects/index.html.erb", "Project creation form", "Uses Rails model-backed form helpers for the Project fields.", 46, 74, "form_with model: @project"),
+              reference("app/controllers/projects_controller.rb", "Project creation", "Permits the form contract, persists the Project, and redirects to its workspace.", 7, 15, "def create"),
+              reference("app/models/project.rb", "Slug validation and routing", "Validates slug format and uniqueness, derives a missing slug, and uses it in routes.", 12, 20, "before_validation :derive_slug"),
+              reference("app/models/project.rb", "Slug derivation", "Converts the Project name into the default slug before validation.", 51, 53, "name.to_s.parameterize"),
               reference("config/routes.rb", "Nested resource boundary", "Defines Project-owned Chats, tools, Knowledge, Experiments, and Runs.", 6, 22, "resources :projects"),
               reference("app/controllers/projects_controller.rb", "Project page action", "Loads the Project and recent scoped Chats/Runs.", 18, 22, "def show"),
               reference("app/models/project.rb", "Project associations", "Declares the local ownership graph and dependent behavior.", 1, 10, "has_many :chats"),

@@ -1,4 +1,8 @@
 <% content_for :title, "Projects · RubyLLM Workbench" %>
+<% content_for :inspector do %>
+  <%= render "shared/runtime_inspector" %>
+  <%= render "shared/learning_link", topic: "project_boundary", label: "How Projects work" %>
+<% end %>
 
 <%= render "shared/shell", active: "projects" do %>
   <div class="mx-auto max-w-6xl px-5 py-8 sm:px-8 lg:px-10">

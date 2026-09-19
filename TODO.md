@@ -10,6 +10,8 @@
       architecture diagrams, operations notes, and changelog.
 - [x] Align the internal docs with the canonical Specs baseline without rewriting the
       pulled Specs; document the two systems and their different purposes.
+- [x] Connect the Projects list/create page to the Project-boundary explanation, including
+      the Rails form, slug identity, resource ownership, and source-anchored evidence.
 - [ ] For every future comprehension-impacting change, update the affected internal docs,
       diagrams, status/evidence labels, and changelog in the same thematic work unit.
 

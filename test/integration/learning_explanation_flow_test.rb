@@ -52,6 +52,10 @@ class LearningExplanationFlowTest < ActionDispatch::IntegrationTest
   test "primary workbench surfaces expose the expanded learning topics" do
     project = create_project(name: "Expanded learning project")
 
+    get root_path
+    assert_response :success
+    assert_includes response.body, learning_topic_path("project_boundary", return_to: root_path)
+
     get models_path
     assert_response :success
     assert_includes response.body, learning_topic_path("model_explorer", return_to: models_path)
@@ -97,6 +101,18 @@ class LearningExplanationFlowTest < ActionDispatch::IntegrationTest
       assert_select "article[data-learning-topic='#{topic}']"
       assert_includes response.body, "Source snapshot"
     end
+  end
+
+  test "project explanation connects creation, slug routing, and resource ownership to code" do
+    get learning_topic_path("project_boundary"), headers: { "Turbo-Frame" => "learning-panel" }
+
+    assert_response :success
+    assert_select "article[data-learning-topic='project_boundary']"
+    assert_includes response.body, "app/controllers/projects_controller.rb"
+    assert_includes response.body, "app/views/projects/index.html.erb"
+    assert_includes response.body, "app/models/project.rb"
+    assert_includes response.body, "parameterize"
+    assert_includes response.body, "nested Rails resources"
   end
 
   test "direct topic URLs remain readable outside a frame" do
