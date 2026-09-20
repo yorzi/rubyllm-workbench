@@ -1,14 +1,14 @@
 # TODO — M0–M4 core slices implemented; M5 provider search + saved Agent Runs in progress; M6–M8 planned
 
 > Current correction (2026-09-20): RubyLLM is pinned to stable 2.0.0. M5.1's
-> opt-in provider web-search slice passes the full Rails suite; provider dogfood
-> remains pending. M5.2 now has saved Agent definitions and an Agent Run worker
-> wired to immutable snapshots, continuable steps, approval, citation and cancel
-> records. A durable expiring lease fences transcript, usage and local tool
-> writes by owner token/generation; approval continuations carry a decided
-> invocation id; saved local tool contracts are checked for drift; and
-> save_run_note is idempotent by tool-call id. Execution, worker-restart and
-> provider verification remain open.
+> opt-in provider web-search slice has local automated coverage; provider dogfood
+> remains pending. M5.2 has saved Agent definitions and a durable Agent Run
+> worker with immutable snapshots, continuable steps, approval, citations and
+> cancellation. Deterministic tests now cover snapshots, outbox dispatch/retry,
+> recovery scans, lease fencing, terminal cancellation and citation/timeline
+> records. Full Agent execution, worker restart recovery and provider behavior
+> remain open. Open-source setup, security and local-only Docker guidance are
+> documented; public redistribution still needs an owner-selected license.
 
 ## Human understanding layer
 
@@ -330,18 +330,23 @@ performed for this slice.
       in a primary-database delivery outbox before queue dispatch.
 - [x] Add a recurring dispatcher with retry backoff and recovery scans for expired
       Agent leases, unclaimed Runs and fully decided approval waits.
-- [ ] Add automated execution coverage for snapshot immutability, multi-step
-      completion, approval/denial continuation, cancellation races and recovery.
+- [x] Add deterministic automated coverage for snapshot immutability, outbox
+      dispatch/retry, stale-lease and approval recovery, generation fencing,
+      terminal cancellation, and step/citation timeline linkage.
+- [ ] Exercise the complete Agent job lifecycle with a deterministic multi-step
+      Agent, including approval/denial continuation and interrupted-step recovery.
 - [ ] Exercise Solid Queue interruption/restart recovery and at-least-once
       replay boundaries with idempotent local tools.
 - [ ] Dogfood a provider/model with web search and a multi-step Agent task.
 
-### M5.2 status: `PARTIAL` · implementation present, static checks only
+### M5.2 status: `PARTIAL` · deterministic boundary tests passed; full worker lifecycle pending
 
-The changed Ruby files other than generated `db/schema.rb` passed `ruby -c` and
-RuboCop; route generation includes the Agent launch and Run cancellation
-endpoints, and `git diff --check` passed. No Agent execution tests, provider
-calls or worker restart drills were run.
+The deterministic suite verifies definition and Run snapshots, primary outbox
+dispatch acknowledgement/retry, queued and expired-lease recovery, fully decided
+multi-approval recovery, lease-generation fencing, cancellation terminal state,
+and step citation/timeline linkage. Full `AgentRunJob#perform`, a Solid Queue
+worker restart drill, and provider calls were not verified. Local browser system
+tests are present, but this sandbox rejects Selenium's loopback socket bind.
 Agent Jobs persist model/tool calls and resume from the Chat transcript with
 at-least-once semantics. Run-row locking fences transcript/usage persistence
 and current local database writes against lease takeover; a provider request
@@ -387,10 +392,9 @@ recurring scheduler running in development and production.
       expiry when a file is uploaded to a provider for OCR or later use.
 - [ ] M4 real OCR dogfood against a configured OCR provider (Cohere `parse-v5.0`
       or Mistral OCR) and page/offset level provenance per chunk.
-- [ ] M5 remaining work: prove execution/recovery/cancel under automated tests,
-      run a Solid Queue restart drill, verify live provider search/Agent paths,
-      and validate the at-least-once
-      tool/idempotency boundary.
+- [ ] M5 remaining work: test the complete Agent worker lifecycle, run a Solid
+      Queue restart drill, verify live provider search/Agent paths, and validate
+      the at-least-once tool/idempotency boundary.
 - [ ] M6 media workflows.
 - [ ] M7 batch execution, evaluations, and repeatable quality/cost comparisons.
 - [ ] M8 exports, deployment readiness, and public-reference polish.

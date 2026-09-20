@@ -6,6 +6,44 @@
 原则上只追加，不静默改写历史。代码细节回到对应 commit 和
 [IMPLEMENTATION_MAP.md](../IMPLEMENTATION_MAP.md)。
 
+## 2026-09-20 — M5 确定性验收覆盖与公开仓库准备
+
+### 为什么做
+
+M5.2 的持久执行骨架此前只有静态检查，无法证明 Agent 快照、跨库投递恢复和迟到 worker
+保护的行为。开源准备审计也发现新开发者缺少前端依赖步骤，Docker 示例会公开未认证的单用户
+应用，且仓库没有安全报告和贡献入口。
+
+### 变化
+
+- 新增 AgentDefinition、AgentRunExecutor、AgentRunDelivery、dispatcher、Run lease 和
+  Agent step/citation summary 的确定性测试；修复 `Run#succeed!` 的旧式 Hash 调用兼容性。
+- outbox 幂等依赖数据库唯一索引处理并发 insert；投递 claim 的过期时间现在在确认和重试时
+  一并校验，避免过期 worker 使用旧 token 更新投递状态。
+- 新贡献者 setup 与 CI 固定使用 `.nvmrc` 的 Node.js 24.21.0，并执行 `npm ci`；CI 新增
+  Rails/Vite 生产资源构建门槛。
+- Docker 构建阶段使用同版本 Node.js 安装锁定的前端依赖；示例限制到 `127.0.0.1`，明确镜像
+  仅适用于可信的单用户环境。新增贡献指南和漏洞报告说明。
+- 忽略仓库根目录的内部需求材料目录，并把历史文档改为自足的产品与实现描述。
+
+### 验证证据
+
+- `PARALLEL_WORKERS=1 bin/rails db:test:prepare test`：167 tests、1,070 assertions、
+  0 failures、0 errors、1 skip。
+- RuboCop（177 个文件）、Zeitwerk、Bundler Audit、Brakeman（79 checks、0 warnings）、
+  CI YAML 解析、`npm ci` 和生产 Rails/Vite 资源预编译通过。
+- 浏览器 system test 已建立 Projects 创建流程，但本地执行环境拒绝 Selenium 的回环 socket
+  绑定，无法完成断言；CI hosted Ubuntu runner 的浏览器驱动未在本地复现。
+- 本地 Docker image build 因 sandbox 无法连接 Docker socket。提权后构建开始，但 Dockerfile
+  frontend registry 请求超时；镜像构建尚未由本地或远端 CI 证明。
+- 内部产品材料不随应用仓库分发。许可证仍待项目所有者选择；未选定前不能宣称公开复用授权已就绪。
+
+### 尚未证明什么
+
+- M5 仍为 `PARTIAL`：完整 `AgentRunJob#perform` 多步生命周期、Solid Queue 重启恢复演练、真实
+  provider search/Agent dogfood，以及被 provider 接收后的重复计费边界尚未验证。
+- GitHub CI 尚未在远端运行；Docker 构建也需要能访问官方镜像注册表的环境。
+
 ## 2026-09-20 — M5.2 保存的 Agent 与专属 Run
 
 ### 为什么做
@@ -121,7 +159,7 @@ calls；这一切片复用现有 Chat Run 的执行边界，不宣称已经提�
 
 ### 人能看到的变化
 
-- 删除个人机器路径的符号链接，并忽略仓库根目录下的 `/specs/` 目录。
+- 删除个人机器路径的符号链接，并忽略仓库根目录下的内部需求材料目录。
 - README、实现地图和 `docs/` 现在只依赖本仓库的代码、迁移、现有测试、运行证据与路线图。
 - 保留后续维护所需的当前能力、限制和 M5–M8 计划，不把外部资料当作运行依赖。
 
@@ -205,7 +243,7 @@ Project 边界，以及 Knowledge 文件/文本是如何进入检索系统的。
 
 ### 为什么做
 
-Specs 允许“应用侧 cosine 或兼容的 SQLite vector extension”，但不允许为了让状态看起来
+检索目标允许使用应用侧 cosine 或兼容的 SQLite vector extension；不应为了让状态看起来
 完成就提前引入基础设施。上一刀已经把 adapter 接口留出来了，所以这次是把它接上真实扩展
 做一次有边界的验证：证明换 adapter 不需要改 `Embedder`/`Retriever`/`Search`/页面，同时
 把新依赖的风险显式暴露出来。
@@ -252,7 +290,7 @@ Specs 允许“应用侧 cosine 或兼容的 SQLite vector extension”，但不
 - 二进制不入库，也不由 Gemfile 管理；Linux VPS/Kamal/Docker/CI 仍需各自提供匹配平台的
   二进制，跨平台分发没有解决。
 - 没有量化（INT8/TurboQuant）路径，因此没有 recall、内存和大规模语料的性能结论。
-- 没有 benchmark：切换默认值前仍缺 Specs 要求的“先记录性能”。
+- 没有 benchmark：切换默认值前仍缺性能基准。
 - 只验证了 macOS arm64 + OpenRouter 一个 1024 维模型；跨维度、跨 provider 未验证。
 - 派生索引表是运行时创建的，不在 `db/schema.rb` 中；它是缓存，可删除重建。
 
@@ -260,8 +298,8 @@ Specs 允许“应用侧 cosine 或兼容的 SQLite vector extension”，但不
 
 ### 为什么做
 
-M4 Specs 要求“reranking can be toggled only for compatible providers”。此前检索只有
-第一阶段的 lexical/semantic/hybrid 排序，没有第二阶段，也没有能力门控。这次把 rerank
+M4 的产品边界要求 reranking 只能对兼容 provider 开放。此前检索只有第一阶段的
+lexical/semantic/hybrid 排序，没有第二阶段，也没有能力门控。这次把 rerank
 做成可选的第二阶段：它可以改变顺序，但不能替代或改写检索证据。
 
 ### 人能看到的变化
@@ -277,7 +315,7 @@ M4 Specs 要求“reranking can be toggled only for compatible providers”。�
 ### 实现地图
 
 - `Ai::Knowledge::RerankCatalog`：以 registry 的 `rerank` output modality + provider
-  配置作为能力门控（对应 Specs 的 compatible-provider 要求）。
+  配置作为能力门控。
 - `Ai::Knowledge::Reranker`：调用 `RubyLLM.rerank`，返回 (index, score)，错误经
   `Ai::ErrorText` 脱敏。
 - `Ai::Knowledge::Search`：rerank 是第二阶段，只重排；`Result` 增加 `rerank_score`
@@ -309,9 +347,9 @@ M4 Specs 要求“reranking can be toggled only for compatible providers”。�
 
 ### 为什么做
 
-Specs 要求“Subscribe to RubyLLM/ActiveSupport instrumentation when available and
-map events to Runs/Attempts”，并且要求用 adapter 隔离不稳定的 payload 字段。此前应用
-只发出自己的 `ai.*` 事件，完全没有消费 RubyLLM 2.0 的 `*.ruby_llm` 通知；同时 provider
+运行记录需要在 RubyLLM/ActiveSupport instrumentation 可用时映射到 Runs/Attempts，
+并用 adapter 隔离不稳定的 payload 字段。此前应用只发出自己的 `ai.*` 事件，没有消费
+RubyLLM 2.0 的 `*.ruby_llm` 通知；同时 provider
 托管的工具调用没有被标记成 remote。借升级到 2.0.0.rc4 的机会把这两件事补齐。
 
 ### 人能看到的变化
@@ -358,8 +396,8 @@ map events to Runs/Attempts”，并且要求用 adapter 隔离不稳定的 payl
 
 ### 为什么做
 
-M4 Specs 还差一条：“OCR/extraction creates durable artifacts with provenance”。此前
-knowledge 只接受粘贴文本，文件没有入口，也没有“这段被索引的文本来自哪个文件、由谁抽取”
+M4 的文件处理目标还要求 OCR/extraction 产生带 provenance 的持久 Artifact。此前 knowledge
+只接受粘贴文本，文件没有入口，也没有“这段被索引的文本来自哪个文件、由谁抽取”
 的证据。这一刀把文件来源接进来，并且明确区分本地可读文件与需要 provider OCR 的文件。
 
 ### 人能看到的变化
@@ -382,7 +420,7 @@ knowledge 只接受粘贴文本，文件没有入口，也没有“这段被索�
   错误信息经 `Ai::ErrorText` 脱敏。
 - `Ai::Knowledge::OcrCatalog`：与 embedding/rerank 一样的 capability + 配置门控。
 - `Ai::Knowledge::DocumentIngestor`：抽取 → 写 provenance Artifact → 调既有 `Ingestor`。
-- `DocumentExtractionJob`：Specs 要求 OCR/长流程用 Active Job；job 内失败只记日志并让
+- `DocumentExtractionJob`：OCR/长流程使用 Active Job；job 内失败只记日志并让
   item 停在 failed，不影响 web 请求。
 - `Artifact`：`run_id` 改为可选并新增 `knowledge_item_id`，因为文档 provenance 不属于任何
   Run；仍然要求至少有一个 owner，且没有 Run 时不发 `ai.artifact.created` 事件。
@@ -413,8 +451,8 @@ knowledge 只接受粘贴文本，文件没有入口，也没有“这段被索�
 ### 为什么做
 
 上一刀把“能搜到”和“语义检索已验证”分开，但 lexical coverage 仍然无法回答语义相近
-的问题。Specs 要求 M4 提供 embedding、retrieval 和 inspectable evidence，同时明确
-“不要为了向量而提前引入 PostgreSQL/pgvector”。本次因此先定义 vector adapter 接口，
+的问题。M4 的实现目标包含 embedding、retrieval 和可检查的 evidence，并保持 SQLite-first，
+避免为了向量能力提前引入 PostgreSQL/pgvector。本次因此先定义 vector adapter 接口，
 再用 SQLite 内的 Float32 blob + 应用侧 cosine 实现有界语料上的语义检索，并让每一次
 降级都给出可检查的原因。
 
@@ -475,7 +513,7 @@ knowledge 只接受粘贴文本，文件没有入口，也没有“这段被索�
 
 ### 为什么做
 
-M4 Specs 的完整目标同时包含 embedding、检索、rerank、文件引用和 OCR/extraction。
+M4 的完整实现目标同时包含 embedding、检索、rerank、文件引用和 OCR/extraction。
 如果先接 provider 或上传链路，容易把“能搜到”和“语义检索已验证”混为一谈。本次先
 建立一个 SQLite-first、可复核的最小闭环：来源能入库，chunk 能重复生成，检索能返回
 原始证据。
@@ -597,26 +635,23 @@ Run、Attempt、工具、审批和 Artifact 记录分别保存了事实，但人
 - 并行 tool calls 的 provider 兼容性仍为 `PARTIAL`；本次没有新增 live provider
   dogfood，也没有部署或公开可用性结论。
 
-## 2026-09-16 — 明确 Specs 基线与项目 `docs/` 双层体系
+## 2026-09-16 — 明确实现文档的职责
 
 ### 为什么做
 
-随着实现不断增长，Specs 和运行时文档如果被当成同一套东西，就会出现两种相反
-的错误：把原始参照线悄悄改成“当前代码是什么”，或者把旧的 planned baseline
-误读成“当前功能还不存在”。本次校正明确两者各自的意图，保留它们之间的可追溯
-关系。
+随着实现不断增长，产品方向、planned 工作和运行时文档如果混写，就会出现两种相反
+的错误：把未来目标说成当前代码，或者把当前限制误读成产品目标。本次明确当前实现文档
+应描述代码、测试与运行证据，并持续保留状态和偏差。
 
 ### 一致性工作
 
-- 当时将外部设计资料与当前实现文档分开维护；这些资料不属于本仓库的运行时代码。
 - 将本目录 `docs/` 明确为代码仓库内部的当前现实层：它随着功能、证据和偏差增长，
-  但不覆盖 Specs、代码或测试。
+  但不覆盖产品方向、代码或测试。
 - 统一使用 `IMPLEMENTED`、`PARTIAL`、`PLANNED`、`DEPRECATED`、`REMOVED` 状态词，
   并把 `LOCAL_VERIFIED`、`OPENROUTER_DOGFOOD` 作为独立证据标签。
 - 把架构图拆成 L0/L1/L2、运行时、状态和 milestone 图；已验证路径与未来节点分开，
   避免把 M4/M5 画成当前依赖。
-- 扩展文档守护测试，确保两套体系的边界、状态词、关键组件和图表锚点不会被后续
-  迭代意外删除。
+- 扩展文档守护测试，确保状态词、关键组件和图表锚点不会被后续迭代意外删除。
 
 ### 证据与边界
 

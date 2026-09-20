@@ -12,8 +12,15 @@ FileUtils.chdir APP_ROOT do
   # This script is idempotent, so that you can run it at any time and get an expectable outcome.
   # Add necessary setup steps to this file.
 
+  required_node_version = File.read(".nvmrc").strip
+  node_version = `node --version 2>/dev/null`.strip.delete_prefix("v")
+  unless node_version == required_node_version
+    abort "Node.js #{required_node_version} is required (see .nvmrc). Run `nvm install && nvm use` first."
+  end
+
   puts "== Installing dependencies =="
   system("bundle check") || system!("bundle install")
+  system! "npm ci"
 
   # puts "\n== Copying sample files =="
   # unless File.exist?("config/database.yml")

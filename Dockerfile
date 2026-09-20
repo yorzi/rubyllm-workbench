@@ -1,9 +1,10 @@
 # syntax=docker/dockerfile:1
 # check=error=true
 
-# This Dockerfile is designed for production, not development. Use with Kamal or build'n'run by hand:
+# This image is for a trusted, single-user installation. The app has no account
+# system or tenant isolation; do not expose it to an untrusted network.
 # docker build -t rubyllm_workbench .
-# docker run -d -p 80:80 -e RAILS_MASTER_KEY=<value from config/master.key> --name rubyllm_workbench rubyllm_workbench
+# docker run --rm -p 127.0.0.1:8080:80 --env-file .env.production --name rubyllm_workbench rubyllm_workbench
 
 # For a containerized dev environment, see Dev Containers: https://guides.rubyonrails.org/getting_started_with_devcontainer.html
 
@@ -27,8 +28,13 @@ ENV RAILS_ENV="production" \
     BUNDLE_WITHOUT="development" \
     LD_PRELOAD="/usr/local/lib/libjemalloc.so"
 
+# Use the pinned Node LTS from .nvmrc for Vite/Rails asset compilation.
+FROM node:24.21.0-bookworm-slim AS node
+
 # Throw-away build stage to reduce size of final image
 FROM base AS build
+
+COPY --from=node /usr/local/ /usr/local/
 
 # Install packages needed to build gems
 RUN apt-get update -qq && \
@@ -46,6 +52,9 @@ RUN bundle install && \
 
 # Copy application code
 COPY . .
+
+# Install the exact frontend dependency graph before Vite runs during precompile.
+RUN npm ci
 
 # Precompile bootsnap code for faster boot times.
 # -j 1 disable parallel compilation to avoid a QEMU bug: https://github.com/rails/bootsnap/issues/495

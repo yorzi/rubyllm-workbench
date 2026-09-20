@@ -3,11 +3,11 @@
 这些图是仓库内的当前实现视图，用来帮助人恢复系统关系。它们不是从数据库自动生成的
 ERD，也不是未来架构承诺；具体字段和行为仍以代码、迁移、测试和运行证据为准。
 
-更新时间：2026-09-18
-当前实现：M0–M3 核心闭环、本地 LifecycleEvent 目录、并行策略切片和 M4 Knowledge 检索/rerank/文件来源 `IMPLEMENTED`
+更新时间：2026-09-20
+当前实现：M0–M3 核心闭环、本地 LifecycleEvent 目录、并行策略切片和 M4 Knowledge 检索/rerank/文件来源 `IMPLEMENTED`；M5 Agent 持久执行骨架 `PARTIAL`
 当前图表范围：已验证的本地运行路径；未来节点全部显式标为 `PLANNED`
 校准依据：routes、models、migrations、jobs、services、测试、M3 OpenRouter
-dogfood（Run #11、Run #13）和 M4 Knowledge 本地回归
+dogfood（Run #11、Run #13）、M4 Knowledge 本地回归和 M5 Agent 边界测试
 
 ## 读图规则
 
@@ -626,8 +626,10 @@ provider 兼容性仍未完成，不能被简化成完整 M4，也不能把当�
 M5.1 已接入每次 Run 单独 opt-in 的 provider web search，搜索步骤和来源关联到对应 Run，
 标准化 citations 另存为 Run Artifact。M5.2 增加了版本化 AgentDefinition、专属 Chat/Run snapshot、
 带 generation-fenced lease 的 Agent step worker、transcript/usage/tool 写入保护、工具 contract drift 检查、
-幂等笔记 Artifact、审批续跑和取消状态。M5.2 当前有 Ruby 语法、应用/迁移 RuboCop、diff 与 Rails routes
-静态检查；自动化执行测试、recurring worker 恢复演练和 provider dogfood 都未完成，所以整体 M5 仍是 `PARTIAL`。
+幂等笔记 Artifact、审批续跑和取消状态。M5.2 现在有冻结快照、outbox 派发/重试、过期 lease 和审批恢复、
+generation fencing、取消终态及 step/citation 时间线关联的确定性自动化测试；全套 Rails tests、RuboCop、
+Zeitwerk、安全扫描和资源预编译通过。完整 AgentRunJob 执行、recurring worker 重启演练与 provider dogfood
+尚未完成，整体 M5 仍是 `PARTIAL`。
 
 ## 8. 如何保持图表可信
 

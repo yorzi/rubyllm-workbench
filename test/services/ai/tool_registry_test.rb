@@ -38,10 +38,17 @@ class Ai::ToolRegistryTest < ActiveSupport::TestCase
       input_snapshot_json: { "prompt" => "save this" }
     )
     attempt = run.attempts.create!(sequence: 1, provider: chat.provider, model_id: chat.model_id, status: :running)
+    assistant = chat.messages.create!(role: "assistant", content: "")
+    tool_call = RubyLLM::ActiveRecord::ToolCall.create!(
+      message: assistant,
+      tool_call_id: "call-save-note-#{SecureRandom.hex(4)}",
+      name: "save_run_note",
+      arguments: { "note" => "A durable observation" }
+    )
     Ai::ToolRegistry.sync_project!(@project)
     tool = @project.tool_definitions.find_by!(key: "save_run_note").tool_instance(run:)
 
-    result = tool.call(note: "A durable observation")
+    result = tool.call(note: "A durable observation", tool_call:)
 
     artifact = run.artifacts.order(:id).last
     assert_equal "saved", result.fetch("status")

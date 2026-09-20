@@ -13,9 +13,11 @@ extraction and provenance artifacts, with explicit degradation. M5.1 adds
 opt-in provider web search and citation artifacts to a Chat Run. M5.2 adds
 Project-scoped revisioned Agent definitions and a dedicated Agent Run worker
 restored from immutable Run snapshots, protected by an expiring generation-fenced
-lease and local tool-contract drift check. Provider file references, real OCR/page-
-level provenance, verified Agent execution/recovery/provider behavior, media,
-batch/evals and operational polish remain incomplete or deferred.
+lease and local tool-contract drift check. Focused tests cover the durable
+snapshot, outbox, recovery, lease, citation and timeline boundaries. Provider
+file references, real OCR/page-level provenance, complete Agent worker
+execution/recovery/provider behavior, media, batch/evals and operational polish
+remain incomplete or deferred.
 
 Current status: M0–M3 core, the M4 local-text foundation and the M4
 embedding/retrieval/rerank/document slices are `IMPLEMENTED` for their verified
@@ -23,12 +25,13 @@ local paths with OpenRouter embedding/rerank dogfood; live M3 parallel provider
 compatibility, provider file references, real OCR/page-level provenance and
 cross-provider embedding compatibility are `PARTIAL` or deferred. M5.1's
 provider-search path passes local automated tests; provider dogfood is pending.
-M5.2 passed Ruby syntax, application/migration RuboCop, route generation and diff
-checks only; no Agent execution tests or provider calls were run. Agent delivery
-intents persist in the primary database and a recurring dispatcher retries
-delivery and scans stale leases; scheduler operation and worker restart behavior
-remain unverified. M5 remains `PARTIAL`, while M6–M8 remain `PLANNED` behind the
-M5 gates.
+M5.2 now has deterministic tests for frozen definitions, durable queue delivery,
+stale-run and approval recovery, lease fencing, cancellation terminal state, and
+Agent step citation/timeline linkage. Full Agent job execution, Solid Queue
+restart recovery and provider calls remain unverified. The dispatcher persists
+delivery intents in the primary database and scans stale leases; scheduler
+operation still depends on the recurring worker. M5 remains `PARTIAL`, while
+M6–M8 remain `PLANNED` behind the M5 gates.
 
 ## Human understanding layer
 
@@ -220,12 +223,12 @@ keyboard-friendly.
 
 - Milestone: M0 + M1 + M2 + M3 plus the M4 local-text, embedding/retrieval,
   rerank and document-source slices; M5.1 provider search is locally tested and
-  M5.2 Agent execution is implemented but statically checked only.
+  M5.2 Agent durability boundaries have deterministic test coverage.
 - Scope: local chat with optional per-Run provider web search, structured experiment comparison, code-defined tools,
   durable approval continuation, and Project-scoped text evidence retrieval with
   provider embeddings, lexical/semantic/hybrid modes, a compatible-provider
   rerank stage, file sources with extraction provenance, and saved Agent Runs.
-  Provider file references, real OCR dogfood, Agent execution/recovery verification
+  Provider file references, real OCR dogfood, full Agent worker/recovery verification
   and M6–M8 remain open.
 - Runtime verified: Ruby 4.0.2 and Rails 8.1.3.1.
 - Dependency target: RubyLLM 2.0.0 stable. Provider calls use the public 2.0 API;

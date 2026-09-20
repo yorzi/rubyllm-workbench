@@ -117,7 +117,8 @@ class Run < ApplicationRecord
     accepted ? self : false
   end
 
-  def succeed!(summary = {}, agent_execution_token: nil, agent_execution_generation: nil)
+  def succeed!(summary = nil, agent_execution_token: nil, agent_execution_generation: nil, **summary_fields)
+    summary = (summary || {}).to_h.deep_stringify_keys.merge(summary_fields.deep_stringify_keys)
     accepted = true
     with_lock do
       reload

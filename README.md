@@ -16,6 +16,8 @@ Start with:
 - [Implementation map](IMPLEMENTATION_MAP.md)
 - [Roadmap](TODO.md)
 - [Documentation index](docs/README.md)
+- [Contribution guide](CONTRIBUTING.md)
+- [Security reporting](SECURITY.md)
 
 The repository is self-contained. Code, migrations, existing tests, and the
 current implementation documents are the source of truth for behavior. The
@@ -40,10 +42,12 @@ Agent Runs with approval and cancellation paths. The new Agent execution path
 has an expiring database execution lease that fences transcript, usage, and
 current local tool writes by owner token/generation. Approval continuations
 identify the decided tool call, saved local tool contracts are checked before
-resuming, and the built-in note Artifact is idempotent by tool-call id. Static
-syntax, lint, diff, and route checks have passed; automated execution, restart
-recovery, cancellation races, and provider dogfooding still need verification.
-M5 remains partial. Initial and resumed Agent work is durably recorded in the
+resuming, and the built-in note Artifact is idempotent by tool-call id. Focused
+automated tests now cover frozen snapshots, outbox dispatch and retries,
+recovery scans, lease-generation fencing, cancellation terminal state, and
+step/citation timeline records. Full Agent execution, worker restart recovery,
+and provider dogfooding still need verification. M5 remains partial. Initial
+and resumed Agent work is durably recorded in the
 primary database, then dispatched to Solid Queue with retry and stale-lease
 recovery. Queue insertion and delivery acknowledgement are at-least-once across
 separate databases, so duplicate jobs are possible and fenced by the Run lease.
@@ -54,13 +58,19 @@ gates. See [TODO.md](TODO.md) for current scope and evidence.
 ## Local setup
 
 The app targets Ruby 4.0.2, Rails 8.1.3.1, RubyLLM 2.0.0, SQLite, Tailwind,
-Vite, Hotwire, and Solid Queue.
+Vite, Hotwire, Solid Queue, and Node.js 24.21.0 for frontend assets.
 
 ```sh
+nvm install
+nvm use
 bundle install
+npm ci
 bin/rails db:prepare
 bin/dev
 ```
+
+The `bin/setup` script checks the pinned Node.js version, installs Ruby and npm
+dependencies, and prepares the database.
 
 For a one-off local server, bind it to loopback explicitly:
 

@@ -6,13 +6,14 @@ provider secret，也不把本地成功包装成部署或业务结果。
 本手册说明当前仓库的本地运行方式与证据边界。命令验证的是当前代码路径；它不能
 替代部署、公开可用性或 provider 长期兼容性的证据。
 
-更新时间：2026-09-16
+更新时间：2026-09-20
 
 ## 运行前提
 
 - Ruby `4.0.2`
 - Rails `8.1.3.1`
 - RubyLLM `2.0.0`
+- Node.js `24.21.0` (see `.nvmrc`)
 - SQLite、Tailwind、Vite、Hotwire、Solid Queue
 - provider 通过环境变量或 Rails credentials 提供配置
 
@@ -24,7 +25,10 @@ provider secret，也不把本地成功包装成部署或业务结果。
 首次准备：
 
 ```sh
+nvm install
+nvm use
 bundle install
+npm ci
 bin/rails db:prepare
 ```
 
@@ -42,6 +46,18 @@ bin/rails server -b 127.0.0.1 -p 3100
 
 本地服务只应监听 `127.0.0.1` 或 `::1`。完成一次检查后，停止本次任务启动的
 服务、watcher、queue worker 和日志订阅。不要留下一个无人查看的源码预览服务。
+
+## Docker 镜像
+
+Dockerfile 会在构建阶段安装 Node.js 并执行 `npm ci`，再预编译 Rails/Vite 资源。
+镜像仍是无账号和租户隔离的单用户应用；示例只把端口发布到宿主机回环地址：
+
+```sh
+docker run --rm -p 127.0.0.1:8080:80 --env-file .env.production rubyllm_workbench
+```
+
+`.env.production` 必须只保存在本机并包含部署所需配置，不能提交到仓库。公开网络部署
+需要在受信任边界外提供认证、TLS 和 Host 校验；当前镜像示例本身不提供这些保护。
 
 ## Provider 配置
 
