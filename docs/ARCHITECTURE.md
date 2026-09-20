@@ -30,15 +30,15 @@ flowchart LR
     Human["人 / 本地开发者"] --> UI["Rails HTML / Turbo UI"]
     UI --> App["Rails Workbench"]
     App --> DB[("SQLite\nrecords + knowledge chunks + lifecycle events")]
-    App --> Queue["Solid Queue\nChatResponseJob"]
+    App --> Queue["Solid Queue\nChatResponseJob + AgentRunJob"]
     Queue --> RubyLLM["RubyLLM boundary"]
     App --> RubyLLM
     RubyLLM --> Providers["Configured providers\nOpenRouter, etc."]
     App --> Blobs["Active Storage\nlocal disk"]
 ```
 
-当前含义：provider 操作从 RubyLLM 边界进入；Run、Message、Attempt、Artifact、工具
-调用、审批、KnowledgeItem/KnowledgeChunk 和 LifecycleEvent 等证据落在本地持久化层；队列负责 Chat continuation。远程部署、账号、
+当前含义：provider 操作从 RubyLLM 边界进入；Run、Message、Attempt、Artifact、AgentDefinition、工具
+调用、审批、KnowledgeItem/KnowledgeChunk 和 LifecycleEvent 等证据落在本地持久化层；队列负责 Chat 与 Agent Run continuation。远程部署、账号、
 外部数据库和公开访问不属于这张当前实现图。
 
 ## 2. L1 — 已实现组件如何连接
@@ -53,6 +53,7 @@ flowchart TD
         ExperimentUI["Experiment workspace"]
         ToolUI["Tool Lab"]
         KnowledgeUI["Knowledge workspace"]
+        AgentUI["Agent definitions + task form"]
         RunUI["Run history / inspector"]
     end
 
@@ -60,6 +61,9 @@ flowchart TD
     ExperimentExecutor["Ai::ExperimentExecutor\n(structured submission)"]
     StructuredExecutor["Ai::StructuredExecutor"]
     ChatJob["ChatResponseJob"]
+    AgentRunExecutor["Ai::AgentRunExecutor"]
+    AgentJob["AgentRunJob\nActiveJob::Continuable"]
+    AgentDefinition["AgentDefinition\nproject-scoped revision"]
     StructuredJob["StructuredResponseJob"]
     ChatExecutor["Ai::ChatExecutor"]
     CitationRecorder["Ai::CitationSetRecorder"]
@@ -68,25 +72,31 @@ flowchart TD
     Audit["ToolInvocationRecorder + ApprovalService"]
     Events["LifecycleEventRecorder\nActiveSupport Notifications"]
     ProviderEvents["Ai::RubyLlmInstrumentation\n*.ruby_llm adapter + ExecutionContext"]
-    Records["Project / Chat / Run / Attempt\n/ Artifact / tool / Knowledge records / LifecycleEvent"]
-    RubyLLM["RubyLLM Chat + embed + provider boundary"]
+    Records["Project / AgentDefinition / Chat / Run / Attempt\n/ Artifact / tool / Knowledge records / LifecycleEvent"]
+    RubyLLM["RubyLLM Agent + Chat + embed + provider boundary"]
 
     ChatUI --> RunExecutor
     ExperimentUI --> ExperimentExecutor
     ToolUI --> Tooling
     KnowledgeUI --> KnowledgeServices
+    AgentUI --> AgentRunExecutor
+    AgentRunExecutor --> AgentDefinition
     RunUI --> Records
     RunExecutor --> ChatJob
     ExperimentExecutor --> StructuredJob
     StructuredJob --> StructuredExecutor
     ChatJob --> ChatExecutor
+    AgentRunExecutor --> AgentJob
+    AgentJob --> RubyLLM
     ChatExecutor --> RubyLLM
     ChatExecutor --> CitationRecorder
     CitationRecorder --> Records
     ChatExecutor --> Audit
+    AgentJob --> Audit
     Audit --> Records
     RunExecutor --> Events
     ChatExecutor --> Events
+    AgentJob --> Events
     StructuredExecutor --> Events
     Events --> Records
     ProviderEvents --> Records
@@ -100,10 +110,10 @@ flowchart TD
 
 代码职责的简化记忆：
 
-1. Controller 只接收页面意图；`Ai::RunExecutor` 或
+1. Controller 只接收页面意图；`Ai::RunExecutor`、`Ai::AgentRunExecutor` 或
    `Ai::ExperimentExecutor` 创建带快照的执行边界。
-2. Job 把可恢复执行交给 `Ai::ChatExecutor`；结构化流程再由
-   `Ai::StructuredExecutor` 负责 schema、validation 和 Artifact。
+2. Job 把 Chat Run 交给 `Ai::ChatExecutor`，Agent Run 使用 `AgentRunJob` 从快照恢复 RubyLLM
+   Agent；结构化流程再由 `Ai::StructuredExecutor` 负责 schema、validation 和 Artifact。
 3. `ToolRegistry`/`ChatTooling` 只允许代码中已注册的工具；Recorder 和
    `ApprovalService` 把调用及人的决定变成可检查记录。
 4. `CitationSetRecorder` 把响应引用链接到执行它的 Run 和 Attempt；provider 搜索步骤则
@@ -119,6 +129,7 @@ flowchart TD
 erDiagram
     PROJECT ||--o{ CHAT : owns
     PROJECT ||--o{ EXPERIMENT : defines
+    PROJECT ||--o{ AGENT_DEFINITION : defines
     PROJECT ||--o{ TOOL_DEFINITION : enables
     PROJECT ||--o{ KNOWLEDGE_COLLECTION : owns
     PROJECT ||--o{ RUN : contains
@@ -148,6 +159,16 @@ erDiagram
         string slug
         text description
         json settings_json
+    }
+    AGENT_DEFINITION {
+        bigint project_id
+        integer revision
+        string provider
+        string model_id
+        text instructions
+        json tool_keys_json
+        json provider_tools_json
+        json options_json
     }
     CHAT {
         bigint project_id
@@ -277,6 +298,9 @@ erDiagram
 - LifecycleEvent 只保存允许的 ID、状态、provider/model、时长和错误类别等元数据；
   prompt、工具参数、工具结果和 Artifact 内容仍由原始记录负责。`event_key` 用于
   幂等去重，旧 Run 不做迁移后的合成回填。
+- AgentDefinition 是可编辑的 Project 模板；启动 Agent Run 时会把定义 id/revision、模型、
+  instructions、工具选择、options 和 prompt 复制进 `Run.input_snapshot_json`。每个 Agent Run
+  创建专属 Chat；Run 与 AgentDefinition 不建外键，删除模板不会删除或改写旧 Run。
 
 KnowledgeItem 保存规范化后的文本与 checksum，文本可以来自粘贴，也可以来自 Active Storage
 附件（`source_kind: file`）：附件先经 `DocumentExtractionJob` 抽取（本地读取或
@@ -298,11 +322,10 @@ exact cosine 扫描。后者不直接扫 `knowledge_embeddings.vector`（该列�
 ```mermaid
 flowchart LR
     Current["当前 Run / Artifact / Knowledge 证据"]
-    Current -. "未来扩展" .-> Agent["PLANNED: Agent / durable research"]
     Current -. "未来扩展" .-> Media["PLANNED: Media / batch / export"]
 ```
 
-这些不是缺失的当前表，而是项目路线图中的后续方向。
+媒体、批量评估和导出不是当前表，仍属于项目路线图后续方向。
 
 ## 4. Runtime — 带审批的 Chat Run
 
@@ -455,6 +478,65 @@ provider、已存储的向量和一次 query embedding；任一项缺失时 `Sea
 ingestion path，并通过 provenance Artifact 表达，provider file reference、真实
 OCR/page-level evidence 仍是边界外能力。
 
+## 4.3 Runtime — 保存的 Agent Run
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Human as 人
+    participant UI as Agent definition page
+    participant Launcher as Ai::AgentRunExecutor
+    participant DB as SQLite / RubyLLM records
+    participant Outbox as AgentRunDelivery
+    participant Dispatcher as recurring dispatcher
+    participant Queue as Solid Queue / AgentRunJob
+    participant Agent as RubyLLM Agent
+    participant Provider as Configured provider
+    participant Audit as Attempts / tools / approvals / artifacts / events
+
+    Human->>UI: 输入 task
+    UI->>Launcher: 用当前 AgentDefinition revision 排队
+    Launcher->>DB: 创建专属 Chat、Run、Attempt 和冻结 snapshot
+    Launcher->>Outbox: persist execute intent in primary transaction
+    Dispatcher->>Outbox: claim due delivery
+    Dispatcher->>Queue: enqueue AgentRunJob
+    Dispatcher->>Outbox: acknowledge or schedule retry
+    Queue->>DB: 从 Run snapshot 重建临时 Agent 配置
+    Queue->>DB: ask_later 只持久化一次初始 prompt
+    loop 每个 Agent step
+        Queue->>Agent: Agent#step
+        Agent->>Provider: RubyLLM 请求（需要生成时）
+        Provider-->>Agent: Message / tool call / citations
+        Agent->>Audit: 记录 Attempt、tool、citation Artifact、step event
+        opt 需要人工审批
+            Queue->>DB: Run 进入 waiting_for_approval
+            Human->>DB: approve 或 deny
+            DB->>Outbox: 同一 primary transaction 写 approval continuation
+        end
+    end
+    Human->>DB: 可取消 queued/running/approval-waiting Run
+```
+
+`AgentRunJob` 把多步执行交给 Rails 8.1 `ActiveJob::Continuable`，在 step 边界 checkpoint；每次
+worker 执行都会从 Run snapshot 和专属 Chat transcript 重建 Agent。Run 行上的随机 owner token、递增
+generation 和 5 分钟到期租约阻止同一 Run 被两个有效 owner 同时接管；存活 worker 每 15 秒续租。续租
+遇到可识别的临时数据库错误时会重试，仍无法确认 owner 时会安排恢复投递。消息占位与完成记录、usage、
+流式输出记录、provider lifecycle event 和当前本地工具数据库写入都会在 Run 行锁内校验 owner；迟到的
+通用 Job 不能把 `waiting_for_approval` 改回 `running`。一轮包含多个待审批调用时，只有全部调用都已有
+决定，审批续跑才会携带具体 invocation id 与暂停代次接管 Run。
+
+恢复仍遵循至少一次语义：provider 已接受的请求无法因租约丢失而撤销，可能发生重复请求或费用；但旧 owner
+迟到的响应不会写入 Chat transcript 或 usage。Agent 启动时会比较冻结的本地工具 schema/policy 快照与当前
+注册 contract，发现 drift 就停止，要求创建新 Run。内置只读 `project_snapshot` 无需副作用去重；
+`save_run_note` 在 Run 锁内按 RubyLLM tool-call id 唯一复用 Artifact。未来有副作用的工具仍需各自实现
+原子租约检查和幂等性。RubyLLM 会先创建空 assistant 占位消息；恢复时若只找到该占位，会将 Attempt
+记为失败、删除占位并重新请求，不会把空结果报告为成功。初始 Run、审批续跑与恢复意图先写入 primary
+数据库 outbox，再由每分钟 dispatcher 投递到独立 Solid Queue 数据库；dispatcher 也扫描未领取 Run、过期
+租约和所有审批均已决定的等待 Run。投递失败会保留并退避重试。队列写入与 outbox 确认无法跨数据库原子
+提交，因此确认前崩溃仍可能重复投递；Run lease/generation 会拒绝迟到 owner。开发与生产都必须运行
+Solid Queue recurring scheduler，才能持续派发和扫描。执行回归、取消竞态和 worker 重启演练尚未运行，
+因此这些恢复保证仍待实测。
+
 ## 5. Runtime — 状态如何推进
 
 ```mermaid
@@ -467,7 +549,9 @@ stateDiagram-v2
     running --> succeeded: 完成且无未决审批
     running --> failed: provider/tool/validation failure
     queued --> failed: job 无法启动
+    queued --> cancelled: 明确取消
     running --> cancelled: 明确取消
+    WaitingForApproval --> cancelled: 明确取消
     succeeded --> [*]
     failed --> [*]
     cancelled --> [*]
@@ -503,10 +587,11 @@ flowchart LR
 `ai.provider.*` 事件（`source = ruby_llm`）。没有 Run 可挂的事件（知识流的
 embedding/rerank）按设计不写入目录。
 
-当前应用侧事件名称按五组组织：
+当前应用侧事件名称按六组组织：
 
-- Run：`created`、`started`、`resumed`、`waiting_for_approval`、`succeeded`、`failed`；
-- Attempt：`started`、`streaming`、`succeeded`、`failed`；
+- Run：`created`、`started`、`resumed`、`waiting_for_approval`、`succeeded`、`failed`、`cancelled`；
+- Agent：`step`（step number、definition revision 和状态）；
+- Attempt：`started`、`streaming`、`succeeded`、`failed`、`cancelled`；
 - Tool：`requested`、`completed`；
 - Approval：`requested`、`decided`；
 - Artifact：`created`。
@@ -525,7 +610,7 @@ flowchart LR
     M2 --> M3["M3 Tools + Approval\nIMPLEMENTED"]
     M3 --> M3P["M3 Parallel Calls\nAPP PATH IMPLEMENTED"]
     M3P --> M4["M4 Knowledge\nRETRIEVAL + RERANK + DOCUMENT SOURCES\nLOCAL PATH IMPLEMENTED"]
-    M4 --> M5["M5.1 Provider Search + Citations\nPARTIAL"]
+    M4 --> M5["M5 Agent Runs\nM5.1 search + M5.2 saved agents\nPARTIAL"]
     M5 --> M6["M6 Media\nPLANNED"]
     M6 --> M7["M7 Batch + Evals\nPLANNED"]
     M7 --> M8["M8 Exports + Public Reference\nPLANNED"]
@@ -539,7 +624,10 @@ OpenRouter embedding/rerank model 的 dogfood 记录，以及文件上传、本�
 Artifact 的本地回归；provider file references、真实 OCR/page-level evidence 和更广跨
 provider 兼容性仍未完成，不能被简化成完整 M4，也不能把当前本地检索误写成 provider RAG。
 M5.1 已接入每次 Run 单独 opt-in 的 provider web search，搜索步骤和来源关联到对应 Run，
-标准化 citations 另存为 Run Artifact；完整 Rails 自动化测试已通过，provider dogfood 待完成。
+标准化 citations 另存为 Run Artifact。M5.2 增加了版本化 AgentDefinition、专属 Chat/Run snapshot、
+带 generation-fenced lease 的 Agent step worker、transcript/usage/tool 写入保护、工具 contract drift 检查、
+幂等笔记 Artifact、审批续跑和取消状态。M5.2 当前有 Ruby 语法、应用/迁移 RuboCop、diff 与 Rails routes
+静态检查；自动化执行测试、recurring worker 恢复演练和 provider dogfood 都未完成，所以整体 M5 仍是 `PARTIAL`。
 
 ## 8. 如何保持图表可信
 

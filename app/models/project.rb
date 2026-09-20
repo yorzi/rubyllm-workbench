@@ -2,6 +2,7 @@ class Project < ApplicationRecord
   TOOL_EXECUTION_MODES = %w[sequential parallel].freeze
 
   has_many :chats, dependent: :destroy
+  has_many :agent_definitions, dependent: :destroy
   has_many :experiments, dependent: :destroy
   has_many :experiment_executions, dependent: :destroy
   has_many :knowledge_collections, dependent: :destroy

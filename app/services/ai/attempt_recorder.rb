@@ -66,17 +66,24 @@ module Ai
     end
 
     def succeed!(response, usage_ids_before: [], result_summary: {})
+      finish_step!(response, usage_ids_before:)
+      summary = response_summary(response).merge(result_summary).merge("partial_output" => @partial_output.presence)
+      summary.delete("partial_output") if summary["partial_output"].nil?
+      @run.succeed!(summary)
+      @run
+    end
+
+    # Finish one Agent step without terminalizing its parent Run. Agent Runs
+    # may make several model/tool moves before they complete or pause for
+    # approval.
+    def finish_step!(response, usage_ids_before: [])
       usage_records = new_usage_records(usage_ids_before)
       if usage_records.any?
         sync_usage_records!(usage_records, fallback_status: :succeeded)
       else
         update_from_response!(response, status: :succeeded)
       end
-
-      summary = response_summary(response).merge(result_summary).merge("partial_output" => @partial_output.presence)
-      summary.delete("partial_output") if summary["partial_output"].nil?
-      @run.succeed!(summary)
-      @run
+      @attempt
     end
 
     def waiting_for_approval!(usage_ids_before: [], result_summary: {})
@@ -90,6 +97,16 @@ module Ai
     end
 
     def fail!(error, usage_ids_before: [])
+      fail_step!(error, usage_ids_before:)
+
+      summary = { "partial_output" => @partial_output.presence }.compact
+      @run.fail!(error, summary: summary)
+      @run
+    end
+
+    # Finish one interrupted Agent model step without failing the overall Run.
+    # The executor can then record the retry as a new Attempt.
+    def fail_step!(error, usage_ids_before: [])
       usage_records = new_usage_records(usage_ids_before)
       if usage_records.any?
         sync_usage_records!(usage_records, fallback_status: :failed, error: error)
@@ -102,10 +119,23 @@ module Ai
           time_to_first_output_ms: first_output_ms
         )
       end
+      @attempt
+    end
 
-      summary = { "partial_output" => @partial_output.presence }.compact
-      @run.fail!(error, summary: summary)
-      @run
+    def cancel!(error, usage_ids_before: [])
+      usage_records = new_usage_records(usage_ids_before)
+      if usage_records.any?
+        sync_usage_records!(usage_records, fallback_status: :cancelled, error: error, status_override: :cancelled)
+      else
+        @attempt ||= start!
+        @attempt.finish!(
+          status: :cancelled,
+          **(error ? error_attributes(error) : {}),
+          duration_ms: elapsed_ms(@clock.call(Process::CLOCK_MONOTONIC)),
+          time_to_first_output_ms: first_output_ms
+        )
+      end
+      @attempt
     end
 
     private
@@ -120,13 +150,13 @@ module Ai
       records.sort_by { |record| [ record.created_at || Time.at(0), record.id ] }
     end
 
-    def sync_usage_records!(usage_records, fallback_status:, error: nil)
+    def sync_usage_records!(usage_records, fallback_status:, error: nil, status_override: nil)
       usage_records.each_with_index do |usage, index|
         attempt = attempt_for(usage, index)
         attempt.assign_attributes(
           provider: usage.provider,
           model_id: usage.model,
-          status: error ? :failed : normalized_status(usage.status, fallback_status),
+          status: status_override || (error ? :failed : normalized_status(usage.status, fallback_status)),
           started_at: attempt.started_at || @run.started_at || Time.current,
           finished_at: Time.current,
           duration_ms: elapsed_ms(@clock.call(Process::CLOCK_MONOTONIC)),

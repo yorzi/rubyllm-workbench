@@ -6,10 +6,13 @@ class LifecycleEvent < ApplicationRecord
     ai.run.waiting_for_approval
     ai.run.succeeded
     ai.run.failed
+    ai.run.cancelled
+    ai.agent.step
     ai.attempt.started
     ai.attempt.streaming
     ai.attempt.succeeded
     ai.attempt.failed
+    ai.attempt.cancelled
     ai.tool.requested
     ai.tool.completed
     ai.approval.requested

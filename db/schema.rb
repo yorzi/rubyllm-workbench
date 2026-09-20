@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_18_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_20_103000) do
 # Could not dump table "_sqliteai_vector" because of following StandardError
 #   Unknown type 'ANY' for column 'value'
 
@@ -43,6 +43,43 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_130000) do
     t.index ["blob_id", "variation_digest"], name: "index_active_storage_variant_records_uniqueness", unique: true
   end
 
+  create_table "agent_definitions", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.text "instructions", null: false
+    t.string "model_id", null: false
+    t.string "name", null: false
+    t.json "options_json", default: {}, null: false
+    t.integer "project_id", null: false
+    t.string "provider", null: false
+    t.json "provider_tools_json", default: [], null: false
+    t.integer "revision", default: 1, null: false
+    t.json "tool_keys_json", default: [], null: false
+    t.datetime "updated_at", null: false
+    t.index ["project_id", "name"], name: "index_agent_definitions_on_project_id_and_name", unique: true
+    t.index ["project_id", "updated_at"], name: "index_agent_definitions_on_project_id_and_updated_at"
+    t.index ["project_id"], name: "index_agent_definitions_on_project_id"
+  end
+
+  create_table "agent_run_deliveries", force: :cascade do |t|
+    t.integer "approval_invocation_id"
+    t.datetime "available_at", null: false
+    t.string "claim_token"
+    t.datetime "claimed_until"
+    t.datetime "created_at", null: false
+    t.string "dedupe_key", null: false
+    t.datetime "delivered_at"
+    t.integer "dispatch_attempts", default: 0, null: false
+    t.integer "expected_generation"
+    t.string "intent", null: false
+    t.string "last_error_class"
+    t.integer "run_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["approval_invocation_id"], name: "index_agent_run_deliveries_on_approval_invocation_id"
+    t.index ["dedupe_key"], name: "index_agent_run_deliveries_on_dedupe_key", unique: true
+    t.index ["delivered_at", "available_at", "claimed_until"], name: "index_agent_run_deliveries_for_dispatch"
+    t.index ["run_id"], name: "index_agent_run_deliveries_on_run_id"
+  end
+
   create_table "approvals", force: :cascade do |t|
     t.string "actor", default: "local_user", null: false
     t.datetime "created_at", null: false
@@ -66,10 +103,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_130000) do
     t.json "metadata_json", default: {}, null: false
     t.string "name"
     t.integer "run_id"
+    t.string "source_tool_call_id"
     t.datetime "updated_at", null: false
     t.index ["attempt_id"], name: "index_artifacts_on_attempt_id"
     t.index ["knowledge_item_id"], name: "index_artifacts_on_knowledge_item_id"
     t.index ["run_id", "kind"], name: "index_artifacts_on_run_id_and_kind"
+    t.index ["run_id", "source_tool_call_id"], name: "index_artifacts_on_run_and_source_tool_call", unique: true
     t.index ["run_id"], name: "index_artifacts_on_run_id"
   end
 
@@ -364,6 +403,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_130000) do
   end
 
   create_table "runs", force: :cascade do |t|
+    t.datetime "agent_execution_expires_at"
+    t.integer "agent_execution_generation", default: 0, null: false
+    t.string "agent_execution_token"
     t.string "app_version"
     t.integer "chat_id", null: false
     t.datetime "created_at", null: false
@@ -432,6 +474,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_130000) do
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "agent_definitions", "projects"
+  add_foreign_key "agent_run_deliveries", "runs"
+  add_foreign_key "agent_run_deliveries", "tool_invocations", column: "approval_invocation_id"
   add_foreign_key "approvals", "tool_invocations"
   add_foreign_key "artifacts", "attempts"
   add_foreign_key "artifacts", "knowledge_items"

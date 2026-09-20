@@ -1,26 +1,37 @@
 module Ai
   class ToolInvocationRecorder
-    def initialize(run:, chat:, attempt: nil)
+    def initialize(run:, chat:, attempt: nil, agent_execution_token: nil, agent_execution_generation: nil)
       @run = run
       @chat = chat
       @attempt = attempt
+      @agent_execution_token = agent_execution_token
+      @agent_execution_generation = agent_execution_generation
       @mutex = Mutex.new
+    end
+
+    def attempt=(attempt)
+      @attempt = attempt
     end
 
     def attach
       return self unless @chat.respond_to?(:before_tool_call)
 
+      if @agent_execution_token
+        @chat.before_tool_call { |_tool_call| with_agent_execution_lease { true } }
+      end
       @chat.before_tool_call { |tool_call| mark_running(tool_call) }
       @chat.after_message { |_message| sync! }
       self
     end
 
     def sync!(failure: nil)
-      @mutex.synchronize do
-        persisted_tool_calls.each do |tool_call_record|
-          sync_record(tool_call_record, failure:)
+      with_agent_execution_lease do
+        @mutex.synchronize do
+          persisted_tool_calls.each do |tool_call_record|
+            sync_record(tool_call_record, failure:)
+          end
+          @run.tool_invocations.reload
         end
-        @run.tool_invocations.reload
       end
     end
 
@@ -43,17 +54,19 @@ module Ai
     end
 
     def mark_running(tool_call)
-      @mutex.synchronize do
-        invocation = find_or_initialize(tool_call.id, tool_call.name)
-        invocation.assign_attributes(
-          attempt: @attempt,
-          status: :running,
-          arguments_json: Ai::ToolPayloadSanitizer.call(tool_call.arguments),
-          started_at: invocation.started_at || Time.current,
-          remote: remote?(tool_call)
-        )
-        invocation.save!
-        notify("ai.tool.requested", invocation, tool_call_id: tool_call.id)
+      with_agent_execution_lease do
+        @mutex.synchronize do
+          invocation = find_or_initialize(tool_call.id, tool_call.name)
+          invocation.assign_attributes(
+            attempt: @attempt,
+            status: :running,
+            arguments_json: Ai::ToolPayloadSanitizer.call(tool_call.arguments),
+            started_at: invocation.started_at || Time.current,
+            remote: remote?(tool_call)
+          )
+          invocation.save!
+          notify("ai.tool.requested", invocation, tool_call_id: tool_call.id)
+        end
       end
     end
 
@@ -170,6 +183,19 @@ module Ai
         status: invocation.status,
         event_key: event_key_for(event, invocation)
       )
+    end
+
+    def with_agent_execution_lease
+      return yield unless @agent_execution_token
+
+      @run.with_lock do
+        @run.reload
+        @run.assert_agent_execution_lease!(
+          token: @agent_execution_token,
+          generation: @agent_execution_generation
+        )
+        yield
+      end
     end
 
     def event_key_for(event, invocation)

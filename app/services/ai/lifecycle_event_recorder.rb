@@ -1,13 +1,14 @@
 module Ai
   class LifecycleEventRecorder
-    EVENT_PATTERN = /\Aai\.(?:run|attempt|tool|approval|artifact)\./
+    EVENT_PATTERN = /\Aai\.(?:run|attempt|tool|approval|artifact|agent)\./
     PAYLOAD_KEYS = %w[
       run_id attempt_id artifact_id tool_invocation_id approval_id
       project_id operation status provider provider_class model_id tool_key
       tool_call_id tool_name streaming remote decision actor kind error_class
       error_code failure_kind duration_ms input_tokens output_tokens
       total_cost finish_reason time_to_first_output_ms schema_name
-      schema_validation pending_tool_count
+      schema_validation pending_tool_count agent_definition_id
+      agent_revision step_number step_status
     ].freeze
 
     class << self

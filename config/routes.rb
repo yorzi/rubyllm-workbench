@@ -9,6 +9,9 @@ Rails.application.routes.draw do
       resources :approvals, only: :update
     end
     resources :tool_definitions, only: %i[index update], controller: :tool_definitions
+    resources :agent_definitions, path: "agents", only: %i[index new create show edit update destroy] do
+      post "runs", to: "agent_runs#create", as: :runs
+    end
     patch "tool-settings", to: "tool_definitions#update_settings", as: :tool_settings
     resources :knowledge_collections, path: "knowledge", only: %i[index create show] do
       resources :items, only: :create, controller: :knowledge_items
@@ -19,7 +22,9 @@ Rails.application.routes.draw do
     end
   end
 
-  resources :runs, only: %i[index show]
+  resources :runs, only: %i[index show] do
+    post :cancel, on: :member
+  end
   get "models", to: "models#index", as: :models
   get "learn/:id", to: "learning_topics#show", as: :learning_topic
 end

@@ -67,31 +67,7 @@ module Ai
 
       attempt_id = Ai::ExecutionContext.attempt_id || run.attempts.order(:sequence, :id).last&.id
 
-      Ai::LifecycleEventRecorder.persist(
-        event_name,
-        payload: {
-          run_id: run.id,
-          attempt_id: attempt_id,
-          operation: operation,
-          provider: string_value(@payload[:provider]),
-          provider_class: string_value(@payload[:provider_class]),
-          model_id: model_id,
-          streaming: @payload[:streaming],
-          tool_name: string_value(@payload[:tool_name]),
-          tool_call_id: string_value(@payload[:tool_call_id]),
-          input_tokens: token_value(:input),
-          output_tokens: token_value(:output),
-          total_cost: cost_value,
-          finish_reason: finish_reason,
-          error_class: error_class,
-          status: @payload[:error].present? ? "failed" : "succeeded",
-          event_key: "provider:#{@notification_id}"
-        }.compact,
-        started_at: @started_at,
-        finished_at: @finished_at,
-        notification_id: @notification_id,
-        source: SOURCE
-      )
+      persist_event(run, attempt_id, operation)
     rescue StandardError => error
       Rails.logger.debug("RubyLLM instrumentation mapping failed: #{error.class}: #{error.message}")
       nil
@@ -101,6 +77,53 @@ module Ai
 
     def event_name
       "ai.provider.#{OPERATIONS[@name]}"
+    end
+
+    def persist_event(run, attempt_id, operation)
+      attributes = {
+        run_id: run.id,
+        attempt_id: attempt_id,
+        operation: operation,
+        provider: string_value(@payload[:provider]),
+        provider_class: string_value(@payload[:provider_class]),
+        model_id: model_id,
+        streaming: @payload[:streaming],
+        tool_name: string_value(@payload[:tool_name]),
+        tool_call_id: string_value(@payload[:tool_call_id]),
+        input_tokens: token_value(:input),
+        output_tokens: token_value(:output),
+        total_cost: cost_value,
+        finish_reason: finish_reason,
+        error_class: error_class,
+        status: @payload[:error].present? ? "failed" : "succeeded",
+        event_key: "provider:#{@notification_id}"
+      }.compact
+
+      lease_token = Ai::ExecutionContext.agent_execution_token
+      generation = Ai::ExecutionContext.agent_execution_generation
+      unless lease_token && generation
+        return Ai::LifecycleEventRecorder.persist(
+          event_name,
+          payload: attributes,
+          started_at: @started_at,
+          finished_at: @finished_at,
+          notification_id: @notification_id,
+          source: SOURCE
+        )
+      end
+
+      run.with_lock do
+        run.reload
+        run.assert_agent_execution_lease!(token: lease_token, generation:)
+        Ai::LifecycleEventRecorder.persist(
+          event_name,
+          payload: attributes,
+          started_at: @started_at,
+          finished_at: @finished_at,
+          notification_id: @notification_id,
+          source: SOURCE
+        )
+      end
     end
 
     def resolve_run

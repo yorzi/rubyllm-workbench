@@ -32,7 +32,12 @@
         <p class="mt-2 break-all font-mono text-xs text-muted"><%= @run.chat.provider %> / <%= @run.chat.model_id %> · <%= @run.operation %></p>
         <% if @run.experiment? %><p class="mt-2 text-xs text-muted">Experiment: <%= link_to @run.experiment.name, project_experiment_path(@run.project, @run.experiment), class: "font-medium text-accent hover:underline" %> · revision <%= @run.input_snapshot.dig("experiment", "revision") || @run.experiment.revision %></p><% end %>
       </div>
-      <%= link_to "Return to chat", project_chat_path(@run.project, @run.chat), class: "inline-flex items-center justify-center rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
+      <div class="flex flex-wrap gap-2">
+        <% if @run.operation == "agent" && !@run.terminal? %>
+          <%= button_to "Cancel Agent Run", cancel_run_path(@run), method: :post, form: { data: { turbo_confirm: "Cancel this Agent Run?" } }, class: "inline-flex cursor-pointer items-center justify-center rounded-lg border border-rose-200 px-3 py-2 text-xs font-medium text-rose-700 hover:bg-rose-50" %>
+        <% end %>
+        <%= link_to "Return to chat", project_chat_path(@run.project, @run.chat), class: "inline-flex items-center justify-center rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
+      </div>
     </div>
 
     <section class="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Run metrics">

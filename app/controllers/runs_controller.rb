@@ -35,4 +35,14 @@ class RunsController < ApplicationController
     @structured_artifact = @run.artifacts.reverse.find { |artifact| artifact.kind == "json" }
     @citation_artifacts = @run.artifacts.reverse.select { |artifact| artifact.kind == "citation_set" }
   end
+
+  def cancel
+    run = Run.find(params[:id])
+    raise ActiveRecord::RecordNotFound unless run.operation == "agent"
+
+    run.cancel!
+    redirect_to run_path(run), notice: "Agent Run ##{run.id} cancelled.", status: :see_other
+  rescue ActiveRecord::RecordNotFound
+    head :not_found
+  end
 end

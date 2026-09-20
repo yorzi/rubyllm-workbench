@@ -5,8 +5,8 @@ AI agent 持续修改系统之后，仍能快速回答：系统为什么存在�
 操作如何完成、数据在哪里、哪些能力还不能宣称已经存在。
 
 更新时间：2026-09-20
-当前实现：M0–M3 核心闭环、M4 Knowledge 切片、M5.1 单次 Run 可选 provider 网页搜索与引用留存
-当前代码基线：RubyLLM 2.0.0 stable；M5.1 有定向自动化验证，provider dogfood 待完成
+当前实现：M0–M4 已验证切片、M5.1 provider 搜索与引用、M5.2 保存的 Agent 定义与 Run 执行骨架
+当前代码基线：RubyLLM 2.0.0 stable；M5.2 已有 primary outbox、周期投递与过期租约扫描；执行/恢复/取消仍待实测
 
 ## 实现状态与证据
 
@@ -29,7 +29,7 @@ Artifact，并把文本来源保存为可追溯的 KnowledgeItem/KnowledgeChunk�
 ### 当前目标
 
 - 把不同 provider/model 的能力放进统一的 RubyLLM 边界中比较和试用。
-- 让一次 AI 执行在刷新页面、失败或需要审批后仍然可解释、可恢复。
+- 让一次 AI 执行在刷新页面、失败或需要审批后仍然可解释；长任务通过保存的 transcript 和队列 continuation 恢复。
 - 让实验结果和工具副作用成为耐久 Artifact，而不是只存在于一次页面响应里。
 - 让人能够看到模型做了什么、系统替它记录了什么、哪里需要人介入。
 - 先用本地、可检查的文本证据验证 Knowledge 工作流，再逐步验证 provider embedding、
@@ -38,8 +38,13 @@ Artifact，并把文本来源保存为可追溯的 KnowledgeItem/KnowledgeChunk�
 ### 当前不做什么
 
 - 不是已经部署给公众使用的 SaaS，也没有账号、团队、计费或多租户。
-- 不是完整的 M5 Agent/Deep Research 平台：当前仅在单次 Chat Run 提供显式、默认关闭的
-  provider 网页搜索和引用留存；保存 Agent 定义、多步研究、取消与崩溃恢复仍未实现。
+- 不是完整的 M5 Agent/Deep Research 平台：现在有 Project-owned、带 revision 的 Agent 定义，
+  每次 Agent Run 使用独立 Chat 和冻结的定义快照，按 RubyLLM Agent step 工作，并接入审批、引用、
+  生命周期事件和取消状态。Rails `ActiveJob::Continuable` 配合带 owner token/generation 的数据库租约，
+  在行锁内保护 Chat transcript、usage 和当前本地工具写入；普通迟到 Job 不会接管审批等待状态。工具
+  contract 变更会阻止旧 Run 继续，内置笔记 Artifact 按 tool-call id 去重。这条执行路径还没有自动化
+  运行测试、真实 provider dogfood 或 worker 重启验证；已经被 provider 接受的请求仍可能在中断后产生费用。
+  审批已写入主数据库但续跑还未进入独立队列数据库时，仍可能因入队故障而滞留。
 - 不是完整的 M4 知识库/RAG/文档 OCR 系统：当前有本地文本 collection、chunk、
   provider embedding、SQLite vector adapter、lexical/semantic/hybrid 证据检索、
   兼容 provider rerank，以及文件上传后的本地抽取和 provenance Artifact；provider
@@ -64,7 +69,7 @@ Artifact，并把文本来源保存为可追溯的 KnowledgeItem/KnowledgeChunk�
 | M4 文档来源 | 上传文件、本地抽取或 provider OCR、查看 provenance Artifact | `ocr_document` Artifact、extractor、页数、blob/内容 checksum | `IMPLEMENTED` · `LOCAL_VERIFIED`（OCR 路径仅测试证据） |
 | M4 完整目标 | provider 文件引用与更细的引用 Artifact | provider file ref lifecycle | `PLANNED` |
 | M5.1 | 每次 Chat Run 可选 provider 网页搜索，检查来源与远程工具步骤 | 冻结的 provider tool 快照、`citation_set` Artifact、Run 级工具步骤摘要 | `PARTIAL` · `LOCAL_VERIFIED`；provider dogfood 待完成 |
-| M5 后续 | 保存 Agent、多步研究、恢复/取消与运行步骤 | AgentDefinition、AgentRunStep、durable research records | `PLANNED` |
+| M5.2 | 保存 Project Agent 定义，按冻结 revision 启动专属 Run/Chat；记录 step、工具、审批、引用并可取消 | `AgentDefinition`、Run snapshot、执行租约、primary delivery outbox、周期派发/崩溃扫描、专属 Chat、Attempt、ToolInvocation、Approval、Artifact、LifecycleEvent | `PARTIAL` · Ruby 语法/RuboCop/routes/diff；执行测试、恢复演练和 provider dogfood 待完成 |
 
 这里的状态描述本仓库当前实现；路线图中的 `PLANNED` 项表示尚未实现的后续能力。
 
@@ -239,8 +244,9 @@ Attempt、cost provenance、tool result、approval 以及是否存在 provider f
 
 ### “工具调用”不等于“Agent”
 
-M3 是 Chat 中的 allowlisted Ruby tool + 审批 + 审计。当前 M5.1 只把 provider-hosted
-web search 接入现有 Chat Run。保存的 Agent 定义、多步运行、恢复和取消仍未实现。
+M3 是 Chat 中的 allowlisted Ruby tool + 审批 + 审计。M5.2 增加了版本化定义和专属 Agent Run；
+Run 继续作为执行边界，定义和 prompt 快照进入 Run，编辑定义不会改写旧 Run。Agent 会按 step
+推进，工具执行与审批仍复用项目 allowlist 和 Run 记录。该路径实现尚未通过自动化执行测试。
 
 ### “失败”不等于“历史丢失”
 
@@ -261,6 +267,8 @@ web search 接入现有 Chat Run。保存的 Agent 定义、多步运行、恢�
   continuation 的新 Attempt；Run inspector 也展示这条时间线。
 - 当前本地回归覆盖并行策略的能力门控、side-effect 工具串行降级、冻结的 RubyLLM
   options，以及多个 tool calls 的独立 ToolInvocation/request/completion 事件。
+- M5.2 新增应用和迁移 Ruby 代码通过 `ruby -c`、RuboCop、`git diff --check` 和 Rails routes 静态核对；本轮没有运行
+  Agent 执行测试，也没有执行 provider 调用或真实 worker 重启。行锁租约保护与空占位恢复有静态实现，但实际执行、取消竞态和恢复承诺尚未被这些检查验证。
 - 当前本地回归覆盖 Knowledge collection、文本 checksum、确定性 chunk offset、ready
   状态、embedding 记录/provenance、vector adapter、三种检索模式的证据分量和降级
   原因；这只证明 M4 本地文本与 embedding 检索切片。

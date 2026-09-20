@@ -6,6 +6,82 @@
 原则上只追加，不静默改写历史。代码细节回到对应 commit 和
 [IMPLEMENTATION_MAP.md](../IMPLEMENTATION_MAP.md)。
 
+## 2026-09-20 — M5.2 保存的 Agent 与专属 Run
+
+### 为什么做
+
+已有的 Chat 工具与审批只能说明某个对话调用了工具，不能提供可编辑、可复现的 Agent
+配置，也不能把一个长任务的多步执行归属到单一 Run。M5.2 先建立版本化定义和持久执行边界。
+
+### 人能看到的变化
+
+- Project 内增加 Agents 工作区；定义保存 provider/model、instructions、已启用的本地工具、
+  allowlisted `web_search` 和受限的 temperature / max output token 选项。修改执行配置会提升 revision。
+- Agent 页面可输入 task 并排队；每个 Agent Run 创建专属 Chat、Run、初始 Attempt，冻结 prompt 和
+  definition snapshot，编辑或删除模板不改写历史 Run。
+- `AgentRunJob` 从 Run 快照重建 RubyLLM Agent，逐步调用 `Agent#step`；工具、审批、citation
+  Artifact、provider 工具活动和生命周期 step 记录关联到该 Run。
+- 每次 worker 执行先获取有到期时间的数据库租约，续租时校验 owner token 和 generation；重复投递
+  不能并发接管，繁忙投递会在租约到期时重排。冻结的本地工具 contract 与当前注册项不一致时，Run 会
+  停止并要求用新 contract 启动。
+- 内置 `save_run_note` 将 Artifact 与 RubyLLM tool-call id 关联并建立唯一索引，工具结果重放时复用原 Artifact。
+- Run inspector 为未终结 Agent Run 提供取消操作；终态转换受行锁保护，迟到的成功/失败不能覆盖 cancelled。
+- 审批决定按 Run 类型回到 Chat 或 Agent worker；Agent worker 使用 Rails `ActiveJob::Continuable`
+  在 step 边界保存 continuation。
+
+### 证据与边界
+
+- 新增 AgentDefinition 与 Agent recovery migration、Project 范围 CRUD；本轮未运行自动化测试。
+- Ruby 文件通过 `ruby -c` 与 RuboCop，Rails routes 显示 Agent Run launch 与 Run cancel 入口，`git diff --check` 通过。
+- 新增表的 migration 已应用到本地 `storage/development.sqlite3`；没有运行 Agent 执行测试、provider
+  请求或 Solid Queue worker 重启演练；M5.2 仍为
+  `PARTIAL`，M5.1 的 provider web-search dogfood 也仍待完成。
+- Continuation 按至少一次语义恢复；若进程在 provider 请求与结果写入之间中断，可能再次计费或重放请求。
+  内置 note 工具已按 tool-call id 幂等；未来副作用工具、取消竞态和跨 worker 恢复仍需通过测试与演练证明。
+
+## 2026-09-20 — M5.2 执行租约与恢复边界加固
+
+### 为什么做
+
+只在模型响应返回后检查租约，无法阻止旧 worker 写入 RubyLLM transcript、usage 或工具结果。迟到的重复
+Job 也可能干扰审批等待；恢复时 RubyLLM 的空 assistant 占位可能被误读成完整回答。
+
+### 变化
+
+- Run 行锁现在保护 Agent 消息、usage、流式 chunk、provider 事件、ToolInvocation 和内置笔记写入；
+  每次续跑通过 owner token 和 generation 验证执行权。
+- 普通 Job 不能接管等待审批的 Run；审批恢复携带已决定 invocation 和 paused generation，同一轮多项审批
+  需要全部决定后才会续跑。
+- 短暂数据库错误会触发租约续租重试；无法确认执行权时安排恢复投递。空 assistant 占位会作为中断处理，
+  失败 Attempt、清理占位并从 Chat transcript 重试。
+- 已被 provider 接受的请求无法撤回；worker 中断后可能再次请求并产生额外费用。审批持久化与 Solid Queue
+  入队位于不同数据库，仍存在入队失败窗口。
+
+### 证据与边界
+
+- 新增/改动 Ruby 文件通过 `ruby -c` 与 RuboCop；Agent 路由解析、迁移状态和 `git diff --check` 静态核对通过。
+- 未运行测试、provider 调用或 Solid Queue 重启演练；M5.2 与整体 M5 继续标为 `PARTIAL`。
+
+## 2026-09-20 — M5.2 持久投递与过期租约扫描
+
+### 为什么做
+
+Approval/Run 状态保存在 primary SQLite，而 Solid Queue 使用独立数据库。单靠 worker `ensure` 调度恢复无法
+覆盖 SIGKILL/OOM；跨库的审批决定与队列入队也无法原子提交。
+
+### 变化
+
+- 初始 Agent Run、审批续跑和运行中恢复意图先在 primary 数据库建立唯一 delivery 记录，再由 dispatcher 投递。
+- dispatcher 对队列错误保留记录并退避重试；确认投递前崩溃可能重投，Run lease 与 generation 拒绝陈旧任务。
+- 每分钟扫描未领取的 queued Run、过期执行租约和所有审批均已决定的等待 Run，并按时间窗限频补发。
+- 开发与生产的 recurring schedule 加入 dispatcher；运行环境需要启动 Solid Queue recurring scheduler。
+
+### 证据与边界
+
+- 本地 schema 增加 `agent_run_deliveries` 表；Ruby 语法、应用/迁移 RuboCop、路由与 diff 静态检查通过。
+- 未运行自动化执行测试、队列重启演练或 provider 请求；外部 provider 已接受的请求仍不能撤销，恢复可能产生重复调用与费用。
+- M5 仍为 `PARTIAL`，直到恢复路径、审批竞态和 scheduler 运维行为有自动化及实际演练证据。
+
 ## 2026-09-20 — M5.1 单次 Run 可选托管网页搜索
 
 ### 为什么做

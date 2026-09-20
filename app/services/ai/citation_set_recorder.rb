@@ -8,6 +8,9 @@ module Ai
     end
 
     def call
+      existing = existing_artifact
+      return existing if existing
+
       citations = normalized_citations
       return if citations.empty?
 
@@ -28,6 +31,14 @@ module Ai
     end
 
     private
+
+    def existing_artifact
+      return if source_message_id.blank?
+
+      @run.artifacts.where(kind: "citation_set").find do |artifact|
+        artifact.metadata_json.to_h["source_message_id"].to_s == source_message_id.to_s
+      end
+    end
 
     def normalized_citations
       return [] unless @response.respond_to?(:citations)

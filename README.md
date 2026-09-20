@@ -34,10 +34,22 @@ and extraction provenance.
 
 Provider compatibility remains partial. In particular, parallel tool-call
 compatibility, OCR dogfooding, page-level provenance, and broader cross-provider
-embedding coverage still need evidence. M5 has started with per-Run, opt-in
-provider web search and saved citation artifacts; saved Agent definitions,
-multi-step research, restart recovery, and cancellation remain unfinished.
-M6–M8 are planned; see [TODO.md](TODO.md) for current scope and evidence.
+embedding coverage still need evidence. M5 now includes per-Run provider search
+and citations plus saved, revisioned Agent definitions and dedicated queued
+Agent Runs with approval and cancellation paths. The new Agent execution path
+has an expiring database execution lease that fences transcript, usage, and
+current local tool writes by owner token/generation. Approval continuations
+identify the decided tool call, saved local tool contracts are checked before
+resuming, and the built-in note Artifact is idempotent by tool-call id. Static
+syntax, lint, diff, and route checks have passed; automated execution, restart
+recovery, cancellation races, and provider dogfooding still need verification.
+M5 remains partial. Initial and resumed Agent work is durably recorded in the
+primary database, then dispatched to Solid Queue with retry and stale-lease
+recovery. Queue insertion and delivery acknowledgement are at-least-once across
+separate databases, so duplicate jobs are possible and fenced by the Run lease.
+The recurring Solid Queue scheduler must run for pending deliveries and crash
+recovery to drain. M6–M8 remain planned behind the M5 execution and recovery
+gates. See [TODO.md](TODO.md) for current scope and evidence.
 
 ## Local setup
 

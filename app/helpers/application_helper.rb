@@ -56,8 +56,10 @@ module ApplicationHelper
   def lifecycle_event_summary(event)
     payload = event.payload
     case event.name
-    when "ai.attempt.started", "ai.attempt.succeeded", "ai.attempt.failed"
+    when "ai.attempt.started", "ai.attempt.succeeded", "ai.attempt.failed", "ai.attempt.cancelled"
       [ payload["provider"], payload["model_id"] ].compact.join(" / ").presence || "Attempt ##{event.attempt_id}"
+    when "ai.agent.step"
+      [ "Step #{payload['step_number']}", payload["step_status"], "Agent revision #{payload['agent_revision']}" ].compact.join(" · ")
     when "ai.attempt.streaming"
       "First output at #{format_duration(payload["time_to_first_output_ms"])}"
     when "ai.tool.requested", "ai.tool.completed"
@@ -68,6 +70,8 @@ module ApplicationHelper
       [ payload["kind"], payload["name"] ].compact.join(" · ").presence || "Artifact"
     when "ai.run.failed"
       [ payload["failure_kind"], payload["error_class"] ].compact.join(" · ").presence || "Run failed"
+    when "ai.run.cancelled"
+      "Run cancelled"
     when "ai.provider.chat", "ai.provider.tool", "ai.provider.embedding", "ai.provider.rerank"
       summary = [ payload["operation"], payload["provider"], payload["model_id"] ].compact.join(" / ")
       details = []

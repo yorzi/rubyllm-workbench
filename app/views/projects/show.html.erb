@@ -59,6 +59,24 @@
       </div>
     </section>
 
+    <section class="mt-10" aria-labelledby="agents-heading">
+      <div class="flex items-center justify-between gap-3">
+        <h2 id="agents-heading" class="text-sm font-semibold text-ink">Agent definitions</h2>
+        <%= link_to "Open workspace", project_agent_definitions_path(@project), class: "text-xs font-medium text-accent hover:underline" %>
+      </div>
+      <div class="mt-3 grid gap-3 md:grid-cols-2">
+        <% @project.agent_definitions.order(updated_at: :desc).limit(4).each do |agent_definition| %>
+          <%= link_to project_agent_definition_path(@project, agent_definition), class: "rounded-xl border border-line bg-panel p-4 hover:border-accent" do %>
+            <div class="flex items-center justify-between gap-3"><h3 class="truncate text-sm font-medium text-ink"><%= agent_definition.name %></h3><span class="font-mono text-[10px] text-muted">v<%= agent_definition.revision %></span></div>
+            <p class="mt-2 truncate font-mono text-[11px] text-muted"><%= agent_definition.provider %> / <%= agent_definition.model_id %></p>
+          <% end %>
+        <% end %>
+        <% if @project.agent_definitions.none? %>
+          <%= link_to "Create a reusable agent definition", new_project_agent_definition_path(@project), class: "rounded-xl border border-dashed border-line bg-panel p-5 text-sm text-muted hover:border-accent hover:text-accent" %>
+        <% end %>
+      </div>
+    </section>
+
     <section class="mt-10" aria-labelledby="knowledge-heading">
       <div class="flex items-center justify-between gap-3">
         <h2 id="knowledge-heading" class="text-sm font-semibold text-ink">Knowledge</h2>

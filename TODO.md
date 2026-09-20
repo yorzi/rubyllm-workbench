@@ -1,9 +1,14 @@
-# TODO — M0–M4 core slices implemented; M5 provider-search slice started; M5–M8 remain in progress/planned
+# TODO — M0–M4 core slices implemented; M5 provider search + saved Agent Runs in progress; M6–M8 planned
 
-> Current correction (2026-09-20): RubyLLM is pinned to stable 2.0.0. M5 has an
-> opt-in provider web-search slice with persisted citations. Its automated local
-> path now passes the full Rails test suite; live provider compatibility remains
-> untested. Saved Agents, durable multi-step research and recovery remain incomplete.
+> Current correction (2026-09-20): RubyLLM is pinned to stable 2.0.0. M5.1's
+> opt-in provider web-search slice passes the full Rails suite; provider dogfood
+> remains pending. M5.2 now has saved Agent definitions and an Agent Run worker
+> wired to immutable snapshots, continuable steps, approval, citation and cancel
+> records. A durable expiring lease fences transcript, usage and local tool
+> writes by owner token/generation; approval continuations carry a decided
+> invocation id; saved local tool contracts are checked for drift; and
+> save_run_note is idempotent by tool-call id. Execution, worker-restart and
+> provider verification remain open.
 
 ## Human understanding layer
 
@@ -297,11 +302,67 @@ requests rejected during execution become failed Runs; the app cannot currently
 prove every selected model will honor or invoke search. No live search was
 performed for this slice.
 
+## M5.2 — Saved Agent definitions and Run execution skeleton — 2026-09-20
+
+- [x] Add Project-owned, revisioned AgentDefinition CRUD with a strict local-tool
+      allowlist, `web_search` provider-tool allowlist, and bounded generation options.
+- [x] Freeze the JSON-safe definition snapshot into each Agent Run; give the
+      Run a dedicated Chat transcript so approval and cancellation remain scoped.
+- [x] Rebuild the RubyLLM Agent from the Run snapshot and advance with one
+      `Agent#step` at a time in an `ActiveJob::Continuable` job.
+- [x] Record Agent step events, Attempts, citations, provider-tool activity,
+      local tool/approval activity and terminal cancellation status.
+- [x] Route approval continuations back through `AgentRunJob` with the decided
+      invocation id and paused generation; atomically claim only a permitted Run
+      state using a generation-fenced database lease with heartbeat and expiry.
+- [x] Keep delayed generic duplicates out of `waiting_for_approval`; retry
+      transient heartbeat database errors within the known lease window and
+      enqueue a recovery delivery if ownership becomes uncertain.
+- [x] Fence RubyLLM Message and usage persistence, streamed chunk recording,
+      provider lifecycle events, tool invocation records and built-in note writes
+      with the current Run lease.
+- [x] Compare each Run's frozen local tool contract with the current registered
+      contract before rebuilding its Agent; fail clearly on contract drift.
+- [x] Make `save_run_note` reuse its Artifact by persisted RubyLLM tool-call id.
+- [x] Treat RubyLLM's blank assistant placeholder as an interrupted provider step;
+      fail the Attempt, remove the placeholder and retry from the preceding Chat turn.
+- [x] Persist initial execution, approval continuation and worker recovery intents
+      in a primary-database delivery outbox before queue dispatch.
+- [x] Add a recurring dispatcher with retry backoff and recovery scans for expired
+      Agent leases, unclaimed Runs and fully decided approval waits.
+- [ ] Add automated execution coverage for snapshot immutability, multi-step
+      completion, approval/denial continuation, cancellation races and recovery.
+- [ ] Exercise Solid Queue interruption/restart recovery and at-least-once
+      replay boundaries with idempotent local tools.
+- [ ] Dogfood a provider/model with web search and a multi-step Agent task.
+
+### M5.2 status: `PARTIAL` · implementation present, static checks only
+
+The changed Ruby files other than generated `db/schema.rb` passed `ruby -c` and
+RuboCop; route generation includes the Agent launch and Run cancellation
+endpoints, and `git diff --check` passed. No Agent execution tests, provider
+calls or worker restart drills were run.
+Agent Jobs persist model/tool calls and resume from the Chat transcript with
+at-least-once semantics. Run-row locking fences transcript/usage persistence
+and current local database writes against lease takeover; a provider request
+already accepted upstream cannot be recalled, so an interrupted request may
+still incur cost before a later delivery retries it. The built-in
+`project_snapshot` tool is read-only and `save_run_note` is idempotent; future
+side-effect tools need their own atomic lease check and replay protection. M5
+remains partial pending execution, recovery, cancellation-race and provider
+evidence. Initial, approval and recovery intents are saved in the primary
+database and dispatched with retries to the separate Solid Queue database. A
+recurring dispatcher also scans expired leases and approved waits so worker
+crashes do not depend on an `ensure` callback. Queue insertion and outbox
+acknowledgement cannot share a transaction; a crash between them can enqueue a
+duplicate, which is fenced by the Run lease. Delivery depends on the Solid Queue
+recurring scheduler running in development and production.
+
 ## Known implementation gap
 
 - [x] Add a unified local lifecycle event catalog for `ai.run`, `ai.attempt`,
-      `ai.tool`, `ai.approval` and `ai.artifact`; the current implementation is
-      deliberately application-level and metadata-only.
+      `ai.agent`, `ai.tool`, `ai.approval` and `ai.artifact`; the current
+      implementation is deliberately application-level and metadata-only.
 - [ ] Add provider-native tracing/metrics, event export or historical backfill;
       these are not implied by the local `LifecycleEvent` timeline.
 
@@ -326,11 +387,10 @@ performed for this slice.
       expiry when a file is uploaded to a provider for OCR or later use.
 - [ ] M4 real OCR dogfood against a configured OCR provider (Cohere `parse-v5.0`
       or Mistral OCR) and page/offset level provenance per chunk.
-- [ ] M5 saved Agent definitions, multi-step/durable research orchestration,
-      restart recovery, cancellation, and agent-level lifecycle records.
-- M5 ownership decision: each Agent Run will own a dedicated Chat transcript;
-  Run remains the execution envelope, and later workers restore configuration
-  from the immutable Run snapshot rather than the editable definition.
+- [ ] M5 remaining work: prove execution/recovery/cancel under automated tests,
+      run a Solid Queue restart drill, verify live provider search/Agent paths,
+      and validate the at-least-once
+      tool/idempotency boundary.
 - [ ] M6 media workflows.
 - [ ] M7 batch execution, evaluations, and repeatable quality/cost comparisons.
 - [ ] M8 exports, deployment readiness, and public-reference polish.

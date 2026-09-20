@@ -1,0 +1,66 @@
+<% content_for :title, "Agents · #{@project.name}" %>
+<% content_for :inspector do %>
+  <div class="sticky top-0">
+    <p class="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Agent definitions</p>
+    <div class="mt-5 rounded-xl border border-line bg-panel p-4 text-xs leading-5">
+      <p class="font-medium text-ink">Reusable, project-scoped setup</p>
+      <p class="mt-2 text-muted">Each definition stores one provider/model choice, instructions, an explicit tool allowlist, and bounded generation options.</p>
+      <dl class="mt-4 divide-y divide-line border-t border-line">
+        <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Project</dt><dd class="max-w-[10rem] truncate text-right text-ink"><%= @project.name %></dd></div>
+        <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Definitions</dt><dd class="font-mono text-ink"><%= @agent_definitions.size %></dd></div>
+      </dl>
+    </div>
+  </div>
+<% end %>
+
+<%= render "shared/shell", active: "agents", project: @project do %>
+  <div class="mx-auto max-w-6xl px-5 py-8 sm:px-8 lg:px-10">
+    <%= render "shared/flash" %>
+    <%= link_to "← #{@project.name}", project_path(@project), class: "text-xs font-medium text-accent hover:underline" %>
+    <div class="mt-3 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+      <div>
+        <h1 class="text-3xl font-semibold tracking-tight text-ink">Agents</h1>
+        <p class="mt-2 max-w-2xl text-sm leading-6 text-muted">Save the model, instructions, local tools, and provider tools that define a reusable agent.</p>
+      </div>
+      <%= link_to "New agent", new_project_agent_definition_path(@project), class: "inline-flex items-center justify-center rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700" %>
+    </div>
+
+    <div class="mt-8 space-y-3">
+      <% @agent_definitions.each do |agent_definition| %>
+        <article class="rounded-xl border border-line bg-panel p-5 shadow-sm">
+          <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <%= link_to agent_definition.name, project_agent_definition_path(@project, agent_definition), class: "truncate text-base font-semibold text-ink hover:text-accent" %>
+                <span class="rounded-full bg-slate-100 px-2 py-1 font-mono text-[10px] text-muted">v<%= agent_definition.revision %></span>
+              </div>
+              <p class="mt-2 break-all font-mono text-xs text-muted"><%= agent_definition.provider %> / <%= agent_definition.model_id %></p>
+              <p class="mt-3 line-clamp-2 whitespace-pre-wrap text-sm leading-6 text-muted"><%= agent_definition.instructions %></p>
+            </div>
+            <div class="flex shrink-0 gap-2">
+              <%= link_to "Edit", edit_project_agent_definition_path(@project, agent_definition), class: "rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
+              <%= button_to "Delete", project_agent_definition_path(@project, agent_definition), method: :delete, form: { data: { turbo_confirm: "Delete this agent definition?" } }, class: "cursor-pointer rounded-lg border border-line px-3 py-2 text-xs font-medium text-muted hover:border-rose-300 hover:text-rose-700" %>
+            </div>
+          </div>
+          <div class="mt-4 flex flex-wrap gap-1.5 border-t border-line pt-4">
+            <% agent_definition.tool_keys.each do |key| %>
+              <span class="rounded-md bg-accent-soft px-2 py-1 font-mono text-[10px] text-accent"><%= key %></span>
+            <% end %>
+            <% agent_definition.provider_tools.each do |key| %>
+              <span class="rounded-md bg-amber-50 px-2 py-1 font-mono text-[10px] text-amber-800"><%= key %></span>
+            <% end %>
+            <% if agent_definition.tool_keys.empty? && agent_definition.provider_tools.empty? %>
+              <span class="text-xs text-muted">No tools selected</span>
+            <% end %>
+          </div>
+        </article>
+      <% end %>
+      <% if @agent_definitions.empty? %>
+        <div class="rounded-xl border border-dashed border-line bg-panel p-8 text-center">
+          <p class="text-sm font-medium text-ink">No agent definitions yet.</p>
+          <p class="mt-2 text-sm leading-5 text-muted">Create a definition to save a reusable model and tool contract.</p>
+        </div>
+      <% end %>
+    </div>
+  </div>
+<% end %>

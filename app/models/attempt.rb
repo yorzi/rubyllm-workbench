@@ -40,7 +40,8 @@ class Attempt < ApplicationRecord
     event_name = {
       "running" => "ai.attempt.started",
       "succeeded" => "ai.attempt.succeeded",
-      "failed" => "ai.attempt.failed"
+      "failed" => "ai.attempt.failed",
+      "cancelled" => "ai.attempt.cancelled"
     }.fetch(status.to_s, nil)
     return unless event_name
 

@@ -2,18 +2,20 @@
 
 ## Scope
 
-This implementation covers the M0–M4 slices and the first M5 provider-search slice:
+This implementation covers M0–M4 slices and the first two M5 slices:
 
-`Project -> Chat/Tool Lab/Knowledge -> persisted execution and evidence records -> inspectors`
+`Project -> Chat/Tool Lab/Knowledge/Agent definition -> persisted execution and evidence records -> inspectors`
 
 The M4 slice currently covers local text collections, deterministic chunks,
 checksums, provider embeddings in a SQLite vector adapter, explainable
 lexical/semantic/hybrid retrieval, compatible-provider rerank, file upload/local
-extraction and provenance artifacts, with explicit degradation. M5 currently
-adds opt-in provider web search and citation artifacts to a Chat Run. Provider
-file references, real OCR/page-level provenance, saved Agents, multi-step
-recovery, media, batch/evals and operational polish remain incomplete or
-deferred.
+extraction and provenance artifacts, with explicit degradation. M5.1 adds
+opt-in provider web search and citation artifacts to a Chat Run. M5.2 adds
+Project-scoped revisioned Agent definitions and a dedicated Agent Run worker
+restored from immutable Run snapshots, protected by an expiring generation-fenced
+lease and local tool-contract drift check. Provider file references, real OCR/page-
+level provenance, verified Agent execution/recovery/provider behavior, media,
+batch/evals and operational polish remain incomplete or deferred.
 
 Current status: M0–M3 core, the M4 local-text foundation and the M4
 embedding/retrieval/rerank/document slices are `IMPLEMENTED` for their verified
@@ -21,7 +23,12 @@ local paths with OpenRouter embedding/rerank dogfood; live M3 parallel provider
 compatibility, provider file references, real OCR/page-level provenance and
 cross-provider embedding compatibility are `PARTIAL` or deferred. M5.1's
 provider-search path passes local automated tests; provider dogfood is pending.
-The rest of M5 is incomplete and M6–M8 remain `PLANNED`.
+M5.2 passed Ruby syntax, application/migration RuboCop, route generation and diff
+checks only; no Agent execution tests or provider calls were run. Agent delivery
+intents persist in the primary database and a recurring dispatcher retries
+delivery and scans stale leases; scheduler operation and worker restart behavior
+remain unverified. M5 remains `PARTIAL`, while M6–M8 remain `PLANNED` behind the
+M5 gates.
 
 ## Human understanding layer
 
@@ -37,6 +44,9 @@ behavior. `TODO.md` is the current roadmap.
 - **User:** one local Ruby/Rails developer; no accounts, teams, billing or
   multi-tenancy in V0.
 - **Project:** durable context boundary with a name, slug and description.
+- **AgentDefinition:** Project-owned, revisioned model/instructions/tool contract;
+  a Run copies its JSON-safe definition and tool contracts so later edits do not
+  affect frozen inputs. A changed registered tool contract stops resumption.
 - **Chat:** a project-owned conversation whose message history can be reloaded.
 - **Run:** one user-meaningful chat execution with a stable detail URL and
   explicit lifecycle state.
@@ -105,13 +115,15 @@ behavior. `TODO.md` is the current roadmap.
    deterministic chunks, embed ready chunks with a configured embedding model,
    and search ready chunks in lexical/semantic/hybrid mode with score
    components, matched terms, source and offsets.
+10. Agent workspace: edit a versioned Project definition and queue a dedicated
+    Chat/Run transcript; inspect steps, tools, approvals, citations and cancel state.
 
 ## Data and service boundaries
 
 - RubyLLM version: `2.0.0`; provider interactions go through the stable 2.0 APIs
   (`with_schema`, `with_tool_options(calls:, concurrency:)`, `approve`/`deny`/
   `complete`, `RubyLLM.embed`, `RubyLLM.rerank`, `chunk.content`).
-- Rails application records: `Project`, `Chat`, `Run`, `Attempt`, `Artifact`,
+- Rails application records: `Project`, `AgentDefinition`, `Chat`, `Run`, `Attempt`, `Artifact`,
   `LifecycleEvent`, `KnowledgeCollection`, `KnowledgeItem`, `KnowledgeChunk`,
   `KnowledgeEmbedding` and
   the minimum message association needed to preserve durable history.
@@ -119,6 +131,12 @@ behavior. `TODO.md` is the current roadmap.
   semantics where its Rails persistence helpers fit.
 - `Ai::ModelCatalog` queries RubyLLM model metadata and provider configuration.
 - `Ai::RunExecutor` owns Run creation and final lifecycle transitions.
+- `Ai::AgentRunExecutor` creates a dedicated Chat and freezes prompt plus
+  AgentDefinition snapshot into one Agent Run.
+- `AgentRunJob` rebuilds the RubyLLM Agent from that snapshot and advances it
+  through `ActiveJob::Continuable`; an expiring lease fences transcript, usage
+  and current local tool writes, while approval resumes identify the decided
+  invocation and paused generation.
 - `Ai::AttemptRecorder` normalizes provider/model, timing, usage, cost and
   errors without mutating historical attempts.
 - `Ai::ChatExecutor` performs chat execution through RubyLLM only.
@@ -138,7 +156,7 @@ behavior. `TODO.md` is the current roadmap.
   sequential fallback.
 - `Ai::ToolInvocationRecorder` maps RubyLLM tool calls to inspectable
   application records; `Ai::ApprovalService` records a decision and enqueues
-  the resumable Chat completion.
+  the matching resumable Chat or Agent worker.
 - `Ai::LifecycleEventRecorder` subscribes to application lifecycle
   notifications, filters payloads to safe metadata, persists `LifecycleEvent`
   rows and deduplicates repeated notifications by `event_key`.
@@ -163,8 +181,8 @@ behavior. `TODO.md` is the current roadmap.
   second stage on a compatible, configured provider and `Ai::Knowledge::Reranker`
   reorders evidence while preserving the original scores and pre-rank positions.
 
-The current M3 inspector records application lifecycle events for Run, Attempt,
-ToolInvocation, Approval and Artifact transitions. The M4 Knowledge workspace is
+The current inspector records application lifecycle events for Run, Agent step,
+Attempt, ToolInvocation, Approval and Artifact transitions. The M4 Knowledge workspace is
 a separate synchronous product flow and does not create a Run/Attempt for a local
 collection search. This is a local event catalog, not provider-native tracing, a
 complete distributed event stream, a cost dashboard or a historical backfill system.
@@ -201,13 +219,14 @@ keyboard-friendly.
 ## Pre-flight record
 
 - Milestone: M0 + M1 + M2 + M3 plus the M4 local-text, embedding/retrieval,
-  rerank and document-source slices; M5.1 provider search is locally verified,
-  with provider dogfood pending.
+  rerank and document-source slices; M5.1 provider search is locally tested and
+  M5.2 Agent execution is implemented but statically checked only.
 - Scope: local chat with optional per-Run provider web search, structured experiment comparison, code-defined tools,
   durable approval continuation, and Project-scoped text evidence retrieval with
   provider embeddings, lexical/semantic/hybrid modes, a compatible-provider
-  rerank stage, and file sources with extraction provenance. Provider file
-  references, real OCR dogfood and the remaining M5–M8 work stay deferred.
+  rerank stage, file sources with extraction provenance, and saved Agent Runs.
+  Provider file references, real OCR dogfood, Agent execution/recovery verification
+  and M6–M8 remain open.
 - Runtime verified: Ruby 4.0.2 and Rails 8.1.3.1.
 - Dependency target: RubyLLM 2.0.0 stable. Provider calls use the public 2.0 API;
   future upgrades should be checked against the official migration guide.
