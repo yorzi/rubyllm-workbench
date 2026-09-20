@@ -2,8 +2,8 @@ module Ai
   module Knowledge
     # Bounded vector storage and similarity adapter interface.
     #
-    # The Specs require a vector adapter interface without preemptively
-    # introducing PostgreSQL/pgvector. Two adapters are registered:
+    # The adapter interface keeps the bounded local corpus in SQLite without
+    # preemptively introducing PostgreSQL/pgvector. Two adapters are registered:
     #
     # - `sqlite_application_cosine` (default): vectors stay in SQLite as packed
     #   Float32 blobs and cosine similarity is computed in Ruby. Valid for
@@ -144,8 +144,9 @@ module Ai
         private
 
         def ensure_index!(table:, dimension:, collection_id:, model_id:)
+          quoted_table = connection.quote_table_name(table)
           connection.execute(<<~SQL)
-            CREATE TABLE IF NOT EXISTS #{table} (
+            CREATE TABLE IF NOT EXISTS #{quoted_table} (
               knowledge_embedding_id INTEGER PRIMARY KEY,
               knowledge_collection_id INTEGER NOT NULL,
               model_id TEXT NOT NULL,
@@ -161,13 +162,14 @@ module Ai
         end
 
         def rebuild_index!(table:, dimension:, collection_id:, model_id:)
+          quoted_table = connection.quote_table_name(table)
           connection.transaction do
             execute_sql(
-              "DELETE FROM #{table} WHERE knowledge_collection_id = ? AND model_id = ?",
+              "DELETE FROM #{quoted_table} WHERE knowledge_collection_id = ? AND model_id = ?",
               [ collection_id, model_id.to_s ]
             )
             execute_sql(<<~SQL, [ collection_id, model_id.to_s, dimension ])
-              INSERT INTO #{table} (knowledge_embedding_id, knowledge_collection_id, model_id, vector)
+              INSERT INTO #{quoted_table} (knowledge_embedding_id, knowledge_collection_id, model_id, vector)
               SELECT knowledge_embeddings.id, knowledge_items.knowledge_collection_id, knowledge_embeddings.model_id, knowledge_embeddings.vector
               FROM knowledge_embeddings
               JOIN knowledge_chunks ON knowledge_chunks.id = knowledge_embeddings.knowledge_chunk_id
@@ -182,21 +184,25 @@ module Ai
         end
 
         def initialize_column!(table, dimension)
-          raw.execute("SELECT vector_init('#{table}', 'vector', 'type=FLOAT32,dimension=#{dimension.to_i},distance=cosine')")
+          statement = raw.prepare("SELECT vector_init(?, ?, ?)")
+          statement.execute([ table, "vector", "type=FLOAT32,dimension=#{dimension.to_i},distance=cosine" ]).to_a
+        ensure
+          statement&.close
         end
 
         def scan(table:, query_vector:, collection_id:, model_id:, limit:)
+          quoted_table = connection.quote_table_name(table)
           sql = <<~SQL
-            SELECT #{table}.knowledge_embedding_id AS knowledge_embedding_id, v.distance AS distance
-            FROM vector_full_scan('#{table}', 'vector', ?) AS v
-            JOIN #{table} ON #{table}.knowledge_embedding_id = v.rowid
-            WHERE #{table}.knowledge_collection_id = ? AND #{table}.model_id = ?
+            SELECT #{quoted_table}.knowledge_embedding_id AS knowledge_embedding_id, v.distance AS distance
+            FROM vector_full_scan(?, ?, ?) AS v
+            JOIN #{quoted_table} ON #{quoted_table}.knowledge_embedding_id = v.rowid
+            WHERE #{quoted_table}.knowledge_collection_id = ? AND #{quoted_table}.model_id = ?
             ORDER BY v.distance
             LIMIT ?
           SQL
 
           statement = raw.prepare(sql)
-          result = statement.execute([ SQLite3::Blob.new(encode(query_vector)), collection_id, model_id.to_s, limit.to_i ])
+          result = statement.execute([ table, "vector", SQLite3::Blob.new(encode(query_vector)), collection_id, model_id.to_s, limit.to_i ])
           rows = result.to_a
           columns = statement.columns
           rows.map { |row| row.is_a?(Hash) ? row : columns.each_with_index.to_h { |name, index| [ name, row[index] ] } }
@@ -210,8 +216,9 @@ module Ai
         end
 
         def indexed_count(table, collection_id, model_id)
+          quoted_table = connection.quote_table_name(table)
           scalar(
-            "SELECT COUNT(*) FROM #{table} WHERE knowledge_collection_id = ? AND model_id = ?",
+            "SELECT COUNT(*) FROM #{quoted_table} WHERE knowledge_collection_id = ? AND model_id = ?",
             [ collection_id, model_id.to_s ]
           ).to_i
         end

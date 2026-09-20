@@ -28,7 +28,11 @@ class RunsController < ApplicationController
     @tool_invocations = @run.tool_invocations.includes(:approval, :tool_definition).recent.to_a
     @lifecycle_events = @run.lifecycle_events.chronological.to_a
     @messages = @run.chat.messages
-    @latest_assistant_message = @messages.reverse.find { |message| message.role.to_s == "assistant" }
+    source_message_id = @run.result_summary["source_message_id"]
+    @source_assistant_message = if source_message_id.present?
+      @run.chat.messages.find_by(id: source_message_id, role: "assistant")
+    end
     @structured_artifact = @run.artifacts.reverse.find { |artifact| artifact.kind == "json" }
+    @citation_artifacts = @run.artifacts.reverse.select { |artifact| artifact.kind == "citation_set" }
   end
 end

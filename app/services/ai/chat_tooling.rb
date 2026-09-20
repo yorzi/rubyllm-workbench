@@ -13,8 +13,10 @@ module Ai
     def configure
       return @chat unless @chat.respond_to?(:with_tools)
 
+      @chat.with_provider_tools(nil) if @chat.respond_to?(:with_provider_tools)
       @chat.with_tools(nil)
       @chat.with_tools(*tool_definitions.map { |definition| definition.tool_instance(run: @run) })
+      apply_provider_tools
       apply_tool_options
       @chat
     end
@@ -40,6 +42,20 @@ module Ai
       return unless @chat.respond_to?(:with_tool_options)
 
       @chat.with_tool_options(**Ai::ToolExecutionPolicy.ruby_llm_options(@run&.input_snapshot&.fetch("tool_options", nil)))
+    end
+
+    def apply_provider_tools
+      return unless @chat.respond_to?(:with_provider_tools)
+
+      provider_tool_keys.each do |key|
+        @chat.with_provider_tools(key.to_sym)
+      end
+    end
+
+    def provider_tool_keys
+      Array(@run&.input_snapshot&.fetch("provider_tools", [])).filter_map do |entry|
+        entry.to_s.presence if entry.to_s == "web_search"
+      end
     end
   end
 end

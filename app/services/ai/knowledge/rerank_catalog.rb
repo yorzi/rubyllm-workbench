@@ -2,8 +2,8 @@ module Ai
   module Knowledge
     # Lists rerank-capable models and whether their provider is configured.
     #
-    # The Specs allow reranking to be toggled only for compatible providers, so
-    # the catalog is the gate: a model must be in the registry with a `rerank`
+    # Reranking is offered only for compatible providers, so the catalog is the
+    # gate: a model must be in the registry with a `rerank`
     # output modality and its provider must be configured. Runtime failures are
     # reported separately and never remove the underlying retrieval evidence.
     class RerankCatalog

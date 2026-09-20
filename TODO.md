@@ -1,15 +1,16 @@
-# TODO — M0/M1/M2/M3 core complete; M4 rerank/documents implemented; provider breadth and page-level evidence pending
+# TODO — M0–M4 core slices implemented; M5 provider-search slice started; M5–M8 remain in progress/planned
 
-> Current correction (2026-09-18): M4 rerank plus file upload/local extraction/provenance
-> are implemented and locally verified. Provider file references, real OCR dogfood,
-> page-level provenance, and broader cross-provider compatibility remain partial or deferred.
+> Current correction (2026-09-20): RubyLLM is pinned to stable 2.0.0. M5 has an
+> opt-in provider web-search slice with persisted citations. Its automated local
+> path now passes the full Rails test suite; live provider compatibility remains
+> untested. Saved Agents, durable multi-step research and recovery remain incomplete.
 
 ## Human understanding layer
 
 - [x] Establish the internal `docs/` current-reality layer with a readable system guide,
       architecture diagrams, operations notes, and changelog.
-- [x] Align the internal docs with the canonical Specs baseline without rewriting the
-      pulled Specs; document the two systems and their different purposes.
+- [x] Maintain the public implementation docs, architecture diagrams, operating notes,
+      and roadmap as one self-contained view of the application.
 - [x] Connect the Projects list/create page to the Project-boundary explanation, including
       the Rails form, slug identity, resource ownership, and source-anchored evidence.
 - [ ] For every future comprehension-impacting change, update the affected internal docs,
@@ -19,7 +20,7 @@
 
 - [x] Initialize the Rails 8.1.3.1 app with SQLite, Tailwind, Vite, Hotwire,
       and the local Solid Queue baseline.
-- [x] Lock Ruby 4.0.2 and RubyLLM 2.0.0.rc4 in the project.
+- [x] Lock Ruby 4.0.2 and RubyLLM 2.0.0 in the project.
 - [x] Add the project shell, navigation, responsive states, and empty states.
 - [x] Add SQLite migrations/models for Project, Chat, Run, and Attempt with
       indexes and validated status transitions.
@@ -118,7 +119,7 @@
 ### M4 gate status: `PARTIAL` · local text slice `LOCAL_VERIFIED`
 
 This slice satisfies the small local document-set ingestion/search foundation
-without claiming the complete M4 Specs gate. It did not yet create embedding
+without claiming the full M4 milestone acceptance. It did not yet create embedding
 records or call a provider for embeddings/reranking.
 
 ## M4 embeddings + retrieval — 2026-09-17
@@ -151,7 +152,7 @@ records or call a provider for embeddings/reranking.
 Embedding, semantic/hybrid retrieval and evidence are implemented for the
 bounded local corpus. Rerank, file/Active Storage ingestion, OCR/extraction and
 provenance artifacts remain outstanding, so this is still not the complete M4
-Specs gate.
+milestone.
 
 ### M4 embedding dogfood record — 2026-09-17
 
@@ -241,7 +242,7 @@ and provider-hosted/remote tools were covered by tests only.
       Storage attachment, MIME/size validation and upload from the workspace.
 - [x] Add `Ai::Knowledge::Extractor` with a local reader for text-like files and
       `RubyLLM.ocr` for PDFs/images behind `Ai::Knowledge::OcrCatalog` gating.
-- [x] Run extraction in `DocumentExtractionJob` (Active Job, per the Specs) and
+- [x] Run extraction in `DocumentExtractionJob` (Active Job) and
       keep failures on the item instead of raising inside the web request.
 - [x] Write a durable `ocr_document` Artifact with provenance: extractor,
       filename, content type, byte size, page count, provider/model, blob
@@ -255,6 +256,46 @@ and provider-hosted/remote tools were covered by tests only.
 
 Local extraction is proven; the provider OCR path has test coverage only,
 because no OCR-capable provider is configured in this environment.
+
+## RubyLLM 2.0.0 stable — 2026-09-20
+
+- [x] Pin RubyLLM to `2.0.0` in `Gemfile` and `Gemfile.lock`; `bundle update ruby_llm` completed successfully.
+- [x] Keep the existing Rails message data and migrations. The repository was
+      already on the 2.0 schema shape; no 1.x data migration was applied.
+- [x] Run the full Rails test suite against the stable dependency bundle.
+- [ ] Exercise configured provider paths after the stable upgrade.
+
+### Stable upgrade status: `IMPLEMENTED` · dependency resolution only
+
+The full Rails suite passed against the stable bundle (154 tests, 1,003
+assertions, one skipped test). No schema migration, deployment, or live provider
+dogfood was part of this verification.
+
+## M5.1 — Per-Run provider web search and citations — 2026-09-20
+
+- [x] Add an unchecked-by-default web-search option on the Chat form; its
+      authorization applies only to the Run submitted with that form.
+- [x] Freeze the selected provider-tool names into the Run `input_snapshot` and
+      configure RubyLLM from that snapshot, clearing tools left on a reused Chat.
+- [x] Persist normalized provider citations as a `citation_set` Artifact linked
+      to the Run and Attempt; record the Artifact id and provider-tool step count in the
+      Run result summary.
+- [x] Show provider tool activity and safe HTTP(S)-only citation links in the
+      Chat and Run inspector.
+- [x] Add focused automated coverage for option snapshots, provider-tool
+      clearing, and citation Artifact persistence/redaction.
+- [ ] Dogfood at least one configured provider/model combination that supports
+      hosted web search.
+
+### M5.1 status: `PARTIAL` · local automated coverage present, provider dogfood pending
+
+RubyLLM 2.0 persists citations and provider tool calls on Messages. The app
+adds a normalized citation Artifact for Run-level inspection. The model
+registry does not expose a reliable per-model hosted-search capability flag.
+RubyLLM rejects protocols without the requested tool alias, and provider/model
+requests rejected during execution become failed Runs; the app cannot currently
+prove every selected model will honor or invoke search. No live search was
+performed for this slice.
 
 ## Known implementation gap
 
@@ -285,6 +326,11 @@ because no OCR-capable provider is configured in this environment.
       expiry when a file is uploaded to a provider for OCR or later use.
 - [ ] M4 real OCR dogfood against a configured OCR provider (Cohere `parse-v5.0`
       or Mistral OCR) and page/offset level provenance per chunk.
-- [ ] M5 agents, durable research, and provider-hosted/server tools.
-- [ ] M6-M8 media, batch/evals, exports, deployment, and
-      public-reference polish.
+- [ ] M5 saved Agent definitions, multi-step/durable research orchestration,
+      restart recovery, cancellation, and agent-level lifecycle records.
+- M5 ownership decision: each Agent Run will own a dedicated Chat transcript;
+  Run remains the execution envelope, and later workers restore configuration
+  from the immutable Run snapshot rather than the editable definition.
+- [ ] M6 media workflows.
+- [ ] M7 batch execution, evaluations, and repeatable quality/cost comparisons.
+- [ ] M8 exports, deployment readiness, and public-reference polish.

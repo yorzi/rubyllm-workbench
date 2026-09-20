@@ -3,10 +3,8 @@
 这份手册解决“怎么运行”和“看到结果后能相信到什么程度”。它不保存任何
 provider secret，也不把本地成功包装成部署或业务结果。
 
-本手册属于项目内部 `docs/` 当前现实层。原始目标、合同和验收基线仍在
-[`rubyllm-workbench/ai/00_ENTRYPOINT.md`](../rubyllm-workbench/ai/00_ENTRYPOINT.md)
-及其 supporting Specs 中；两套文档的状态可以不同。操作命令验证的是当前代码，
-不会自动改变 Specs。
+本手册说明当前仓库的本地运行方式与证据边界。命令验证的是当前代码路径；它不能
+替代部署、公开可用性或 provider 长期兼容性的证据。
 
 更新时间：2026-09-16
 
@@ -14,7 +12,7 @@ provider secret，也不把本地成功包装成部署或业务结果。
 
 - Ruby `4.0.2`
 - Rails `8.1.3.1`
-- RubyLLM `2.0.0.rc4`
+- RubyLLM `2.0.0`
 - SQLite、Tailwind、Vite、Hotwire、Solid Queue
 - provider 通过环境变量或 Rails credentials 提供配置
 

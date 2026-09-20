@@ -4,23 +4,15 @@
 AI agent 持续修改系统之后，仍能快速回答：系统为什么存在、现在有什么、一次
 操作如何完成、数据在哪里、哪些能力还不能宣称已经存在。
 
-更新时间：2026-09-18
-当前实现：M0–M3 核心闭环、M4 Knowledge 检索/rerank/文件来源与本地抽取切片
-当前代码基线：`main` 上的 M3 生命周期/并行策略与 M4 Knowledge embedding/retrieval/rerank/document paths
+更新时间：2026-09-20
+当前实现：M0–M3 核心闭环、M4 Knowledge 切片、M5.1 单次 Run 可选 provider 网页搜索与引用留存
+当前代码基线：RubyLLM 2.0.0 stable；M5.1 有定向自动化验证，provider dogfood 待完成
 
-## 两套文档体系：先确认你正在读哪一种“真相”
+## 实现状态与证据
 
-- **Specs 基线**：[`rubyllm-workbench/ai/`](../rubyllm-workbench/ai/) 和
-  [`rubyllm-workbench/supporting/`](../rubyllm-workbench/supporting/) 定义原始目标、
-  合同、约束和验收线；[`rubyllm-workbench/human/`](../rubyllm-workbench/human/) 是
-  Specs 对人类可理解性的基线说明。
-- **项目 `docs/` 当前现实层**：本目录根据当前代码、数据库、测试、浏览器检查和
-  provider dogfood 记录“现在实际上发生什么”。它会随项目增长，不是 Specs 的副本，
-  也不能替代代码或测试。
-
-Specs 中的 `PLANNED` 可能仍然是正确的基线状态，而本页可以记录其中某个切片已经
-  在代码中 `IMPLEMENTED`。反过来，如果当前实现偏离 Specs，本页必须同时写出基线
-  意图和实际偏差；不能通过改写 Specs 来消除差异。
+本指南描述这个仓库当前实际实现的行为。代码与数据库迁移定义运行时；现有测试、
+浏览器检查和 provider dogfood 记录哪些路径经过验证；`TODO.md` 与 `CHANGELOG.md`
+记录计划和历史。文档中的状态与证据标签分开使用，避免把计划写成已交付能力。
 
 ## 一句话理解
 
@@ -46,8 +38,8 @@ Artifact，并把文本来源保存为可追溯的 KnowledgeItem/KnowledgeChunk�
 ### 当前不做什么
 
 - 不是已经部署给公众使用的 SaaS，也没有账号、团队、计费或多租户。
-- 不是 M5 Agent/Deep Research 平台；Agent、工作流和 provider-hosted/server tools
-  仍然延期。
+- 不是完整的 M5 Agent/Deep Research 平台：当前仅在单次 Chat Run 提供显式、默认关闭的
+  provider 网页搜索和引用留存；保存 Agent 定义、多步研究、取消与崩溃恢复仍未实现。
 - 不是完整的 M4 知识库/RAG/文档 OCR 系统：当前有本地文本 collection、chunk、
   provider embedding、SQLite vector adapter、lexical/semantic/hybrid 证据检索、
   兼容 provider rerank，以及文件上传后的本地抽取和 provenance Artifact；provider
@@ -71,10 +63,10 @@ Artifact，并把文本来源保存为可追溯的 KnowledgeItem/KnowledgeChunk�
 | M4 rerank | 对已配置的兼容 rerank model 打开第二阶段重排，查看 pre/post rank | rerank score、pre_rank、未应用原因 | `IMPLEMENTED` · `LOCAL_VERIFIED` + `OPENROUTER_DOGFOOD` |
 | M4 文档来源 | 上传文件、本地抽取或 provider OCR、查看 provenance Artifact | `ocr_document` Artifact、extractor、页数、blob/内容 checksum | `IMPLEMENTED` · `LOCAL_VERIFIED`（OCR 路径仅测试证据） |
 | M4 完整目标 | provider 文件引用与更细的引用 Artifact | provider file ref lifecycle | `PLANNED` |
-| M5 | Agent、Durable Research、远程工具和可恢复长任务 | AgentDefinition、AgentRunStep、citation/research Artifact | `PLANNED` |
+| M5.1 | 每次 Chat Run 可选 provider 网页搜索，检查来源与远程工具步骤 | 冻结的 provider tool 快照、`citation_set` Artifact、Run 级工具步骤摘要 | `PARTIAL` · `LOCAL_VERIFIED`；provider dogfood 待完成 |
+| M5 后续 | 保存 Agent、多步研究、恢复/取消与运行步骤 | AgentDefinition、AgentRunStep、durable research records | `PLANNED` |
 
-这里的状态是项目当前实现层的判断；Specs 人类基线中的 `PLANNED` 状态仍保留其
-“原始需求尚未被基线承认为已完成”的含义。
+这里的状态描述本仓库当前实现；路线图中的 `PLANNED` 项表示尚未实现的后续能力。
 
 ## 关键概念：不要把它们混成一个“结果”
 
@@ -95,8 +87,18 @@ Run 是一次用户能理解的执行请求，有稳定的 inspector URL 和状�
 `queued → running → waiting_for_approval → succeeded | failed | cancelled`
 
 Run 的 `input_snapshot` 冻结这次执行看到的 prompt、工具 schema、approval policy 和
-Tool execution policy。
+Tool execution policy，以及本次是否启用了 provider-hosted tools。
 之后在 Tool Lab 里切换 enabled，不会回写已经开始的旧 Run。
+
+### Provider-hosted web search
+
+Chat 表单默认不启用网页搜索。勾选后，Run 会把 `web_search` 写入快照并调用
+RubyLLM 2.0 的 provider-tool API；搜索词会交给所选 provider 的托管服务。具体模型和
+protocol 的支持情况并不统一。RubyLLM 会在 protocol 不提供相应 provider-tool alias
+时拒绝请求；具体模型能力没有由 ModelCatalog 验证，模型也可能拒绝请求或不调用搜索。
+明确的请求错误会让应用将 Run 记为失败；成功响应本身不能证明发生了搜索，需检查
+`server_tool_calls` 和 citations。RubyLLM Message 保留这些数据；应用另把标准化
+citations 保存成 `citation_set` Artifact。网页链接只在 HTTP(S) 下可点击。
 
 ### Attempt
 
@@ -173,17 +175,19 @@ Tool Lab 为 Project 保存一个新 Chat Run 的默认执行模式，默认为 
 
 1. 人在 Chat 输入 prompt，应用调用 `Ai::RunExecutor`。
 2. 系统同步 Project 的 registry，并把当前 enabled 工具的 key、schema、描述、
-   approval policy 和 Tool execution policy 写入新 Run 的 `input_snapshot`。
+   approval policy、Tool execution policy 和 provider tool 选项写入新 Run 的
+   `input_snapshot`。
 3. 系统原子创建 Run 和第一个 queued Attempt，然后把 `ChatResponseJob` 放入
    Solid Queue。
 4. `Ai::ChatExecutor` 领取 Run；同一 Run 已经 `running` 或已经 terminal 时，
    后来的重复 job 不会再次提交 prompt。
-5. ChatExecutor 通过 RubyLLM 配置工具和快照中的 `with_tool_options`，再执行
-   `ask(prompt)`；流式内容继续写入 RubyLLM Message，同时 Attempt 记录 usage、latency、
-   cost 和 finish reason。
-6. 如果模型请求一个或多个工具，`Ai::ToolInvocationRecorder` 为每个 RubyLLM
+5. ChatExecutor 通过 RubyLLM 配置本地工具、快照中的 provider tools 与
+   `with_tool_options`，再执行 `ask(prompt)`；流式内容继续写入 RubyLLM Message，
+   同时 Attempt 记录 usage、latency、cost 和 finish reason。
+6. 如果模型请求一个或多个本地工具，`Ai::ToolInvocationRecorder` 为每个 RubyLLM
    持久化的调用映射成 ToolInvocation，并过滤参数中的 key/token/secret/password 等
-   敏感字段。
+   敏感字段。provider-hosted 步骤和引用由 RubyLLM 持久化在 Message；provider 引用
+   另外形成 citation Artifact。
 7. 如果工具需要审批，Run 进入 `waiting_for_approval`，页面刷新后仍能看到待决定
    的调用；这时不会假装 Run 已成功。
 8. 人 approve 或 deny 后，`Ai::ApprovalService` 同时写应用 Approval 和 RubyLLM
@@ -235,8 +239,8 @@ Attempt、cost provenance、tool result、approval 以及是否存在 provider f
 
 ### “工具调用”不等于“Agent”
 
-M3 只是 Chat 中的 allowlisted Ruby tool + 审批 + 审计。M5 Agent 才会引入保存的
-Agent 定义、多步运行、远程/provider-hosted 工具、研究引用和更长的可恢复流程。
+M3 是 Chat 中的 allowlisted Ruby tool + 审批 + 审计。当前 M5.1 只把 provider-hosted
+web search 接入现有 Chat Run。保存的 Agent 定义、多步运行、恢复和取消仍未实现。
 
 ### “失败”不等于“历史丢失”
 
@@ -268,7 +272,7 @@ Agent 定义、多步运行、远程/provider-hosted 工具、研究引用和更
   0.6758 / 0.111 / 0.0009；它在一次 lexical 并列（0.7833）时把词面重复但离题的段落
   排在语义正确的段落之前，说明 rerank 分数需要人复核。
 - 当前仍没有 live provider 返回多个 parallel tool calls 的兼容性结论，也没有 M4
-  rerank/OCR 或 M5 的实现证据。
+  OCR 或 M5.1 网页搜索切片的 provider dogfood 证据。
 
 这些是本地、点时的验证，不是生产承诺。
 

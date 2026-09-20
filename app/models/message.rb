@@ -1,6 +1,8 @@
 class Message < ApplicationRecord
   acts_as_message
 
+  attr_accessor :web_search
+
   has_many_attached :attachments
 
   broadcasts_to ->(message) { message.chat.stream_key }, inserts_by: :append

@@ -50,6 +50,41 @@ class WorkbenchFlowTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "ai.run.created"
   end
 
+  test "run inspector shows provider activity from its own result snapshot" do
+    project = create_project(name: "Provider activity project")
+    chat = create_chat(project)
+    chat.messages.create!(
+      role: "assistant",
+      content: "A later answer",
+      server_tool_calls: [
+        { "type" => "web_search_call", "name" => "later-run-search", "input" => { "query" => "later query" } }
+      ]
+    )
+    run = chat.runs.create!(
+      project: project,
+      operation: "chat",
+      status: :succeeded,
+      requested_by: "test",
+      input_snapshot_json: { "prompt" => "Earlier run" },
+      result_summary_json: {
+        "provider_tool_calls" => [
+          { "type" => "web_search_call", "name" => "current-run-search", "input" => { "query" => "current query" } }
+        ]
+      },
+      app_version: "test",
+      ruby_llm_version: Gem.loaded_specs.fetch("ruby_llm").version.to_s
+    )
+    run.attempts.create!(sequence: 1, provider: chat.provider, model_id: chat.model_id, status: :succeeded)
+
+    get run_path(run)
+
+    assert_response :success
+    assert_includes response.body, "current-run-search"
+    assert_includes response.body, "current query"
+    refute_includes response.body, "later-run-search"
+    refute_includes response.body, "later query"
+  end
+
   test "freezes an effective parallel tool policy into a Run snapshot" do
     project = create_project(name: "Parallel policy project")
     chat = create_chat(project)

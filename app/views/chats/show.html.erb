@@ -95,8 +95,14 @@
       <%= form_with model: [@project, @chat, Message.new], data: { controller: "form-state", action: "turbo:submit-start->form-state#start turbo:submit-end->form-state#finish" }, class: "rounded-2xl border border-line bg-panel p-3 shadow-sm" do |form| %>
         <%= form.label :content, "Message", class: "sr-only" %>
         <%= form.text_area :content, rows: 3, required: true, placeholder: "Ask the selected model something…", class: "w-full resize-y border-0 bg-transparent px-2 py-1 text-sm leading-6 text-ink outline-none placeholder:text-slate-400 focus:ring-0" %>
-        <div class="mt-2 flex items-center justify-between gap-3 border-t border-line px-2 pt-2">
-          <p class="text-[11px] text-muted">Run data and messages are persisted locally.</p>
+        <div class="mt-2 flex flex-col gap-3 border-t border-line px-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
+          <div class="space-y-2">
+            <p class="text-[11px] text-muted">Run data and messages are persisted locally.</p>
+            <label class="flex items-start gap-2 text-[11px] leading-5 text-muted">
+              <%= form.check_box :web_search, class: "mt-1 rounded border-line text-accent focus:ring-accent" %>
+              <span>Allow provider web search for this Run. Search terms go to the selected provider; support varies by model.</span>
+            </label>
+          </div>
           <%= form.submit "Run", disabled: !@provider_configured, title: (@provider_configured ? nil : "Configure the provider first"), data: { form_state_target: "submit" }, class: "cursor-pointer rounded-lg bg-accent px-4 py-2 text-xs font-medium text-white enabled:hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50" %>
         </div>
       <% end %>

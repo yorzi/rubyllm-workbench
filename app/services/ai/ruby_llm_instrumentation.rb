@@ -1,8 +1,8 @@
 module Ai
   # Maps RubyLLM 2.0 instrumentation onto the local lifecycle catalog.
   #
-  # The Specs require provider instrumentation to be consumed through an
-  # adapter so the domain model never depends on unstable payload fields. This
+  # Provider instrumentation is consumed through an adapter so the domain model
+  # never depends on unstable payload fields. This
   # adapter whitelists a handful of scalars, resolves the Run behind the event's
   # chat when there is one, and records a `ai.provider.*` event with
   # `source = ruby_llm`. Events that cannot be tied to a Run (embedding and

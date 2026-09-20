@@ -2,10 +2,11 @@ require "test_helper"
 
 class Ai::ChatToolingTest < ActiveSupport::TestCase
   class FakeChat
-    attr_reader :registered_tools, :tool_options
+    attr_reader :registered_tools, :tool_options, :provider_tools, :provider_tool_calls
 
     def initialize
       @registered_tools = []
+      @provider_tool_calls = []
     end
 
     def with_tools(*tools)
@@ -16,6 +17,12 @@ class Ai::ChatToolingTest < ActiveSupport::TestCase
 
     def with_tool_options(**options)
       @tool_options = options
+      self
+    end
+
+    def with_provider_tools(*tools)
+      @provider_tool_calls << tools
+      @provider_tools = tools
       self
     end
   end
@@ -64,5 +71,33 @@ class Ai::ChatToolingTest < ActiveSupport::TestCase
     Ai::ChatTooling.new(chat: fake_chat, project: @project, run: run).configure
 
     assert_equal({ calls: :one, concurrency: false }, fake_chat.tool_options)
+  end
+
+  test "applies snapshotted provider tools and clears them for a default Run" do
+    opted_in_run = @chat.runs.create!(
+      project: @project,
+      operation: "chat",
+      status: :queued,
+      requested_by: "test",
+      input_snapshot_json: { "prompt" => "search", "provider_tools" => [ "web_search" ] }
+    )
+    default_run = @chat.runs.create!(
+      project: @project,
+      operation: "chat",
+      status: :queued,
+      requested_by: "test",
+      input_snapshot_json: { "prompt" => "no search" }
+    )
+    fake_chat = FakeChat.new
+
+    Ai::ChatTooling.new(chat: fake_chat, project: @project, run: opted_in_run).configure
+
+    assert_equal [ [ nil ], [ :web_search ] ], fake_chat.provider_tool_calls
+    assert_equal [ :web_search ], fake_chat.provider_tools
+
+    Ai::ChatTooling.new(chat: fake_chat, project: @project, run: default_run).configure
+
+    assert_equal [ [ nil ], [ :web_search ], [ nil ] ], fake_chat.provider_tool_calls
+    assert_equal [ nil ], fake_chat.provider_tools
   end
 end

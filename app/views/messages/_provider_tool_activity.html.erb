@@ -1,0 +1,18 @@
+<% calls = local_assigns.fetch(:calls) { message.server_tool_calls } %>
+<% if calls.any? %>
+  <details class="mt-3 border-t border-line pt-2 text-xs text-muted">
+    <summary class="cursor-pointer">Provider tool activity · <%= calls.size %> steps</summary>
+    <ol class="mt-2 space-y-2">
+      <% calls.each do |call| %>
+        <% data = call.respond_to?(:to_h) ? call.to_h : call %>
+        <% name = data[:name] || data["name"] %>
+        <% type = data[:type] || data["type"] %>
+        <% input = data[:input] || data["input"] %>
+        <li class="rounded-md bg-canvas p-2">
+          <p class="font-medium text-ink"><%= name.presence || type %></p>
+          <% if input.present? %><pre class="mt-1 whitespace-pre-wrap break-words font-mono text-[10px]"><%= JSON.pretty_generate(Ai::ToolPayloadSanitizer.call(input)) %></pre><% end %>
+        </li>
+      <% end %>
+    </ol>
+  </details>
+<% end %>

@@ -26,14 +26,24 @@ module Ai
         end
       end
       tool_recorder.sync!
+      source_message_id = latest_assistant_message&.id
+      citation_artifact = Ai::CitationSetRecorder.new(run: @run, attempt:, response:, source_message_id:).call
+      result_summary = provider_result_summary(response, citation_artifact, source_message_id)
 
       if @chat.awaiting_approval?
+        pending_result_summary = {
+          "pending_tool_calls" => @run.tool_invocations.waiting_for_approval.pluck(:tool_key)
+        }.merge(result_summary)
         recorder.waiting_for_approval!(
           usage_ids_before: usage_ids_before,
-          result_summary: { "pending_tool_calls" => @run.tool_invocations.waiting_for_approval.pluck(:tool_key) }
+          result_summary: pending_result_summary
         )
       else
-        recorder.succeed!(response, usage_ids_before: usage_ids_before)
+        recorder.succeed!(
+          response,
+          usage_ids_before: usage_ids_before,
+          result_summary:
+        )
       end
     rescue StandardError => error
       Ai::ToolErrorFinalizer.new(@chat, error).call
@@ -60,6 +70,36 @@ module Ai
 
     def latest_assistant_message
       @chat.messages.reload.reverse.find { |message| message.role.to_s == "assistant" }
+    end
+
+    def provider_result_summary(response, citation_artifact, source_message_id)
+      summary = {}
+      summary["source_message_id"] = source_message_id if source_message_id
+      summary["citation_artifact_id"] = citation_artifact.id if citation_artifact
+      summary["citation_count"] = citation_artifact.metadata_json["citation_count"] if citation_artifact
+      provider_tool_calls = provider_tool_call_records(response)
+      if provider_tool_calls.any?
+        summary["provider_tool_calls"] = provider_tool_calls
+        summary["provider_tool_step_count"] = provider_tool_calls.size
+      end
+      summary
+    end
+
+    def provider_tool_call_records(response)
+      return [] unless response.respond_to?(:server_tool_calls)
+
+      Array(response.server_tool_calls).filter_map do |call|
+        data = call.respond_to?(:to_h) ? call.to_h : call
+        next unless data.is_a?(Hash)
+
+        record = {
+          "type" => data[:type] || data["type"],
+          "name" => data[:name] || data["name"],
+          "id" => data[:id] || data["id"],
+          "input" => Ai::ToolPayloadSanitizer.call(data[:input] || data["input"])
+        }.compact
+        record if record.any?
+      end
     end
   end
 end

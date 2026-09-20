@@ -2,43 +2,35 @@
 
 ## Scope
 
-This implementation covers the M0, M1, M2, M3 and current M4 Knowledge slice:
+This implementation covers the M0–M4 slices and the first M5 provider-search slice:
 
 `Project -> Chat/Tool Lab/Knowledge -> persisted execution and evidence records -> inspectors`
 
 The M4 slice currently covers local text collections, deterministic chunks,
 checksums, provider embeddings in a SQLite vector adapter, explainable
 lexical/semantic/hybrid retrieval, compatible-provider rerank, file upload/local
-extraction and provenance artifacts, with explicit degradation. Provider file
-references, real OCR/page-level provenance, agents, media, batch/evals and
-operational polish stay deferred until each boundary is extended deliberately.
+extraction and provenance artifacts, with explicit degradation. M5 currently
+adds opt-in provider web search and citation artifacts to a Chat Run. Provider
+file references, real OCR/page-level provenance, saved Agents, multi-step
+recovery, media, batch/evals and operational polish remain incomplete or
+deferred.
 
 Current status: M0–M3 core, the M4 local-text foundation and the M4
 embedding/retrieval/rerank/document slices are `IMPLEMENTED` for their verified
 local paths with OpenRouter embedding/rerank dogfood; live M3 parallel provider
 compatibility, provider file references, real OCR/page-level provenance and
-cross-provider embedding compatibility are `PARTIAL` or deferred; M5–M8 remain
-`PLANNED`.
+cross-provider embedding compatibility are `PARTIAL` or deferred. M5.1's
+provider-search path passes local automated tests; provider dogfood is pending.
+The rest of M5 is incomplete and M6–M8 remain `PLANNED`.
 
 ## Human understanding layer
 
-There are two deliberately separate documentation systems:
-
-- **Specs baseline:** [`rubyllm-workbench/ai/`](rubyllm-workbench/ai/) and
-  [`rubyllm-workbench/supporting/`](rubyllm-workbench/supporting/) define the original
-  product intent, contracts, constraints and acceptance line. Their
-  [`human/`](rubyllm-workbench/human/) layer explains that baseline to a person.
-- **Project current-reality layer:** [docs/README.md](docs/README.md) and the documents
-  below summarize what this repository actually implements and what evidence exists.
-  They grow with the project, record deviations and risks, and do not override Specs,
-  source code or tests.
-
-Start with `docs/SYSTEM_GUIDE.md` for current goals, capabilities and cautions; use
-`docs/ARCHITECTURE.md` for verified flow/data/state diagrams; use `docs/OPERATIONS.md`
-for local operation and evidence boundaries; and append user-facing changes to
-`docs/CHANGELOG.md` with each thematic iteration. If runtime and Specs differ, keep
-both sides visible: do not rewrite the baseline merely to make the current implementation
-look complete.
+The repository's public documentation is self-contained. `docs/SYSTEM_GUIDE.md`
+describes current capabilities and limits; `docs/ARCHITECTURE.md` shows verified
+data and runtime paths; `docs/OPERATIONS.md` covers local operation; and
+`docs/CHANGELOG.md` records thematic changes and their evidence. Code, migrations,
+existing tests, and recorded runtime checks remain the sources for claims about
+behavior. `TODO.md` is the current roadmap.
 
 ## Product shape
 
@@ -54,8 +46,9 @@ look complete.
   output definition that can be executed repeatedly.
 - **Experiment execution:** one frozen definition snapshot grouping one Run per
   selected model; reruns create a new execution and preserve prior evidence.
-- **Artifact:** a bounded JSON result attached to the successful structured Run;
-  the raw chat/Run/Attempt history remains inspectable alongside it.
+- **Artifact:** a bounded JSON result attached to the successful structured Run,
+  a citation set attached to a cited provider response, or source-extraction
+  provenance; raw chat/Run/Attempt history remains inspectable alongside it.
 - **LifecycleEvent:** a Run-scoped, metadata-only event catalog entry with a fixed
   name, optional links to an Attempt/Artifact/ToolInvocation/Approval, occurrence
   time, duration and idempotency key. It indexes transitions; it is not a content
@@ -97,8 +90,8 @@ look complete.
 3. Model Explorer: RubyLLM-backed model catalog with search/provider/
    capability/configuration filters, capability badges and explicit
    configured/unconfigured state.
-4. Chat: choose a model, submit a prompt, see idle/submitting/streaming/
-   finalizing/succeeded/failed states, and reload durable history.
+4. Chat: choose a model, optionally enable provider web search for one Run,
+   submit a prompt, inspect search activity/citations, and reload durable history.
 5. Run inspector: stable `/runs/:id` URL showing status, provider/model,
    timing, usage, cost provenance, attempts, output and safe diagnostic data.
 6. Global Run history: searchable/filterable local execution ledger linking each
@@ -115,7 +108,7 @@ look complete.
 
 ## Data and service boundaries
 
-- RubyLLM version: `2.0.0.rc4`; provider interactions go through the 2.0 APIs
+- RubyLLM version: `2.0.0`; provider interactions go through the stable 2.0 APIs
   (`with_schema`, `with_tool_options(calls:, concurrency:)`, `approve`/`deny`/
   `complete`, `RubyLLM.embed`, `RubyLLM.rerank`, `chunk.content`).
 - Rails application records: `Project`, `Chat`, `Run`, `Attempt`, `Artifact`,
@@ -129,6 +122,8 @@ look complete.
 - `Ai::AttemptRecorder` normalizes provider/model, timing, usage, cost and
   errors without mutating historical attempts.
 - `Ai::ChatExecutor` performs chat execution through RubyLLM only.
+- `Ai::CitationSetRecorder` writes normalized RubyLLM citations as a Run/Attempt
+  Artifact; provider tool steps remain on the persisted RubyLLM Message.
 - `Ai::CostNormalizer` labels reported, estimated or unknown cost.
 - `Ai::SchemaDefinition` owns the bounded schema contract; `Ai::SchemaValidator`
   validates returned JSON without evaluating code or arbitrary schema keywords.
@@ -176,13 +171,14 @@ complete distributed event stream, a cost dashboard or a historical backfill sys
 
 ## Integrations and constraints
 
-- Rails 8.1.3.1, RubyLLM 2.0.0.rc4 target, SQLite, Active Storage local disk,
+- Rails 8.1.3.1, RubyLLM 2.0.0, SQLite, Active Storage local disk,
   Hotwire/Turbo/Stimulus, Tailwind and Vite following the loaded Rails MVP
   conventions.
 - Provider credentials are read from environment/Rails credentials only; they
   are never rendered, persisted as plaintext or copied into logs.
-- Provider capability differences are runtime-visible. Unsupported actions are
-  disabled/explained rather than simulated.
+- Provider capability differences are runtime-visible. Registry-declared
+  capabilities gate supported actions; provider-tool support is opt-in and can
+  still fail for a specific model/protocol, with the error retained on its Run.
 - M4 retrieval is intentionally SQLite-bounded. Semantic mode requires a
   configured provider embedding model and stored vectors; otherwise `Search`
   degrades to lexical evidence and records the reason. The sqlite-vector adapter
@@ -205,16 +201,16 @@ keyboard-friendly.
 ## Pre-flight record
 
 - Milestone: M0 + M1 + M2 + M3 plus the M4 local-text, embedding/retrieval,
-  rerank and document-source slices.
-- Scope: local chat, structured experiment comparison, code-defined tools,
+  rerank and document-source slices; M5.1 provider search is locally verified,
+  with provider dogfood pending.
+- Scope: local chat with optional per-Run provider web search, structured experiment comparison, code-defined tools,
   durable approval continuation, and Project-scoped text evidence retrieval with
   provider embeddings, lexical/semantic/hybrid modes, a compatible-provider
-  rerank stage, and file sources with extraction provenance; provider file
-  references, real OCR dogfood and M5-M8 remain explicitly deferred.
+  rerank stage, and file sources with extraction provenance. Provider file
+  references, real OCR dogfood and the remaining M5–M8 work stay deferred.
 - Runtime verified: Ruby 4.0.2 and Rails 8.1.3.1.
-- Baseline difference: RubyLLM 2.0.0.rc4 is a prerelease and is not installed
-  globally; RubyLLM 1.16.0 is the newest stable release. The Gemfile must target
-  2.0.0.rc4 and the installed API/source must be checked before implementation.
+- Dependency target: RubyLLM 2.0.0 stable. Provider calls use the public 2.0 API;
+  future upgrades should be checked against the official migration guide.
 - RubyLLM instrumentation is consumed through an adapter
   (`Ai::RubyLlmInstrumentation`) rather than by reading payload internals.
 - Provider boundary: every provider operation goes through RubyLLM; no escape

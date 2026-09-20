@@ -5,5 +5,20 @@
     <% if message.thinking_text.present? %>
       <details class="mt-3 border-t border-line pt-2 text-xs text-muted"><summary class="cursor-pointer">Thinking</summary><p class="mt-2 whitespace-pre-wrap"><%= message.thinking_text %></p></details>
     <% end %>
+    <%= render "messages/provider_tool_activity", message: message %>
+    <% if message.citations.any? %>
+      <aside class="mt-3 border-t border-line pt-2 text-xs" aria-label="Source citations">
+        <p class="font-semibold text-muted">Sources</p>
+        <ul class="mt-2 space-y-1">
+          <% message.citations.each do |citation| %>
+            <% url = citation_link_url(citation) %>
+            <% title = citation_value(citation, :title).presence || url || "Source" %>
+            <li class="break-words">
+              <% if url %><%= link_to title, url, target: "_blank", rel: "noopener noreferrer", class: "text-accent underline decoration-accent/30 underline-offset-2 hover:decoration-accent" %><% else %><span class="text-muted"><%= title %></span><% end %>
+            </li>
+          <% end %>
+        </ul>
+      </aside>
+    <% end %>
   </div>
 </article>

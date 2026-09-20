@@ -18,7 +18,9 @@ class MessagesController < ApplicationController
       return
     end
 
-    @run = Ai::RunExecutor.enqueue(chat: @chat, project: @project, prompt: prompt)
+    web_search = ActiveModel::Type::Boolean.new.cast(message_params[:web_search])
+    provider_tools = web_search ? [ "web_search" ] : []
+    @run = Ai::RunExecutor.enqueue(chat: @chat, project: @project, prompt: prompt, provider_tools:)
     redirect_to project_chat_path(@project, @chat), notice: "Run ##{@run.id} queued.", status: :see_other
   rescue ActiveRecord::RecordInvalid => error
     redirect_to project_chat_path(@project, @chat), alert: error.record.errors.full_messages.to_sentence
@@ -35,6 +37,6 @@ class MessagesController < ApplicationController
   end
 
   def message_params
-    params.expect(message: [ :content ])
+    params.expect(message: [ :content, :web_search ])
   end
 end

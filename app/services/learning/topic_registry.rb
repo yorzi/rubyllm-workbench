@@ -112,23 +112,25 @@ module Learning
             kicker: "Chat → Run → Attempt → RubyLLM",
             summary: "A prompt becomes a durable Run before provider code runs, so the Workbench can show what was requested, which tools were frozen, and how the attempt finished.",
             steps: list(
-              step("1. The Rails action accepts the message", "MessagesController checks the selected model and hands the bounded prompt to Ai::RunExecutor. The page then redirects back to the Chat; execution is asynchronous."),
-              step("2. The application creates the evidence boundary", "RunExecutor snapshots enabled tools, tool policy, app version, RubyLLM version, provider, model, and the first Attempt before enqueueing ChatResponseJob."),
-              step("3. The job enters the ChatExecutor", "ChatResponseJob loads the Run. ChatExecutor claims it, starts the Attempt, configures the RubyLLM chat, and executes ask or complete inside the Run/Attempt execution context."),
-              step("4. Streaming and tool records are persisted", "The executor observes streamed content and ToolInvocationRecorder synchronizes RubyLLM tool calls into local invocation, approval, result, and lifecycle records."),
+              step("1. The Rails action accepts the message", "MessagesController checks the selected model and hands the prompt plus an optional, per-Run web-search choice to Ai::RunExecutor. The page redirects back to the Chat; execution is asynchronous."),
+              step("2. The application creates the evidence boundary", "RunExecutor snapshots enabled local tools, provider-tool keys, tool policy, app version, RubyLLM version, provider, model, and the first Attempt before enqueueing ChatResponseJob."),
+              step("3. The job enters the ChatExecutor", "ChatResponseJob loads the Run. ChatExecutor claims it, starts the Attempt, configures local and provider tools from the frozen snapshot, and executes ask or complete inside the Run/Attempt execution context."),
+              step("4. Streaming, tool records and citations are persisted", "The executor observes streamed content; ToolInvocationRecorder synchronizes local RubyLLM tools into invocation and approval records; provider search steps remain on the RubyLLM Message and citations are copied to a Run Artifact."),
               step("5. RubyLLM notifications are adapted", "The instrumentation adapter listens to RubyLLM notifications and maps a safe subset to local ai.provider.* lifecycle events. This is an adapter boundary, not provider-native tracing.")
             ),
             code_references: list(
-              reference("app/controllers/messages_controller.rb", "Rails entry point", "Validates the model and enqueues the Run.", 5, 22, "Ai::RunExecutor.enqueue"),
+              reference("app/controllers/messages_controller.rb", "Rails entry point", "Validates the model and enqueues the Run.", 15, 24, "Ai::RunExecutor.enqueue"),
               reference("app/services/ai/run_executor.rb", "Run creation and snapshot", "Creates the durable Run and first Attempt.", 14, 42, "def enqueue"),
               reference("app/jobs/chat_response_job.rb", "Queue handoff", "Moves the durable Run into the executor.", 1, 5, "Ai::ChatExecutor.new"),
               reference("app/services/ai/chat_executor.rb", "Chat execution", "Claims, configures, streams, and completes the Attempt.", 8, 41, "def call"),
+              reference("app/services/ai/citation_set_recorder.rb", "Citation artifact", "Persists normalized provider citations against the Run and Attempt.", 1, 40, "class CitationSetRecorder"),
               reference("app/services/ai/ruby_llm_instrumentation.rb", "RubyLLM adapter", "Maps RubyLLM notifications to local lifecycle evidence.", 24, 36, "ActiveSupport::Notifications.subscribe")
             ),
             external_references: list(
               external("Rails Action Controller overview", "https://guides.rubyonrails.org/action_controller_overview.html", "Rails request/action boundary"),
               external("Rails Action View overview", "https://guides.rubyonrails.org/action_view_overview.html", "Rails rendering boundary"),
               external("RubyLLM overview", "https://rubyllm.com/overview/", "RubyLLM chat and provider boundary"),
+              external("RubyLLM provider tools", "https://rubyllm.com/provider-tools/", "Provider-hosted search and citations"),
               external("RubyLLM Rails integration", "https://rubyllm.com/rails/", "RubyLLM persistence and Rails integration"),
               external("RubyLLM instrumentation", "https://rubyllm.com/next/instrumentation/", "RubyLLM notification boundary")
             ),
@@ -140,7 +142,8 @@ module Learning
             ),
             boundaries: list(
               "The app owns the snapshot and audit records; the provider still owns model behavior and provider-specific compatibility.",
-              "RubyLLM 2.0.0.rc4 is the current project target. This page does not claim that every provider exposes identical behavior.",
+              "RubyLLM 2.0.0 is the current project target. Provider web search is opt-in; the model registry does not establish support for every model/protocol.",
+              "The M5.1 provider-search path has not yet been locally verified or dogfooded against a live provider.",
               "The learning layer explains the path without rendering prompts, credentials, raw provider payloads, or arbitrary source files."
             )
           ),

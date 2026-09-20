@@ -14,6 +14,10 @@
 # Ignore all environment files.
 /.env*
 
+# Product specifications live outside this public application repository.
+/specs/
+/rubyllm-workbench
+
 # Ignore all logfiles and tempfiles.
 /log/*
 /tmp/*

@@ -3,7 +3,7 @@ module Ai
     # Turns an attached file into text, locally when possible and through a
     # provider OCR model when it is not.
     #
-    # The Specs ask for durable artifacts with provenance, so every extraction
+    # The application keeps durable artifacts with provenance, so every extraction
     # records where the text came from: local reader, or provider + model +
     # page count. Nothing here guesses at a binary's contents.
     class Extractor

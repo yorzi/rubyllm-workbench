@@ -1,51 +1,47 @@
 # RubyLLM Workbench
 
-RubyLLM Workbench is a local-first Rails reference app for inspecting model
-capabilities, running project-scoped chats, and reviewing durable AI Runs and
-Attempts. It follows the source specifications linked into this workspace:
+RubyLLM Workbench is a local-first Rails reference application for building and
+inspecting AI workflows with RubyLLM. It brings model selection, project-scoped
+chats, structured experiments, approved tools, local knowledge retrieval, and
+durable execution records into one application.
 
-- Canonical entrypoint: [ai/00_ENTRYPOINT.md](rubyllm-workbench/ai/00_ENTRYPOINT.md)
-- Specs baseline: [`ai/`](rubyllm-workbench/ai/) and [`supporting/`](rubyllm-workbench/supporting/),
-  including the original product, technical, safety and acceptance contracts.
-- Implementation map: [IMPLEMENTATION_MAP.md](IMPLEMENTATION_MAP.md)
-- Current work list: [TODO.md](TODO.md)
-- Current implementation docs: [docs/README.md](docs/README.md)
+This is a single-user developer workbench. It is not a hosted service and does
+not provide accounts, teams, billing, or multi-tenant isolation.
 
-Specs and `docs/` have different jobs. Specs are the stable reference line; the project
-`docs/` directory is the living record of what this repository currently implements,
-what evidence supports it, and where it deviates or remains incomplete. Read `docs/`
-for current behavior and the linked Specs when checking original intent or acceptance
-constraints. Current runtime changes must not silently rewrite the Specs baseline.
+Start with:
 
-## Current slice
+- [Current system guide](docs/SYSTEM_GUIDE.md)
+- [Architecture and runtime diagrams](docs/ARCHITECTURE.md)
+- [Local setup and evidence boundaries](docs/OPERATIONS.md)
+- [Implementation map](IMPLEMENTATION_MAP.md)
+- [Roadmap](TODO.md)
+- [Documentation index](docs/README.md)
 
-The implemented gates are M0–M3 core plus a verified M4 local Knowledge slice (`PARTIAL` at the milestone level): Projects, Model Explorer, model selection,
-persisted Chats and Messages, RubyLLM-backed streaming execution, a
-code-defined Tool Lab, durable tool approvals, Run/Attempt/ToolInvocation
-records, a searchable Run history, a token/cost/latency inspector, a local
-LifecycleEvent timeline for each Run, and Project-scoped Knowledge collections
-with inline text ingestion, deterministic chunks, checksums, provider embeddings
-in a SQLite vector adapter, explainable lexical/semantic/hybrid evidence search,
-optional compatible-provider reranking, and file sources with local extraction
-and provenance artifacts.
-Tool execution is sequential by default; Tool Lab has an explicit parallel mode that is
-frozen into each new Run and only takes effect for a model advertising
-`parallel_tool_calls` when every enabled tool is marked parallel-safe. The local application
-path and multiple-call inspection are verified; real provider compatibility remains `PARTIAL`.
-Provider file references, real OCR dogfood and page-level provenance, broader
-cross-provider compatibility, Agents, provider-hosted tools, media, batch evaluation,
-billing, and deployment remain `PLANNED`, `PARTIAL`, or explicitly deferred within M4
-and later milestones.
+The repository is self-contained. Code, migrations, existing tests, and the
+current implementation documents are the source of truth for behavior. The
+roadmap describes planned work; `IMPLEMENTED`, `PARTIAL`, and `PLANNED` labels
+are kept distinct from verification evidence.
 
-If you are returning to the project after a pause, read
-[docs/SYSTEM_GUIDE.md](docs/SYSTEM_GUIDE.md) first, then the diagrams and
-operating notes linked from [docs/README.md](docs/README.md). These documents
-are maintained alongside each thematic implementation change so the system's
-current behavior and boundaries remain legible to a human.
+## Current implementation
+
+The implemented application includes Projects, a RubyLLM model explorer,
+persisted Chats and Messages, streaming execution, structured Experiments,
+allowlisted tools with durable approval, Run/Attempt/ToolInvocation records,
+searchable Run history, and a local lifecycle timeline. Its Project-scoped
+Knowledge workspace supports text and file sources, checksummed chunks,
+provider embeddings, lexical/semantic/hybrid evidence search, optional reranking,
+and extraction provenance.
+
+Provider compatibility remains partial. In particular, parallel tool-call
+compatibility, OCR dogfooding, page-level provenance, and broader cross-provider
+embedding coverage still need evidence. M5 has started with per-Run, opt-in
+provider web search and saved citation artifacts; saved Agent definitions,
+multi-step research, restart recovery, and cancellation remain unfinished.
+M6–M8 are planned; see [TODO.md](TODO.md) for current scope and evidence.
 
 ## Local setup
 
-The app targets Ruby 4.0.2, Rails 8.1.3.1, RubyLLM 2.0.0.rc4, SQLite, Tailwind,
+The app targets Ruby 4.0.2, Rails 8.1.3.1, RubyLLM 2.0.0, SQLite, Tailwind,
 Vite, Hotwire, and Solid Queue.
 
 ```sh
@@ -60,7 +56,7 @@ For a one-off local server, bind it to loopback explicitly:
 bin/rails server -b 127.0.0.1 -p 3100
 ```
 
-The Model Explorer and project/chat pages are usable without provider keys.
+The Model Explorer and project pages can be opened without provider keys.
 Running a chat requires the selected provider to be configured through the
 environment or Rails credentials. Never commit or print plaintext credentials.
 
@@ -73,6 +69,6 @@ bin/rubocop --cache false
 bin/rails assets:precompile
 ```
 
-Paid-provider checks are intentionally opt-in. The application keeps provider
-configuration state visible and turns an unavailable provider into a diagnostic
-state instead of attempting a hidden fallback.
+Paid-provider checks are opt-in. The application keeps provider configuration
+visible and reports unavailable providers instead of attempting a hidden
+fallback.

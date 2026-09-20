@@ -26,8 +26,7 @@ module Ai
 
     private
 
-    # RubyLLM 2.0 marks provider-hosted tools as remote; the Specs require
-    # those calls to be labelled explicitly rather than treated as local code.
+    # RubyLLM 2.0 can mark a tool call as remote; preserve that flag for inspection.
     def remote?(tool_call)
       return false unless tool_call.respond_to?(:remote?)
 

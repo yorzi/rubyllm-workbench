@@ -1,8 +1,7 @@
 # RubyLLM Workbench 架构与流程图
 
-这些图是项目内部 `docs/` 的当前实现视图，用来帮助人恢复系统关系。它们不是从
-数据库自动生成的 ERD，也不是 Specs 的未来架构宣言；具体字段和行为仍以代码、
-迁移、测试和运行证据为准。
+这些图是仓库内的当前实现视图，用来帮助人恢复系统关系。它们不是从数据库自动生成的
+ERD，也不是未来架构承诺；具体字段和行为仍以代码、迁移、测试和运行证据为准。
 
 更新时间：2026-09-18
 当前实现：M0–M3 核心闭环、本地 LifecycleEvent 目录、并行策略切片和 M4 Knowledge 检索/rerank/文件来源 `IMPLEMENTED`
@@ -63,6 +62,7 @@ flowchart TD
     ChatJob["ChatResponseJob"]
     StructuredJob["StructuredResponseJob"]
     ChatExecutor["Ai::ChatExecutor"]
+    CitationRecorder["Ai::CitationSetRecorder"]
     Tooling["ToolRegistry + ChatTooling\n+ ToolExecutionPolicy"]
     KnowledgeServices["Ai::Knowledge::Chunker + Ingestor\n+ Embedder + Retriever + Search\n+ VectorStore adapter"]
     Audit["ToolInvocationRecorder + ApprovalService"]
@@ -81,6 +81,8 @@ flowchart TD
     StructuredJob --> StructuredExecutor
     ChatJob --> ChatExecutor
     ChatExecutor --> RubyLLM
+    ChatExecutor --> CitationRecorder
+    CitationRecorder --> Records
     ChatExecutor --> Audit
     Audit --> Records
     RunExecutor --> Events
@@ -104,7 +106,9 @@ flowchart TD
    `Ai::StructuredExecutor` 负责 schema、validation 和 Artifact。
 3. `ToolRegistry`/`ChatTooling` 只允许代码中已注册的工具；Recorder 和
    `ApprovalService` 把调用及人的决定变成可检查记录。
-4. provider/conversation 语义仍由 RubyLLM 承担，应用不旁路调用 provider SDK 或 HTTP。
+4. `CitationSetRecorder` 把响应引用链接到执行它的 Run 和 Attempt；provider 搜索步骤则
+   继续保留在 RubyLLM Message 中。
+5. provider/conversation 语义仍由 RubyLLM 承担，应用不旁路调用 provider SDK 或 HTTP。
 
 ## 3. L2 — 当前持久化关系
 
@@ -298,7 +302,7 @@ flowchart LR
     Current -. "未来扩展" .-> Media["PLANNED: Media / batch / export"]
 ```
 
-这些不是缺失的当前表，而是 Specs 和路线图中的后续方向。
+这些不是缺失的当前表，而是项目路线图中的后续方向。
 
 ## 4. Runtime — 带审批的 Chat Run
 
@@ -521,8 +525,10 @@ flowchart LR
     M2 --> M3["M3 Tools + Approval\nIMPLEMENTED"]
     M3 --> M3P["M3 Parallel Calls\nAPP PATH IMPLEMENTED"]
     M3P --> M4["M4 Knowledge\nRETRIEVAL + RERANK + DOCUMENT SOURCES\nLOCAL PATH IMPLEMENTED"]
-    M4 --> M5["M5 Agents + Research\nPLANNED"]
-    M5 --> M6["M6+ Media / Batch / Ops\nPLANNED"]
+    M4 --> M5["M5.1 Provider Search + Citations\nPARTIAL"]
+    M5 --> M6["M6 Media\nPLANNED"]
+    M6 --> M7["M7 Batch + Evals\nPLANNED"]
+    M7 --> M8["M8 Exports + Public Reference\nPLANNED"]
 ```
 
 `APP PATH IMPLEMENTED` 的含义是：Project opt-in、能力/安全门控、Run snapshot 和
@@ -532,13 +538,15 @@ embedding 记录、SQLite vector adapter 与 lexical/semantic/hybrid 证据，�
 OpenRouter embedding/rerank model 的 dogfood 记录，以及文件上传、本地抽取和 provenance
 Artifact 的本地回归；provider file references、真实 OCR/page-level evidence 和更广跨
 provider 兼容性仍未完成，不能被简化成完整 M4，也不能把当前本地检索误写成 provider RAG。
+M5.1 已接入每次 Run 单独 opt-in 的 provider web search，搜索步骤和来源关联到对应 Run，
+标准化 citations 另存为 Run Artifact；完整 Rails 自动化测试已通过，provider dogfood 待完成。
 
 ## 8. 如何保持图表可信
 
 每次新增或改变以下任一项，都要在同一主题迭代中检查本页：实体/迁移、状态转移、
 队列 job、provider 边界、工具审批、Artifact 产出或页面入口。更新时：
 
-1. 先对照 Specs，确认目标和约束没有被误读。
+1. 先对照 README、TODO 和相关代码，确认目标和现有限制。
 2. 再对照代码、测试和实际页面，把已验证路径写成 `IMPLEMENTED` 或 `PARTIAL`。
 3. 尚未落地的目标只写 `PLANNED`；被淘汰的入口写 `DEPRECATED` 或 `REMOVED`，
    不要把未来节点画成当前依赖。

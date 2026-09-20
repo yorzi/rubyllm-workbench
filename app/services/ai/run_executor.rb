@@ -1,14 +1,15 @@
 module Ai
   class RunExecutor
-    def self.enqueue(chat:, project:, prompt:, requested_by: "local_user")
-      new(chat:, project:, prompt:, requested_by:).enqueue
+    def self.enqueue(chat:, project:, prompt:, requested_by: "local_user", provider_tools: [])
+      new(chat:, project:, prompt:, requested_by:, provider_tools:).enqueue
     end
 
-    def initialize(chat:, project:, prompt:, requested_by:)
+    def initialize(chat:, project:, prompt:, requested_by:, provider_tools:)
       @chat = chat
       @project = project
       @prompt = prompt
       @requested_by = requested_by
+      @provider_tools = normalize_provider_tools(provider_tools)
     end
 
     def enqueue
@@ -24,7 +25,8 @@ module Ai
           input_snapshot_json: {
             "prompt" => @prompt,
             "tools" => tools_snapshot,
-            "tool_options" => tool_options
+            "tool_options" => tool_options,
+            "provider_tools" => @provider_tools
           },
           app_version: ENV.fetch("APP_VERSION", "local"),
           ruby_llm_version: Gem.loaded_specs.fetch("ruby_llm").version.to_s
@@ -40,6 +42,12 @@ module Ai
 
       ChatResponseJob.perform_later(run.id)
       run
+    end
+
+    private
+
+    def normalize_provider_tools(provider_tools)
+      Array(provider_tools).map(&:to_s).select { |key| key == "web_search" }.uniq
     end
   end
 end

@@ -6,6 +6,53 @@
 原则上只追加，不静默改写历史。代码细节回到对应 commit 和
 [IMPLEMENTATION_MAP.md](../IMPLEMENTATION_MAP.md)。
 
+## 2026-09-20 — M5.1 单次 Run 可选托管网页搜索
+
+### 为什么做
+
+M5 需要从可审计、范围受限的 provider-hosted tool 开始。仓库已经迁到
+RubyLLM 2.0 的 stable API，Message 表也能保存 citations 和 server tool
+calls；这一切片复用现有 Chat Run 的执行边界，不宣称已经提供 Agent 或多步 Deep Research。
+
+### 人能看到的变化
+
+- Chat 表单增加默认关闭的 per-Run 网页搜索选项；搜索词会发送给所选 provider。
+- `input_snapshot` 冻结 provider tool 选择；旧 provider tools 在配置新 Run 时清理。
+- provider 步骤可从 assistant Message 展开查看；HTTP(S) 引用显示为安全外链，并另存
+  为关联 Run/Attempt 的 `citation_set` Artifact。
+- RubyLLM 依赖升级到 stable `2.0.0`；现有消息列承载 citations 与 server tool calls。
+- README、系统指南、架构图、实现地图和路线图区分了 M5.1 与未完成的 Agent 生命周期。
+
+### 证据与边界
+
+- `bundle update ruby_llm` 成功，Gemfile 与锁文件均解析到 RubyLLM `2.0.0`。
+- 对照 RubyLLM 2.0 provider-tools API 实现；已有数据库列和 Artifact 类型足以承载，无新迁移。
+- 实现刚完成时自动化测试与真实 provider 调用都尚未运行。定向测试已补齐，具体模型/protocol 是否支持搜索仍需逐一验证；失败保存在 Run。
+
+### M5.1 后续验证 — 2026-09-20
+
+- 定向覆盖 provider-tool 快照/清除、citation Artifact 脱敏与来源关联，以及历史 Run 的工具步骤隔离。
+- 完整 Rails 测试集通过：154 tests、1,003 assertions、0 failures、0 errors、1 skip。
+- 未调用真实 provider；provider/model 能否执行并实际返回搜索步骤仍待 dogfood。
+- RuboCop 无违规，Bundler Audit 未发现漏洞；Brakeman 的两条 SQL 插值告警经标识符引用与参数绑定修正后清零。
+
+## 2026-09-20 — 公开仓库改为自包含文档
+
+### 为什么做
+
+仓库此前跟踪了一个指向个人目录的外部设计资料链接，并把它当作项目文档入口。
+其他开发者克隆仓库后无法打开该路径，也无法仅凭仓库内容理解项目。
+
+### 人能看到的变化
+
+- 删除个人机器路径的符号链接，并忽略仓库根目录下的 `/specs/` 目录。
+- README、实现地图和 `docs/` 现在只依赖本仓库的代码、迁移、现有测试、运行证据与路线图。
+- 保留后续维护所需的当前能力、限制和 M5–M8 计划，不把外部资料当作运行依赖。
+
+### 证据与边界
+
+本次检查了文档和源代码引用；自动化测试尚未运行。此变更不代表部署或外部用户验证。
+
 ## 2026-09-19 — Project 创建入口接入页面学习层
 
 ### 为什么做
@@ -485,8 +532,7 @@ Run、Attempt、工具、审批和 Artifact 记录分别保存了事实，但人
 
 ### 一致性工作
 
-- 保留 [`rubyllm-workbench/ai/`](../rubyllm-workbench/ai/) 和 supporting Specs 作为
-  稳定基线；本次没有把当前实现倒灌或改写到 Specs。
+- 当时将外部设计资料与当前实现文档分开维护；这些资料不属于本仓库的运行时代码。
 - 将本目录 `docs/` 明确为代码仓库内部的当前现实层：它随着功能、证据和偏差增长，
   但不覆盖 Specs、代码或测试。
 - 统一使用 `IMPLEMENTED`、`PARTIAL`、`PLANNED`、`DEPRECATED`、`REMOVED` 状态词，

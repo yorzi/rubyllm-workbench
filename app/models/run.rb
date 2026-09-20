@@ -40,8 +40,11 @@ class Run < ApplicationRecord
   end
 
   def total_tokens
-    %i[input output cache_read cache_write thinking].to_h do |field|
-      [ field, attempts.sum("#{field}_tokens") ]
+    columns = %i[input_tokens output_tokens cache_read_tokens cache_write_tokens thinking_tokens]
+    rows = attempts.pluck(*columns)
+
+    %i[input output cache_read cache_write thinking].each_with_index.to_h do |field, index|
+      [ field, rows.sum { |row| (row[index] || 0).to_i } ]
     end
   end
 

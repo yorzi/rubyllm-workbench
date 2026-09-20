@@ -1,4 +1,22 @@
+require "uri"
+
 module ApplicationHelper
+  def citation_value(citation, key)
+    return if citation.nil?
+    return citation.public_send(key) if citation.respond_to?(key)
+    return unless citation.respond_to?(:[])
+
+    citation[key.to_s] || citation[key.to_sym]
+  end
+
+  def citation_link_url(citation)
+    url = citation_value(citation, :url).to_s
+    parsed = URI.parse(url)
+    parsed.to_s if parsed.is_a?(URI::HTTP) && parsed.host.present? && parsed.userinfo.blank?
+  rescue URI::InvalidURIError
+    nil
+  end
+
   def format_duration(milliseconds)
     return "—" if milliseconds.blank?
 

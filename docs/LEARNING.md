@@ -47,7 +47,7 @@ Model Explorer、Chat、Experiment、工具审批或 Knowledge 操作，同时�
 - 同一功能存在多个阶段时，按可验证边界拆题：例如 Knowledge ingestion 负责“如何进入”，
   Knowledge search 负责“如何被检索”；Experiment comparison 负责“如何比较”，Run Inspector
   负责“如何检查一次执行”。
-- `docs/` 继续记录当前现实，Specs 继续作为原始意图基线；学习层不能静默改写 Specs。
+- 页面说明描述当前行为，并与实现文档保持一致。说明不能替代代码、迁移或验证证据。
 - 源码片段不得包含 credentials、原始 prompt、provider secret、未脱敏 tool payload 或
   任意用户内容。
 - 说明中的“Implemented/Partial/Deferred”必须与 `README.md`、`SYSTEM_GUIDE.md`、
