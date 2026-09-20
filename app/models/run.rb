@@ -229,7 +229,9 @@ class Run < ApplicationRecord
             invocation && %w[approved denied].include?(invocation.status) &&
               invocation.approval&.status == invocation.status
           end
-          running? && approval_decided && all_approvals_decided && pending_invocation_ids.include?(approval_invocation.id)
+          running? && approval_decided && all_approvals_decided &&
+            expected_generation.to_i == agent_execution_generation.to_i &&
+            pending_invocation_ids.include?(approval_invocation.id)
         end
       else
         false

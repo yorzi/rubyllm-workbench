@@ -6,7 +6,7 @@ AI agent 持续修改系统之后，仍能快速回答：系统为什么存在�
 
 更新时间：2026-09-20
 当前实现：M0–M4 已验证切片、M5.1 provider 搜索与引用、M5.2 保存的 Agent 定义与 Run 执行骨架
-当前代码基线：RubyLLM 2.0.0 stable；M5.2 的快照、outbox、恢复扫描、租约隔离、取消终态和 step/citation 关联已有确定性测试；完整 worker 执行、进程重启和 provider dogfood 待完成
+当前代码基线：RubyLLM 2.0.0 stable；M5.2 的快照、outbox、恢复扫描、租约隔离、取消终态、late-response cancellation、step/citation 关联、两步 AgentRunJob 成功、审批/拒绝续跑和过期 lease 后空响应恢复已有确定性测试；Solid Queue 进程重启和 provider dogfood 待完成
 
 ## 实现状态与证据
 
@@ -70,7 +70,7 @@ Artifact，并把文本来源保存为可追溯的 KnowledgeItem/KnowledgeChunk�
 | M4 文档来源 | 上传文件、本地抽取或 provider OCR、查看 provenance Artifact | `ocr_document` Artifact、extractor、页数、blob/内容 checksum | `IMPLEMENTED` · `LOCAL_VERIFIED`（OCR 路径仅测试证据） |
 | M4 完整目标 | provider 文件引用与更细的引用 Artifact | provider file ref lifecycle | `PLANNED` |
 | M5.1 | 每次 Chat Run 可选 provider 网页搜索，检查来源与远程工具步骤 | 冻结的 provider tool 快照、`citation_set` Artifact、Run 级工具步骤摘要 | `PARTIAL` · `LOCAL_VERIFIED`；provider dogfood 待完成 |
-| M5.2 | 保存 Project Agent 定义，按冻结 revision 启动专属 Run/Chat；记录 step、工具、审批、引用并可取消 | `AgentDefinition`、Run snapshot、执行租约、primary delivery outbox、周期派发/崩溃扫描、专属 Chat、Attempt、ToolInvocation、Approval、Artifact、LifecycleEvent | `PARTIAL` · deterministic boundary tests pass；完整 worker 生命周期、重启演练和 provider dogfood 待完成 |
+| M5.2 | 保存 Project Agent 定义，按冻结 revision 启动专属 Run/Chat；记录 step、工具、审批、引用并可取消 | `AgentDefinition`、Run snapshot、执行租约、primary delivery outbox、周期派发/崩溃扫描、专属 Chat、Attempt、ToolInvocation、Approval、Artifact、LifecycleEvent | `PARTIAL` · success, approved/denied continuation and expired-lease placeholder recovery covered with fake Agent；重启演练和 provider dogfood 待完成 |
 
 这里的状态描述本仓库当前实现；路线图中的 `PLANNED` 项表示尚未实现的后续能力。
 
@@ -269,9 +269,10 @@ Run 继续作为执行边界，定义和 prompt 快照进入 Run，编辑定义�
 - 当前本地回归覆盖并行策略的能力门控、side-effect 工具串行降级、冻结的 RubyLLM
   options，以及多个 tool calls 的独立 ToolInvocation/request/completion 事件。
 - M5.2 新增测试覆盖冻结快照、primary outbox 入队/重试、过期租约与多审批恢复、generation fencing、
-  取消后的终态保护，以及 step/citation Artifact 的 Run 时间线关联。全套 Rails 测试、RuboCop、Zeitwerk、
-  Bundler Audit、Brakeman 和生产资源预编译通过。完整 AgentRunJob 执行、真实 Solid Queue 重启和 provider
-  dogfood 尚未验证；本地浏览器 system test 受 sandbox 禁止 Selenium 回环 socket 绑定影响，未完成断言。
+  取消后的终态保护、late-response cancellation、step/citation Artifact 时间线、假 Agent 两步 `AgentRunJob#perform` 成功收尾，以及
+  approved/denied `save_run_note` continuation、过期 lease 后空响应恢复和 stale delivery generation 拒绝。全套 Rails 测试、RuboCop、
+  Zeitwerk、Bundler Audit、Brakeman 和生产资源预编译通过。Solid Queue 重启与 provider-backed Agent dogfood
+  尚未验证；本地浏览器 system test 受 sandbox 禁止 Selenium 回环 socket 绑定影响，未完成断言。
 - 当前本地回归覆盖 Knowledge collection、文本 checksum、确定性 chunk offset、ready
   状态、embedding 记录/provenance、vector adapter、三种检索模式的证据分量和降级
   原因；这只证明 M4 本地文本与 embedding 检索切片。

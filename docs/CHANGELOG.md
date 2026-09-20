@@ -6,6 +6,34 @@
 原则上只追加，不静默改写历史。代码细节回到对应 commit 和
 [IMPLEMENTATION_MAP.md](../IMPLEMENTATION_MAP.md)。
 
+## 2026-09-20 — M5 Agent continuation 与 outbox 代次 fencing
+
+### 为什么做
+
+之前的边界测试覆盖了 Run lease 与审批恢复扫描，但没有从 durable outbox 参数跑完 Agent job continuation。
+检查过程中发现，初始或审批 delivery 首次取得 lease 后，其 continuation 仍携带旧 generation；旧 delivery
+也可能在前一 lease 释放后重新取得执行权。
+
+### 变化
+
+- 增加确定性假 Agent 全流程测试：从初始 outbox 投递运行多步成功、批准/拒绝 `save_run_note`，并在过期
+  lease 后移除空 assistant 占位、失败旧 Attempt 后继续执行；另验证迟到的 Agent 回复不能覆盖取消状态。
+- Agent job 在每次取得 Run lease 后，把当前 generation 与完整 job 参数写入 continuation；execute 和
+  approval claim 都要求 generation 精确匹配，拒绝迟到的重复 outbox delivery。
+- README、路线图、实现地图、架构图和系统指南现在说明这些本地路径已有自动化覆盖，并保留进程恢复和
+  provider-backed 行为的验证边界。
+
+### 验证证据
+
+- `PARALLEL_WORKERS=1 bin/rails db:test:prepare test`：172 tests、1,123 assertions、0 failures、
+  0 errors、1 skip。
+- RuboCop：177 个文件无 offenses；Zeitwerk eager load 与 `git diff --check` 通过。
+
+### 尚未证明什么
+
+- M5 仍为 `PARTIAL`：恢复路径以确定性假 Agent 和持久化过期 lease 数据验证；Solid Queue 进程终止/重启恢复与真实 provider 调用未验证。
+- 本地浏览器 system test 仍受 Selenium driver 无法在 sandbox 内绑定 loopback socket 限制。
+
 ## 2026-09-20 — M5 确定性验收覆盖与公开仓库准备
 
 ### 为什么做

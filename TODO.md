@@ -6,9 +6,12 @@
 > worker with immutable snapshots, continuable steps, approval, citations and
 > cancellation. Deterministic tests now cover snapshots, outbox dispatch/retry,
 > recovery scans, lease fencing, terminal cancellation and citation/timeline
-> records. Full Agent execution, worker restart recovery and provider behavior
-> remain open. Open-source setup, security and local-only Docker guidance are
-> documented; public redistribution still needs an owner-selected license.
+> records, a two-step fake-Agent `AgentRunJob` continuation through success,
+> approved/denied continuations with stale delivery generation rejection, and
+> late-response cancellation that preserves the terminal Run state. Actual
+> worker interruption/restart and provider-backed Agent behavior remain open.
+> Open-source setup, security and local-only Docker guidance are documented;
+> public redistribution still needs an owner-selected license.
 
 ## Human understanding layer
 
@@ -333,20 +336,31 @@ performed for this slice.
 - [x] Add deterministic automated coverage for snapshot immutability, outbox
       dispatch/retry, stale-lease and approval recovery, generation fencing,
       terminal cancellation, and step/citation timeline linkage.
-- [ ] Exercise the complete Agent job lifecycle with a deterministic multi-step
-      Agent, including approval/denial continuation and interrupted-step recovery.
-- [ ] Exercise Solid Queue interruption/restart recovery and at-least-once
-      replay boundaries with idempotent local tools.
+- [x] Exercise a deterministic two-step `AgentRunJob` through continuation,
+      Attempt recording, transcript persistence, timeline events and success.
+- [x] Exercise approved and denied tool decisions through the durable Agent Run
+      delivery, Agent job continuation and local `save_run_note` side effect.
+- [x] Recover a blank assistant placeholder as a failed Attempt and resume from
+      a newly claimed expired Run lease through `AgentRunJob`.
+- [x] Keep a Run cancelled when an Agent response returns before step finalization.
+- [ ] Exercise Solid Queue worker interruption/restart and at-least-once replay
+      boundaries with local side-effect tools.
 - [ ] Dogfood a provider/model with web search and a multi-step Agent task.
 
-### M5.2 status: `PARTIAL` · deterministic boundary tests passed; full worker lifecycle pending
+### M5.2 status: `PARTIAL` · deterministic success and approval paths covered; queue restart pending
 
 The deterministic suite verifies definition and Run snapshots, primary outbox
 dispatch acknowledgement/retry, queued and expired-lease recovery, fully decided
 multi-approval recovery, lease-generation fencing, cancellation terminal state,
-and step citation/timeline linkage. Full `AgentRunJob#perform`, a Solid Queue
-worker restart drill, and provider calls were not verified. Local browser system
-tests are present, but this sandbox rejects Selenium's loopback socket bind.
+and step/citation timeline linkage. A deterministic fake Agent now exercises
+`AgentRunJob#perform` through a queued
+continuation and two successful steps, including Attempts, transcript, and
+lifecycle events. A provider-free flow also exercises approved and denied
+`save_run_note` decisions through the durable delivery and continuation; stale
+delivery generations are rejected. Actual Solid Queue worker restart recovery,
+real concurrent cancellation during a provider call, replay during a side-effect
+call, and provider calls remain unverified. Local browser system tests are
+present, but this sandbox rejects Selenium's loopback socket bind.
 Agent Jobs persist model/tool calls and resume from the Chat transcript with
 at-least-once semantics. Run-row locking fences transcript/usage persistence
 and current local database writes against lease takeover; a provider request
@@ -354,8 +368,8 @@ already accepted upstream cannot be recalled, so an interrupted request may
 still incur cost before a later delivery retries it. The built-in
 `project_snapshot` tool is read-only and `save_run_note` is idempotent; future
 side-effect tools need their own atomic lease check and replay protection. M5
-remains partial pending execution, recovery, cancellation-race and provider
-evidence. Initial, approval and recovery intents are saved in the primary
+remains partial pending a Solid Queue restart/replay drill, concurrent worker
+cancellation evidence and provider evidence. Initial, approval and recovery intents are saved in the primary
 database and dispatched with retries to the separate Solid Queue database. A
 recurring dispatcher also scans expired leases and approved waits so worker
 crashes do not depend on an `ensure` callback. Queue insertion and outbox
@@ -392,9 +406,9 @@ recurring scheduler running in development and production.
       expiry when a file is uploaded to a provider for OCR or later use.
 - [ ] M4 real OCR dogfood against a configured OCR provider (Cohere `parse-v5.0`
       or Mistral OCR) and page/offset level provenance per chunk.
-- [ ] M5 remaining work: test the complete Agent worker lifecycle, run a Solid
-      Queue restart drill, verify live provider search/Agent paths, and validate
-      the at-least-once tool/idempotency boundary.
+- [ ] M5 remaining work: run a real Solid Queue worker termination/restart and
+      side-effect replay drill, verify live provider search/Agent paths, and
+      validate the at-least-once tool/idempotency boundary under interruption.
 - [ ] M6 media workflows.
 - [ ] M7 batch execution, evaluations, and repeatable quality/cost comparisons.
 - [ ] M8 exports, deployment readiness, and public-reference polish.

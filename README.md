@@ -44,9 +44,13 @@ current local tool writes by owner token/generation. Approval continuations
 identify the decided tool call, saved local tool contracts are checked before
 resuming, and the built-in note Artifact is idempotent by tool-call id. Focused
 automated tests now cover frozen snapshots, outbox dispatch and retries,
-recovery scans, lease-generation fencing, cancellation terminal state, and
-step/citation timeline records. Full Agent execution, worker restart recovery,
-and provider dogfooding still need verification. M5 remains partial. Initial
+recovery scans, lease-generation fencing, terminal and late-response
+cancellation, step/citation timeline records, deterministic two-step
+`AgentRunJob` success, approved/denied continuation, and recovery from an
+expired lease with an interrupted blank response. All outbox continuations carry the newly claimed
+generation forward, while stale duplicate deliveries are rejected. Solid Queue
+worker restart recovery and provider-backed Agent execution still need
+verification. M5 remains partial. Initial
 and resumed Agent work is durably recorded in the
 primary database, then dispatched to Solid Queue with retry and stale-lease
 recovery. Queue insertion and delivery acknowledgement are at-least-once across

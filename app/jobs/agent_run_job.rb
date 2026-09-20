@@ -117,6 +117,11 @@ class AgentRunJob < ApplicationJob
     @run.reload
     @claimed = true
     @lease_generation = @run.agent_execution_generation
+    # A continuation is a new Active Job delivery. Carry the generation from
+    # this claim so it remains valid, while older outbox deliveries go stale.
+    @expected_generation = @lease_generation
+    @job_arguments[3] = @lease_generation
+    self.arguments = @job_arguments.dup
     @lease_expires_at = @run.agent_execution_expires_at
     start_lease_heartbeat
   end

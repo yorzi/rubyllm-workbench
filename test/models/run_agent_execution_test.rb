@@ -44,4 +44,41 @@ class RunAgentExecutionTest < ActiveSupport::TestCase
     assert @run.reload.cancelled?
     assert_not @run.result_summary.key?("answer")
   end
+
+  test "stale execute and approval deliveries cannot reclaim a newer generation" do
+    invocation = @run.tool_invocations.create!(
+      tool_call_id: "call-approved-generation",
+      tool_key: "save_run_note",
+      status: "approved"
+    )
+    invocation.create_approval!(status: "approved", requested_at: Time.current, decided_at: Time.current)
+    @run.update!(
+      status: :waiting_for_approval,
+      agent_execution_generation: 2,
+      result_summary_json: { "pending_tool_call_ids" => [ invocation.id ] }
+    )
+
+    assert @run.claim_agent_execution!(
+      token: "approval-worker",
+      intent: "approval",
+      approval_invocation_id: invocation.id,
+      expected_generation: 2
+    )
+    @run.reload
+    claimed_generation = @run.agent_execution_generation
+    assert @run.release_agent_execution_lease!(token: "approval-worker", generation: claimed_generation)
+
+    assert_not @run.claim_agent_execution!(
+      token: "stale-execute-worker",
+      intent: "execute",
+      expected_generation: 2
+    )
+    assert_not @run.claim_agent_execution!(
+      token: "duplicate-worker",
+      intent: "approval",
+      approval_invocation_id: invocation.id,
+      expected_generation: 2
+    )
+    assert_equal claimed_generation, @run.reload.agent_execution_generation
+  end
 end

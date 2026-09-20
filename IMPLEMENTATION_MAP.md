@@ -14,10 +14,13 @@ opt-in provider web search and citation artifacts to a Chat Run. M5.2 adds
 Project-scoped revisioned Agent definitions and a dedicated Agent Run worker
 restored from immutable Run snapshots, protected by an expiring generation-fenced
 lease and local tool-contract drift check. Focused tests cover the durable
-snapshot, outbox, recovery, lease, citation and timeline boundaries. Provider
-file references, real OCR/page-level provenance, complete Agent worker
-execution/recovery/provider behavior, media, batch/evals and operational polish
-remain incomplete or deferred.
+snapshot, outbox, recovery, lease, citation and timeline boundaries, plus
+two-step job success, approved/denied continuation through the delivery outbox,
+recovery from an expired lease with an interrupted blank response, and a late
+Agent response that cannot overturn cancellation. Stale
+delivery generations are rejected. Provider file references, real OCR/page-level
+provenance, actual Solid Queue worker restart/replay, provider-backed Agent
+behavior, media, batch/evals and operational polish remain incomplete or deferred.
 
 Current status: M0–M3 core, the M4 local-text foundation and the M4
 embedding/retrieval/rerank/document slices are `IMPLEMENTED` for their verified
@@ -26,9 +29,11 @@ compatibility, provider file references, real OCR/page-level provenance and
 cross-provider embedding compatibility are `PARTIAL` or deferred. M5.1's
 provider-search path passes local automated tests; provider dogfood is pending.
 M5.2 now has deterministic tests for frozen definitions, durable queue delivery,
-stale-run and approval recovery, lease fencing, cancellation terminal state, and
-Agent step citation/timeline linkage. Full Agent job execution, Solid Queue
-restart recovery and provider calls remain unverified. The dispatcher persists
+stale-run and approval recovery, lease fencing, cancellation terminal state,
+Agent step citation/timeline linkage, fake-Agent success plus approved/denied
+continuation, deterministic recovery of an interrupted placeholder, and terminal
+cancellation after a late Agent response. Actual
+Solid Queue restart/replay and provider calls remain unverified. The dispatcher persists
 delivery intents in the primary database and scans stale leases; scheduler
 operation still depends on the recurring worker. M5 remains `PARTIAL`, while
 M6–M8 remain `PLANNED` behind the M5 gates.
@@ -228,7 +233,7 @@ keyboard-friendly.
   durable approval continuation, and Project-scoped text evidence retrieval with
   provider embeddings, lexical/semantic/hybrid modes, a compatible-provider
   rerank stage, file sources with extraction provenance, and saved Agent Runs.
-  Provider file references, real OCR dogfood, full Agent worker/recovery verification
+  Provider file references, real OCR dogfood, actual Agent-worker restart/replay
   and M6–M8 remain open.
 - Runtime verified: Ruby 4.0.2 and Rails 8.1.3.1.
 - Dependency target: RubyLLM 2.0.0 stable. Provider calls use the public 2.0 API;

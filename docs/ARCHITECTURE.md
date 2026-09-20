@@ -627,9 +627,11 @@ M5.1 已接入每次 Run 单独 opt-in 的 provider web search，搜索步骤和
 标准化 citations 另存为 Run Artifact。M5.2 增加了版本化 AgentDefinition、专属 Chat/Run snapshot、
 带 generation-fenced lease 的 Agent step worker、transcript/usage/tool 写入保护、工具 contract drift 检查、
 幂等笔记 Artifact、审批续跑和取消状态。M5.2 现在有冻结快照、outbox 派发/重试、过期 lease 和审批恢复、
-generation fencing、取消终态及 step/citation 时间线关联的确定性自动化测试；全套 Rails tests、RuboCop、
-Zeitwerk、安全扫描和资源预编译通过。完整 AgentRunJob 执行、recurring worker 重启演练与 provider dogfood
-尚未完成，整体 M5 仍是 `PARTIAL`。
+generation fencing、取消终态及 step/citation 时间线关联的确定性自动化测试；假 Agent 也通过
+`AgentRunJob#perform` continuation 完成两步成功、approved/denied `save_run_note`、过期 lease 后空响应恢复和
+late-response cancellation 路径。
+outbox continuation 会携带新 generation，迟到的重复 delivery 会被拒绝。整体 M5 仍是 `PARTIAL`：真实 worker
+重启与副作用重放演练和 provider-backed 执行仍待验证。
 
 ## 8. 如何保持图表可信
 
