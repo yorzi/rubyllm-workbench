@@ -108,6 +108,16 @@ OPENROUTER_LIVE_TEST=1 bin/rails test test/integration/openrouter_live_test.rb
 该命令只表示本次本地 provider dogfood；它可能产生费用、受网络影响，也不应在
 没有用户明确意图时反复运行。
 
+OpenRouter Agent hosted-search dogfood 使用独立 opt-in：
+
+```sh
+OPENROUTER_AGENT_LIVE_TEST=1 OPENROUTER_AGENT_TEST_MODEL_ID=google/gemma-4-31b-it:free \
+  PARALLEL_WORKERS=1 bin/rails test test/integration/openrouter_live_test.rb
+```
+
+这项测试会把测试 prompt 和临时 Project 的非敏感摘要交给 OpenRouter，并请求托管网页搜索；
+即便模型标价为零，搜索服务仍可能另计费。只在项目所有者明确授权、且运行环境允许联网时执行。
+
 ## Tool Lab 执行模式
 
 Tool Lab 的默认模式是 `sequential`。只有在 Project 中显式选择 `parallel` 时，新建

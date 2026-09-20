@@ -343,6 +343,8 @@ performed for this slice.
 - [x] Recover a blank assistant placeholder as a failed Attempt and resume from
       a newly claimed expired Run lease through `AgentRunJob`.
 - [x] Keep a Run cancelled when an Agent response returns before step finalization.
+- [x] Replay a committed `save_run_note` with the same persisted tool-call id and
+      verify it reuses one Artifact.
 - [ ] Exercise Solid Queue worker interruption/restart and at-least-once replay
       boundaries with local side-effect tools.
 - [ ] Dogfood a provider/model with web search and a multi-step Agent task.
@@ -412,3 +414,8 @@ recurring scheduler running in development and production.
 - [ ] M6 media workflows.
 - [ ] M7 batch execution, evaluations, and repeatable quality/cost comparisons.
 - [ ] M8 exports, deployment readiness, and public-reference polish.
+
+The next implementation sequence remains gated: close M5's Solid Queue restart/replay
+and provider evidence first; then build M6 as a text-to-speech Run that stores an
+audio Artifact, M7 as immutable evaluation datasets with ordinary child Runs, and
+M8 as a redacted Run reproduction export. These are slices, not completion claims.

@@ -6,6 +6,34 @@
 原则上只追加，不静默改写历史。代码细节回到对应 commit 和
 [IMPLEMENTATION_MAP.md](../IMPLEMENTATION_MAP.md)。
 
+## 2026-09-20 — M5 工具副作用重放回归与 provider dogfood 门
+
+### 为什么做
+
+Run lease fencing 之外，还需要证明相同的已持久化工具调用在重放时不会重复创建本地
+Artifact。M5 的 provider 搜索/Agent dogfood 也需要有一个可重复的显式入口。
+
+### 变化
+
+- 增加 `save_run_note` 相同 tool-call id 重放测试，确认重试复用原 Artifact。
+- 增加 OpenRouter 多步 Agent + hosted search opt-in 测试，并在运行手册中说明发送的
+  临时 Project 摘要及潜在搜索费用。
+- 记录 M6 文字转语音、M7 immutable evaluation dataset、M8 redacted reproduction export
+  作为 M5 gate 之后的首批切片。
+
+### 验证证据
+
+- `PARALLEL_WORKERS=1 bin/rails test test/services/ai/tool_registry_test.rb test/integration/openrouter_live_test.rb`：
+  7 runs、19 assertions、0 failures、0 errors、2 skips；provider 测试在默认配置下跳过。
+- RuboCop：3 个 Ruby 文件无 offenses；`git diff --check` 通过。
+- 一次显式 provider 尝试在 DNS 解析阶段失败；自动审批随后拒绝向 OpenRouter 发送测试 prompt 和
+  Project 摘要并承担搜索费用。没有取得 provider 响应或 dogfood 证据。
+
+### 尚未证明什么
+
+- M5 仍为 `PARTIAL`：Solid Queue worker 进程终止/重启、真实 side-effect 崩溃窗口和 provider-backed
+  搜索/Agent 路径尚未验收。
+
 ## 2026-09-20 — M5 Agent continuation 与 outbox 代次 fencing
 
 ### 为什么做

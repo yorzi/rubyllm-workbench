@@ -57,6 +57,32 @@ class Ai::ToolRegistryTest < ActiveSupport::TestCase
     assert_equal attempt.id, artifact.attempt_id
   end
 
+  test "replays a saved note with the same tool call id without duplicating its Artifact" do
+    chat = create_chat(@project)
+    run = chat.runs.create!(
+      project: @project,
+      operation: "agent",
+      status: :running,
+      requested_by: "test",
+      input_snapshot_json: { "prompt" => "save this" }
+    )
+    assistant = chat.messages.create!(role: "assistant", content: "")
+    tool_call = RubyLLM::ActiveRecord::ToolCall.create!(
+      message: assistant,
+      tool_call_id: "call-replayed-note-#{SecureRandom.hex(4)}",
+      name: "save_run_note",
+      arguments: { "note" => "A replay-safe observation" }
+    )
+    Ai::ToolRegistry.sync_project!(@project)
+    tool = @project.tool_definitions.find_by!(key: "save_run_note").tool_instance(run:)
+
+    first_result = tool.call(note: "A replay-safe observation", tool_call:)
+    second_result = tool.call(note: "A replay-safe observation", tool_call:)
+
+    assert_equal first_result.fetch("artifact_id"), second_result.fetch("artifact_id")
+    assert_equal 1, run.artifacts.where(source_tool_call_id: tool_call.id).count
+  end
+
   test "sanitizes sensitive nested tool arguments" do
     sanitized = Ai::ToolPayloadSanitizer.call(
       "api_key" => "secret-value",
