@@ -1,0 +1,51 @@
+<% content_for :title, "Generate speech · #{@project.name}" %>
+
+<%= render "shared/shell", active: "projects", project: @project do %>
+  <div class="mx-auto max-w-3xl px-5 py-8 sm:px-8 lg:px-10">
+    <%= render "shared/flash" %>
+    <%= link_to "← #{@chat.display_title.presence || 'Chat'}", project_chat_path(@project, @chat), class: "text-xs font-medium text-accent hover:underline" %>
+    <h1 class="mt-4 text-2xl font-semibold tracking-tight text-ink">Generate speech</h1>
+    <p class="mt-2 text-sm leading-6 text-muted">Convert this saved assistant reply into an audio Artifact. The request runs in Solid Queue.</p>
+
+    <% if @error.present? %>
+      <div class="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700" role="alert"><%= @error %></div>
+    <% end %>
+
+    <section class="mt-6 rounded-xl border border-line bg-panel p-5" aria-labelledby="source-reply-heading">
+      <div class="flex items-center justify-between gap-3">
+        <h2 id="source-reply-heading" class="text-sm font-semibold text-ink">Source reply</h2>
+        <span class="font-mono text-[10px] text-muted">Message #<%= @message.id %></span>
+      </div>
+      <div class="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-canvas p-4 text-sm leading-6 text-ink"><%= @message.content %></div>
+    </section>
+
+    <section class="mt-6 rounded-xl border border-line bg-panel p-5" aria-labelledby="speech-model-heading">
+      <h2 id="speech-model-heading" class="text-sm font-semibold text-ink">Speech model</h2>
+      <% configured_models = @speech_models.select(&:configured) %>
+      <% if @speech_models.empty? %>
+        <p class="mt-2 text-sm leading-6 text-muted">Speech generation is unavailable because the RubyLLM model catalog has no model declaring the speech-generation capability.</p>
+      <% else %>
+        <%= form_with scope: :speech_run, url: project_chat_message_speech_run_path(@project, @chat, @message), class: "mt-4 space-y-4" do |form| %>
+          <div>
+            <%= form.label :model_reference, "Configured speech model", class: "block text-[10px] font-semibold uppercase tracking-[0.14em] text-muted" %>
+            <% model_options = @speech_models.map do |entry|
+              label = "#{entry.name} · #{entry.provider_name}"
+              label += " · configure #{entry.missing_configuration.join(', ')}" unless entry.configured
+              [ label, "#{entry.provider}|#{entry.id}", { disabled: !entry.configured } ]
+            end %>
+            <%= form.select :model_reference, options_for_select(model_options, configured_models.first && "#{configured_models.first.provider}|#{configured_models.first.id}"), {}, disabled: configured_models.empty?, class: "mt-2 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-accent focus:ring-4 focus:ring-accent/20 disabled:opacity-60" %>
+          </div>
+          <% if configured_models.empty? %>
+            <p class="text-xs leading-5 text-muted">Speech generation is disabled until a speech-capable provider is configured.</p>
+          <% else %>
+            <p class="text-xs leading-5 text-muted">The selected model's default voice and output format will be used. The Run freezes the source reply and model before it is queued.</p>
+          <% end %>
+          <div class="flex flex-wrap gap-2">
+            <%= form.submit "Queue speech Run", disabled: configured_models.empty?, class: "cursor-pointer rounded-lg bg-accent px-4 py-2.5 text-xs font-medium text-white enabled:hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50" %>
+            <%= link_to "Cancel", project_chat_path(@project, @chat), class: "inline-flex items-center rounded-lg border border-line px-4 py-2.5 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
+          </div>
+        <% end %>
+      <% end %>
+    </section>
+  </div>
+<% end %>

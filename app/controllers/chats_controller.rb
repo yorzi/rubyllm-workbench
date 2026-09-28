@@ -45,6 +45,10 @@ class ChatsController < ApplicationController
       entry.id == @chat.model_id && entry.provider == @chat.provider
     end
     @provider_configured = @model_entry&.configured
+    @image_models_available = Ai::MediaCatalog.entries(operation: "image").any?
+    @transcription_models_available = Ai::MediaCatalog.entries(operation: "transcription").any?
+    @video_models_available = Ai::MediaCatalog.entries(operation: "video").any?
+    @speech_models_available = Ai::SpeechCatalog.entries.any?
   end
 
   def destroy

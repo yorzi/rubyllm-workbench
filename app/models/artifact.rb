@@ -5,6 +5,8 @@ class Artifact < ApplicationRecord
   belongs_to :attempt, optional: true
   belongs_to :knowledge_item, optional: true
   has_many :lifecycle_events, dependent: :nullify
+  has_one_attached :audio_file
+  has_one_attached :media_file
 
   after_create :record_created_event
 
@@ -38,6 +40,10 @@ class Artifact < ApplicationRecord
   end
 
   def has_content
+    return if kind == "audio" && audio_file.attached?
+    return if %w[image video].include?(kind) && media_file.attached?
+    return if kind == "transcript" && content_text == ""
+
     errors.add(:base, "content is required") if content_json.nil? && content_text.blank?
   end
 

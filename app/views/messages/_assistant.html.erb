@@ -20,5 +20,14 @@
         </ul>
       </aside>
     <% end %>
+    <% if message.content.present? && message.persisted? %>
+      <div class="mt-3 border-t border-line pt-2">
+        <% if local_assigns.fetch(:speech_models_available) { speech_models_available? } %>
+          <%= link_to "Generate audio Artifact", new_project_chat_message_speech_run_path(message.chat.project, message.chat, message), class: "text-xs font-medium text-accent hover:underline" %>
+        <% else %>
+          <span aria-disabled="true" title="No RubyLLM speech-generation model is available" class="cursor-not-allowed text-xs font-medium text-muted">Speech unavailable</span>
+        <% end %>
+      </div>
+    <% end %>
   </div>
 </article>

@@ -14,12 +14,60 @@ development:
     class: AgentRunDeliveryDispatcherJob
     queue: maintenance
     schedule: every minute
+  recover_stale_speech_runs:
+    class: SpeechRunRecoveryJob
+    queue: maintenance
+    schedule: every minute
+  recover_stale_media_runs:
+    class: MediaRunRecoveryJob
+    queue: maintenance
+    schedule: every minute
+  recover_stale_evaluation_cases:
+    class: EvaluationCaseRecoveryJob
+    queue: maintenance
+    schedule: every minute
+  recover_evaluation_case_judgments:
+    class: EvaluationCaseJudgmentRecoveryJob
+    queue: maintenance
+    schedule: every minute
+  recover_stale_evaluation_batch_submissions:
+    class: EvaluationBatchRecoveryJob
+    queue: maintenance
+    schedule: every minute
+  purge_stale_unattached_blobs:
+    class: PurgeStaleUnattachedBlobsJob
+    queue: maintenance
+    schedule: every day at 4am
 
 production:
   dispatch_agent_run_deliveries:
     class: AgentRunDeliveryDispatcherJob
     queue: maintenance
     schedule: every minute
+  recover_stale_speech_runs:
+    class: SpeechRunRecoveryJob
+    queue: maintenance
+    schedule: every minute
+  recover_stale_media_runs:
+    class: MediaRunRecoveryJob
+    queue: maintenance
+    schedule: every minute
+  recover_stale_evaluation_cases:
+    class: EvaluationCaseRecoveryJob
+    queue: maintenance
+    schedule: every minute
+  recover_evaluation_case_judgments:
+    class: EvaluationCaseJudgmentRecoveryJob
+    queue: maintenance
+    schedule: every minute
+  recover_stale_evaluation_batch_submissions:
+    class: EvaluationBatchRecoveryJob
+    queue: maintenance
+    schedule: every minute
+  purge_stale_unattached_blobs:
+    class: PurgeStaleUnattachedBlobsJob
+    queue: maintenance
+    schedule: every day at 4am
   clear_solid_queue_finished_jobs:
     command: "SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)"
     schedule: every hour at minute 12

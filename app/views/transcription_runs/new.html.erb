@@ -1,0 +1,48 @@
+<% content_for :title, "Transcribe audio · #{@project.name}" %>
+
+<%= render "shared/shell", active: "projects", project: @project do %>
+  <div class="mx-auto max-w-3xl px-5 py-8 sm:px-8 lg:px-10">
+    <%= render "shared/flash" %>
+    <%= link_to "← #{@chat.display_title.presence || 'Chat'}", project_chat_path(@project, @chat), class: "text-xs font-medium text-accent hover:underline" %>
+    <h1 class="mt-4 text-2xl font-semibold tracking-tight text-ink">Transcribe audio</h1>
+    <p class="mt-2 text-sm leading-6 text-muted">The uploaded recording is stored as an input Artifact and sent to the selected provider from a background job. Maximum file size: 25 MB.</p>
+
+    <% if @error.present? %>
+      <div class="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700" role="alert"><%= @error %></div>
+    <% end %>
+
+    <section class="mt-6 rounded-xl border border-line bg-panel p-5" aria-labelledby="transcription-model-heading">
+      <h2 id="transcription-model-heading" class="text-sm font-semibold text-ink">Transcription model</h2>
+      <% configured_models = @media_models.select(&:configured) %>
+      <% if @media_models.empty? %>
+        <p class="mt-2 text-sm leading-6 text-muted">Transcription is unavailable because the RubyLLM catalog has no model declaring the transcription capability.</p>
+      <% else %>
+        <%= form_with scope: :transcription_run, url: project_chat_transcription_runs_path(@project, @chat), multipart: true, class: "mt-4 space-y-4" do |form| %>
+          <div>
+            <%= form.label :audio_file, "Audio file", class: "block text-[10px] font-semibold uppercase tracking-[0.14em] text-muted" %>
+            <%= form.file_field :audio_file, accept: ".flac,.m4a,.mp3,.mp4,.mpeg,.mpga,.ogg,.wav,.webm,audio/*", required: true, class: "mt-2 block w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink file:mr-3 file:rounded-md file:border-0 file:bg-canvas file:px-3 file:py-2 file:text-xs file:font-medium" %>
+            <p class="mt-2 text-xs leading-5 text-muted">Accepted formats: FLAC, M4A, MP3, MP4, MPEG, OGG, WAV, and WebM. Audio is sent to the selected provider.</p>
+          </div>
+          <div>
+            <%= form.label :model_reference, "Configured transcription model", class: "block text-[10px] font-semibold uppercase tracking-[0.14em] text-muted" %>
+            <% model_options = @media_models.map do |entry|
+              label = "#{entry.name} · #{entry.provider_name}"
+              label += " · configure #{entry.missing_configuration.join(', ')}" unless entry.configured
+              [ label, "#{entry.provider}|#{entry.id}", { disabled: !entry.configured } ]
+            end %>
+            <%= form.select :model_reference, options_for_select(model_options, configured_models.first && "#{configured_models.first.provider}|#{configured_models.first.id}"), {}, disabled: configured_models.empty?, class: "mt-2 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-accent focus:ring-4 focus:ring-accent/20 disabled:opacity-60" %>
+          </div>
+          <% if configured_models.empty? %>
+            <p class="text-xs leading-5 text-muted">Transcription is disabled until a transcription-capable provider is configured.</p>
+          <% else %>
+            <p class="text-xs leading-5 text-muted">The Run snapshots the uploaded file's filename, type, size, and digest. Binary file data is not included in the reproduction JSON.</p>
+          <% end %>
+          <div class="flex flex-wrap gap-2">
+            <%= form.submit "Queue transcription Run", disabled: configured_models.empty?, class: "cursor-pointer rounded-lg bg-accent px-4 py-2.5 text-xs font-medium text-white enabled:hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50" %>
+            <%= link_to "Cancel", project_chat_path(@project, @chat), class: "inline-flex items-center rounded-lg border border-line px-4 py-2.5 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
+          </div>
+        <% end %>
+      <% end %>
+    </section>
+  </div>
+<% end %>

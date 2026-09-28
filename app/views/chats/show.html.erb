@@ -32,6 +32,11 @@
 <%= render "shared/shell", active: "projects", project: @project do %>
   <div class="mx-auto flex min-h-screen max-w-5xl flex-col px-5 py-8 sm:px-8 lg:px-10">
     <%= render "shared/flash" %>
+    <% if @chat.remote_tool_outcome_unknown? %>
+      <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900" role="status">
+        An approved remote tool call has no saved provider result, so its external outcome is unknown. This chat is blocked from resuming that request. <%= link_to "Start a new chat", new_project_chat_path(@project, model_id: @chat.model_id, provider: @chat.provider), class: "font-semibold underline" %>.
+      </div>
+    <% end %>
 
     <div class="flex flex-col justify-between gap-4 border-b border-line pb-5 sm:flex-row sm:items-start">
       <div class="min-w-0">
@@ -39,8 +44,23 @@
         <h1 class="mt-3 truncate text-2xl font-semibold tracking-tight text-ink"><%= @chat.display_title.presence || "Untitled chat" %></h1>
         <p class="mt-2 break-all font-mono text-xs text-muted"><%= @chat.provider %> / <%= @chat.model_id %></p>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2 sm:justify-end">
         <%= link_to "Change model", new_project_chat_path(@project), class: "rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
+        <% if @image_models_available %>
+          <%= link_to "Image", new_project_chat_image_run_path(@project, @chat), class: "rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
+        <% else %>
+          <span aria-disabled="true" title="No RubyLLM image-generation model is available" class="cursor-not-allowed rounded-lg border border-line px-3 py-2 text-xs font-medium text-muted opacity-60">Image unavailable</span>
+        <% end %>
+        <% if @transcription_models_available %>
+          <%= link_to "Transcribe", new_project_chat_transcription_run_path(@project, @chat), class: "rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
+        <% else %>
+          <span aria-disabled="true" title="No RubyLLM transcription model is available" class="cursor-not-allowed rounded-lg border border-line px-3 py-2 text-xs font-medium text-muted opacity-60">Transcription unavailable</span>
+        <% end %>
+        <% if @video_models_available %>
+          <%= link_to "Video", new_project_chat_video_run_path(@project, @chat), class: "rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
+        <% else %>
+          <span aria-disabled="true" title="No RubyLLM video-generation model is available" class="cursor-not-allowed rounded-lg border border-line px-3 py-2 text-xs font-medium text-muted opacity-60">Video unavailable</span>
+        <% end %>
         <%= link_to "Tools", project_tool_definitions_path(@project), class: "rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
         <%= button_to "Delete", project_chat_path(@project, @chat), method: :delete, form: { data: { turbo_confirm: "Delete this chat and its runs?" } }, class: "rounded-lg border border-rose-200 px-3 py-2 text-xs font-medium text-rose-700 hover:bg-rose-50" %>
       </div>
@@ -57,7 +77,7 @@
         <div class="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
           <div>
             <h2 id="tool-approvals-heading" class="text-sm font-semibold text-ink">Approval required</h2>
-            <p class="mt-1 text-xs leading-5 text-warning">The model requested a local tool action. Review its arguments before the Run continues.</p>
+            <p class="mt-1 text-xs leading-5 text-warning">Review each request and its location. Local tools run in this Workbench; provider-hosted calls run through the selected provider after approval.</p>
           </div>
           <span class="rounded-full bg-white px-2 py-1 font-mono text-[10px] text-warning"><%= @pending_tool_invocations.size %> pending</span>
         </div>
@@ -65,7 +85,7 @@
           <% @pending_tool_invocations.each do |invocation| %>
             <div class="rounded-lg border border-amber-200 bg-white p-3">
               <div class="flex flex-wrap items-center justify-between gap-2">
-                <div><p class="text-xs font-semibold text-ink"><%= invocation.display_name %></p><p class="mt-1 font-mono text-[10px] text-muted"><%= invocation.tool_key %> · call <%= invocation.tool_call_id %></p></div>
+                <div><p class="text-xs font-semibold text-ink"><%= invocation.display_name %></p><p class="mt-1 font-mono text-[10px] text-muted"><%= invocation.remote? ? "Provider hosted" : "Local" %> · <%= invocation.tool_key %> · call <%= invocation.tool_call_id %></p></div>
                 <span class="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-medium text-warning">pending</span>
               </div>
               <pre class="mt-3 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md bg-canvas p-3 font-mono text-[11px] leading-5 text-muted"><%= JSON.pretty_generate(invocation.arguments) %></pre>
@@ -81,7 +101,7 @@
 
     <div id="messages" class="flex-1 space-y-4 py-6" aria-live="polite">
       <% @messages.each do |message| %>
-        <%= render partial: message.to_partial_path, locals: { message: message } %>
+        <%= render partial: message.to_partial_path, locals: { message: message, speech_models_available: @speech_models_available } %>
       <% end %>
       <% if @messages.empty? %>
         <div class="rounded-2xl border border-dashed border-line bg-panel p-8 text-center">
@@ -103,7 +123,7 @@
               <span>Allow provider web search for this Run. Search terms go to the selected provider; support varies by model.</span>
             </label>
           </div>
-          <%= form.submit "Run", disabled: !@provider_configured, title: (@provider_configured ? nil : "Configure the provider first"), data: { form_state_target: "submit" }, class: "cursor-pointer rounded-lg bg-accent px-4 py-2 text-xs font-medium text-white enabled:hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50" %>
+          <%= form.submit "Run", disabled: !@provider_configured || @chat.remote_tool_outcome_unknown?, title: (@chat.remote_tool_outcome_unknown? ? "Start a new chat because the remote tool outcome is unknown" : (@provider_configured ? nil : "Configure the provider first")), data: { form_state_target: "submit" }, class: "cursor-pointer rounded-lg bg-accent px-4 py-2 text-xs font-medium text-white enabled:hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50" %>
         </div>
       <% end %>
     </div>

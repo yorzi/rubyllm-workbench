@@ -1,12 +1,13 @@
 module Ai
   class CostNormalizer
-    def self.for(usage_or_response, model: nil)
-      new(usage_or_response, model:).call
+    def self.for(usage_or_response, model: nil, category: :text_tokens)
+      new(usage_or_response, model:, category:).call
     end
 
-    def initialize(usage_or_response, model: nil)
+    def initialize(usage_or_response, model: nil, category: :text_tokens)
       @value = usage_or_response
       @model = model
+      @category = category
     end
 
     def call
@@ -18,7 +19,7 @@ module Ai
       end
 
       if @model && tokens.to_h.any?
-        estimated = @model.cost_for(tokens).total
+        estimated = RubyLLM::Cost.new(tokens:, model: @model, category: @category).total
         return { reported_cost: nil, estimated_cost: estimated, cost_status: "estimated", currency: "USD" } if estimated
       end
 
