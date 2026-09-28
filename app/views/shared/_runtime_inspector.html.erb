@@ -1,7 +1,7 @@
 <div class="sticky top-0">
   <div class="flex items-center justify-between">
     <p class="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Runtime</p>
-    <span class="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-medium text-success">healthy</span>
+    <span class="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-muted">Web responding</span>
   </div>
 
   <dl class="mt-5 divide-y divide-line rounded-xl border border-line bg-panel text-xs">
@@ -18,6 +18,35 @@
       <dd class="font-mono text-right text-ink">SQLite</dd>
     </div>
   </dl>
+
+  <% readiness = queue_readiness %>
+  <section aria-label="Background job readiness" class="mt-5 rounded-xl border border-line bg-panel p-3 text-xs leading-5">
+    <div class="flex items-center justify-between gap-3">
+      <h2 class="font-medium text-ink">Background jobs</h2>
+      <span class="rounded-full px-2 py-1 text-[10px] font-medium <%= status_classes(readiness.state) %>"><%= readiness.label %></span>
+    </div>
+    <p class="mt-2 text-muted"><%= readiness.details %></p>
+    <% if readiness.due_agent_deliveries %>
+      <dl class="mt-3 divide-y divide-line rounded-lg border border-line text-[11px]">
+        <div class="flex justify-between gap-3 p-2">
+          <dt class="text-muted">Agent deliveries due</dt>
+          <dd class="font-mono text-ink"><%= readiness.due_agent_deliveries %></dd>
+        </div>
+        <div class="flex justify-between gap-3 p-2">
+          <dt class="text-muted">Recurring scheduler</dt>
+          <dd class="text-right text-ink"><%= readiness.scheduler_ready ? "Recent heartbeat" : "Not seen" %></dd>
+        </div>
+        <div class="flex justify-between gap-3 p-2">
+          <dt class="text-muted">Queue dispatcher</dt>
+          <dd class="text-right text-ink"><%= readiness.dispatcher_ready ? "Recent heartbeat" : "Not seen" %></dd>
+        </div>
+        <div class="flex justify-between gap-3 p-2">
+          <dt class="text-muted">Maintenance worker</dt>
+          <dd class="text-right text-ink"><%= readiness.maintenance_worker_ready ? "Recent heartbeat" : "Not seen" %></dd>
+        </div>
+      </dl>
+    <% end %>
+  </section>
 
   <div class="mt-5 rounded-xl border border-line bg-canvas p-3 text-xs leading-5 text-muted">
     <p class="font-medium text-ink">Credential boundary</p>

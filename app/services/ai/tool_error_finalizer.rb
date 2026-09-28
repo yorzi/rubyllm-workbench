@@ -1,8 +1,9 @@
 module Ai
   class ToolErrorFinalizer
-    def initialize(chat, error)
+    def initialize(chat, error, run:)
       @chat = chat
       @error = error
+      @run = run
     end
 
     def call
@@ -30,7 +31,9 @@ module Ai
       RubyLLM::ActiveRecord::ToolCall.where(
         message_type: Message.polymorphic_name,
         message_id: @chat.messages.select(:id),
-        result_id: nil
+        result_id: nil,
+        remote: false,
+        tool_call_id: @run.tool_invocations.where(status: :running, remote: false).select(:tool_call_id)
       ).to_a
     end
 

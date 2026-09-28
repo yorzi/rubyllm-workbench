@@ -58,9 +58,12 @@ module Ai
 
     def configured_model!(snapshot)
       catalog = Ai::ModelCatalog.new
-      entry = catalog.entries.find do |candidate|
-        candidate.id == snapshot.fetch("model_id") && candidate.provider == snapshot.fetch("provider")
-      end
+      Ai::AgentModelEligibility.new(catalog:).ensure_eligible!(
+        provider: snapshot.fetch("provider"),
+        model_id: snapshot.fetch("model_id"),
+        tool_keys: snapshot.fetch("tool_keys")
+      )
+      entry = catalog.find_entry(snapshot.fetch("model_id"), provider: snapshot.fetch("provider"))
       unless entry&.configured
         missing = entry&.missing_configuration&.join(", ").presence || "provider configuration"
         raise ArgumentError, "This Agent model is not runnable yet. Configure #{missing} first."

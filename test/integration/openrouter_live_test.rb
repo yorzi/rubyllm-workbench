@@ -1,6 +1,6 @@
 require "test_helper"
 
-class OpenrouterLiveTest < ActiveSupport::TestCase
+class OpenrouterLiveTest < ActionDispatch::IntegrationTest
   include ActiveJob::TestHelper
 
   test "runs structured output through the configured OpenRouter provider" do
@@ -79,11 +79,36 @@ class OpenrouterLiveTest < ActiveSupport::TestCase
       AgentRunJob.perform_later(*delivery.job_arguments)
     end
 
-    assert run.reload.succeeded?, "#{run.status}: #{run.error_summary} #{run.result_summary.inspect}"
-    assert_operator run.result_summary.fetch("agent_step_count"), :>=, 2
-    assert_operator run.result_summary.fetch("provider_tool_step_count"), :>=, 1
+    run.reload
+    assert run.succeeded?, "#{run.status}: #{run.error_summary} #{run.result_summary.inspect}"
+    summary = run.result_summary
+    assert_operator summary.fetch("agent_step_count"), :>=, 2
+    assert_operator summary.fetch("provider_tool_step_count"), :>=, 1
     assert run.artifacts.where(kind: "citation_set").any?
     assert run.tool_invocations.find_by!(tool_key: "project_snapshot").succeeded?
     assert run.attempts.where(status: "succeeded").count >= 2
+
+    report = run.artifacts.find_by!(id: summary.fetch("research_report_artifact_id"), kind: "report")
+    final_attempt = run.attempts.order(:sequence, :id).last
+    citation_artifact_ids = run.artifacts.where(kind: "citation_set").order(:created_at, :id).pluck(:id)
+    source_message_id = summary.fetch("source_message_id")
+
+    assert_equal final_attempt.id, report.attempt_id
+    assert_equal "agent_research_report", report.metadata_json.fetch("report_type")
+    assert_equal source_message_id, report.metadata_json.fetch("source_message_id")
+    assert_equal source_message_id, report.content_json.fetch("source_message_id")
+    assert_equal run.input_snapshot.dig("agent_definition", "revision"), report.content_json.dig("agent", "revision")
+    assert_equal citation_artifact_ids, report.content_json.fetch("citation_artifact_ids")
+    assert_equal final_attempt.provider, report.content_json.fetch("provider")
+    assert_equal final_attempt.model_id, report.content_json.fetch("model_id")
+
+    get run_path(run)
+
+    assert_response :success
+    assert_select "#agent-research-report", text: report.content_text
+    assert_select "#agent-research-report a[href=?]", "#citation-artifact-#{citation_artifact_ids.first}"
+    citation_artifact_ids.each do |artifact_id|
+      assert_select "#citation-artifact-#{artifact_id}"
+    end
   end
 end

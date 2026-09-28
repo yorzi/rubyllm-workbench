@@ -8,7 +8,8 @@ module Ai
       error_code failure_kind duration_ms input_tokens output_tokens
       total_cost finish_reason time_to_first_output_ms schema_name
       schema_validation pending_tool_count agent_definition_id
-      agent_revision step_number step_status
+      agent_revision step_number step_status audio_bytes
+      provider_job_id
     ].freeze
 
     class << self

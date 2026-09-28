@@ -11,6 +11,7 @@ module Ai
       recorder = Ai::AttemptRecorder.new(@run, chat: @chat, continuation: @resuming_approval)
       attempt = recorder.start!
       Ai::ChatTooling.new(chat: @chat, project: @run.project, run: @run).configure
+      assert_frozen_conversation_context! unless @resuming_approval
       tool_recorder = Ai::ToolInvocationRecorder.new(run: @run, chat: @chat, attempt:).attach
       usage_ids_before = @chat.ruby_llm_usages.pluck(:id)
       response = nil
@@ -46,9 +47,15 @@ module Ai
         )
       end
     rescue StandardError => error
-      Ai::ToolErrorFinalizer.new(@chat, error).call
-      tool_recorder&.sync!(failure: error)
-      recorder&.fail!(error, usage_ids_before: usage_ids_before || [])
+      @run.with_lock do
+        @run.reload
+        return if @run.terminal?
+
+        Ai::ToolErrorFinalizer.new(@chat, error, run: @run).call
+        tool_recorder&.sync!(failure: error)
+        result_summary = error.is_a?(Ai::ChatContextSnapshot::ContextChanged) ? { "provider_request_made" => false } : {}
+        recorder&.fail!(error, usage_ids_before: usage_ids_before || [], result_summary:)
+      end
     end
 
     private
@@ -66,6 +73,20 @@ module Ai
 
     def prompt
       @run.input_snapshot.fetch("prompt") { @run.input_snapshot.fetch(:prompt) }
+    end
+
+    def assert_frozen_conversation_context!
+      expected = @run.input_snapshot["conversation_context"]
+      return unless expected
+
+      # RubyLLM memoizes its hydrated Chat object. Tool configuration can
+      # materialize that object before this check, so refresh it from the
+      # persisted transcript before comparing the frozen request context.
+      @chat.reload
+      return if Ai::ChatContextSnapshot.call(@chat) == expected
+
+      raise Ai::ChatContextSnapshot::ContextChanged,
+        "Chat changed after this Run was queued. No provider request was made; queue a new Run."
     end
 
     def latest_assistant_message

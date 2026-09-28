@@ -82,9 +82,16 @@ class Ai::ToolInvocationRecorderTest < ActiveSupport::TestCase
 
   test "finalizes a local tool exception with an answerable tool result" do
     call = create_tool_call(arguments: { "note" => "will fail" })
+    @run.tool_invocations.create!(
+      attempt: @attempt,
+      tool_call_id: call.tool_call_id,
+      tool_key: call.name,
+      status: :running,
+      started_at: 1.second.ago
+    )
     error = RuntimeError.new("tool exploded")
 
-    Ai::ToolErrorFinalizer.new(@chat, error).call
+    Ai::ToolErrorFinalizer.new(@chat, error, run: @run).call
     Ai::ToolInvocationRecorder.new(run: @run, chat: @chat, attempt: @attempt).sync!(failure: error)
 
     tool_message = @chat.messages.reload.find { |message| message.role.to_s == "tool" }
@@ -92,8 +99,22 @@ class Ai::ToolInvocationRecorderTest < ActiveSupport::TestCase
     assert tool_message
     assert_equal call.tool_call_id, tool_message.parent_tool_call.id
     assert invocation.failed?
+    assert_nil invocation.approval
     assert_equal "RubyLLM::ToolError", invocation.error_class
     assert_includes invocation.error_message, "Local tool execution failed"
+  end
+
+  test "does not finalize pending or remote tool calls as local execution failures" do
+    local_call = create_tool_call(arguments: { "note" => "waiting" })
+    remote_call = create_tool_call(arguments: { "query" => "waiting" }, name: "web_search", remote: true)
+    Ai::ToolInvocationRecorder.new(run: @run, chat: @chat, attempt: @attempt).sync!
+
+    Ai::ToolErrorFinalizer.new(@chat, RuntimeError.new("later step failed"), run: @run).call
+
+    assert_nil local_call.reload.result_id
+    assert_nil remote_call.reload.result_id
+    assert @run.tool_invocations.all?(&:waiting_for_approval?)
+    assert_equal 2, @run.tool_invocations.joins(:approval).where(approvals: { status: "pending" }).count
   end
 
   test "labels provider-hosted tool calls as remote and local ones as local" do
@@ -102,7 +123,10 @@ class Ai::ToolInvocationRecorderTest < ActiveSupport::TestCase
 
     Ai::ToolInvocationRecorder.new(run: @run, chat: @chat, attempt: @attempt).sync!
 
-    assert @run.tool_invocations.find_by(tool_call_id: remote_call.tool_call_id).remote?
+    remote_invocation = @run.tool_invocations.find_by(tool_call_id: remote_call.tool_call_id)
+    assert remote_invocation.remote?
+    assert remote_invocation.waiting_for_approval?
+    assert remote_invocation.approval.pending?
     assert_not @run.tool_invocations.find_by(tool_call_id: local_call.tool_call_id).remote?
     assert_equal 1, @run.tool_invocations.where(remote: true).count
   end

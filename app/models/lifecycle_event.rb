@@ -15,13 +15,19 @@ class LifecycleEvent < ApplicationRecord
     ai.attempt.cancelled
     ai.tool.requested
     ai.tool.completed
+    ai.tool.cancelled
     ai.approval.requested
     ai.approval.decided
+    ai.approval.expired
     ai.artifact.created
     ai.provider.chat
     ai.provider.tool
     ai.provider.embedding
     ai.provider.rerank
+    ai.provider.speech
+    ai.provider.image
+    ai.provider.transcription
+    ai.provider.video
   ].freeze
 
   belongs_to :run

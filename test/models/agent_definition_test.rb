@@ -46,4 +46,29 @@ class AgentDefinitionTest < ActiveSupport::TestCase
     assert definition.errors[:provider_tools].any?
     assert definition.errors[:options].any?
   end
+
+  test "rejects local tools when the model is missing from the RubyLLM chat registry" do
+    definition = @project.agent_definitions.new(
+      name: "Unlisted model agent",
+      provider: chat_model.provider,
+      model_id: "not-in-the-chat-registry",
+      instructions: "Use the project snapshot.",
+      tool_keys: [ "project_snapshot" ]
+    )
+
+    assert_not definition.valid?
+    assert_includes definition.errors[:model_id].join(" "), "function_calling"
+  end
+
+  test "allows provider tools without local tools through the local capability gate" do
+    definition = @project.agent_definitions.new(
+      name: "Hosted search agent",
+      provider: chat_model.provider,
+      model_id: "not-in-the-chat-registry",
+      instructions: "Search for reliable sources.",
+      provider_tools: [ "web_search" ]
+    )
+
+    assert definition.valid?, definition.errors.full_messages.to_sentence
+  end
 end

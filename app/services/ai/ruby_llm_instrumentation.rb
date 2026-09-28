@@ -16,7 +16,12 @@ module Ai
       "chat.ruby_llm" => "chat",
       "tool_call.ruby_llm" => "tool",
       "embedding.ruby_llm" => "embedding",
-      "rerank.ruby_llm" => "rerank"
+      "rerank.ruby_llm" => "rerank",
+      "speech.ruby_llm" => "speech",
+      "image.ruby_llm" => "image",
+      "transcription.ruby_llm" => "transcription",
+      "video.ruby_llm" => "video",
+      "video_job.ruby_llm" => "video"
     }.freeze
 
     ACTIVE_RUN_STATUSES = %w[queued running waiting_for_approval].freeze
@@ -93,9 +98,11 @@ module Ai
         input_tokens: token_value(:input),
         output_tokens: token_value(:output),
         total_cost: cost_value,
+        audio_bytes: numeric_value(@payload[:audio_bytes]),
+        provider_job_id: provider_job_id,
         finish_reason: finish_reason,
         error_class: error_class,
-        status: @payload[:error].present? ? "failed" : "succeeded",
+        status: event_status,
         event_key: "provider:#{@notification_id}"
       }.compact
 
@@ -166,12 +173,26 @@ module Ai
 
     def cost_value
       cost = @payload[:cost]
-      return nil unless cost.respond_to?(:total_cost)
+      return nil unless cost.respond_to?(:total_cost) || cost.respond_to?(:total)
 
-      value = cost.total_cost
+      value = cost.respond_to?(:total_cost) ? cost.total_cost : cost.total
       value.is_a?(Numeric) ? value.to_f : nil
     rescue StandardError
       nil
+    end
+
+    def provider_job_id
+      return unless @name == "video_job.ruby_llm"
+
+      value = @payload[:job_id]
+      value.truncate(200).presence if value.is_a?(String)
+    end
+
+    def event_status
+      return "failed" if @payload[:error].present?
+      return "submitted" if @name == "video_job.ruby_llm"
+
+      "succeeded"
     end
 
     def finish_reason
@@ -194,6 +215,10 @@ module Ai
       return nil if value.nil?
 
       value.to_s.presence
+    end
+
+    def numeric_value(value)
+      value.to_i if value.is_a?(Numeric)
     end
   end
 end

@@ -12,8 +12,9 @@ module Ai
       recorder = Ai::AttemptRecorder.new(@run, chat: @chat)
       recorder.start!
       usage_ids_before = @chat.ruby_llm_usages.pluck(:id)
-      definition = @experiment.schema_definition
-      configure_chat(definition)
+      experiment_snapshot = @run.input_snapshot.fetch("experiment")
+      definition = Ai::SchemaDefinition.parse(experiment_snapshot.fetch("schema"))
+      configure_chat(definition, experiment_snapshot)
 
       response = Ai::ExecutionContext.with(run_id: @run.id, attempt_id: @run.attempts.order(:sequence, :id).last&.id) do
         @chat.ask(prompt) do |chunk|
@@ -26,7 +27,8 @@ module Ai
       end
 
       parsed = parse_and_validate!(response, definition)
-      @run.transaction do
+      @run.finish_running_execution!(operation: "structured", status: :succeeded) do
+        recorder.finish_step!(response, usage_ids_before:)
         artifact = @run.artifacts.create!(
           attempt: @run.attempts.order(:sequence, :id).last,
           kind: "json",
@@ -36,12 +38,11 @@ module Ai
           metadata_json: {
             "schema_name" => definition.name,
             "schema_validation" => "valid",
-            "experiment_revision" => @experiment.revision
+            "experiment_revision" => experiment_snapshot.fetch("revision")
           }
         )
-        recorder.succeed!(
+        recorder.success_summary(
           response,
-          usage_ids_before: usage_ids_before,
           result_summary: {
             "schema_name" => definition.name,
             "schema_validation" => "valid",
@@ -53,7 +54,12 @@ module Ai
 
       @run
     rescue StandardError => error
-      recorder&.fail!(error, usage_ids_before: usage_ids_before || [])
+      if recorder
+        @run.finish_running_execution!(operation: "structured", status: :failed, error:) do
+          recorder.fail_step!(error, usage_ids_before: usage_ids_before || [])
+          { "partial_output" => recorder.partial_output.presence }.compact
+        end
+      end
       @run
     ensure
       @run.experiment_execution&.refresh_status!
@@ -65,12 +71,12 @@ module Ai
       @run.input_snapshot.fetch("experiment").fetch("input_prompt")
     end
 
-    def configure_chat(definition)
-      system_prompt = @run.input_snapshot.dig("experiment", "system_prompt")
+    def configure_chat(definition, experiment_snapshot)
+      system_prompt = experiment_snapshot["system_prompt"]
       @chat.with_instructions(system_prompt, persist: false) if system_prompt.present?
       @chat.with_schema(definition.payload)
 
-      options = @run.input_snapshot.dig("experiment", "generation_options") || {}
+      options = experiment_snapshot["generation_options"] || {}
       @chat.with_temperature(options["temperature"]) if options["temperature"]
       @chat.with_max_output_tokens(options["max_output_tokens"]) if options["max_output_tokens"]
     end

@@ -1,6 +1,18 @@
 require "test_helper"
 
 class AgentRunDeliveryDispatcherJobTest < ActiveSupport::TestCase
+  class TerminalRunGuardAgentJob < AgentRunJob
+    class << self
+      attr_accessor :restore_calls
+    end
+
+    private
+
+    def restore_agent
+      self.class.restore_calls = self.class.restore_calls.to_i + 1
+    end
+  end
+
   setup do
     @project = create_project(name: "Agent dispatcher project")
     @chat = create_chat(@project)
@@ -68,6 +80,65 @@ class AgentRunDeliveryDispatcherJobTest < ActiveSupport::TestCase
     assert_equal 1, delivery.reload.dispatch_attempts
     assert_equal "IOError", delivery.last_error_class
     assert_nil delivery.delivered_at
+  end
+
+  test "re-enqueues after an accepted enqueue loses its outbox acknowledgement" do
+    run = create_agent_run(status: :queued, generation: 0)
+    delivery = AgentRunDelivery.record!(run:, intent: "execute", expected_generation: 0)
+    job = Object.new
+    enqueue_attempts = 0
+    job.define_singleton_method(:enqueue) { enqueue_attempts += 1; true }
+    original_mark_delivered = AgentRunDelivery.instance_method(:mark_delivered!)
+    AgentRunDelivery.define_method(:mark_delivered!) do |token:, now: Time.current|
+      original_mark_delivered.bind(self).call(token:, now: now + AgentRunDelivery::CLAIM_DURATION + 1.second)
+    end
+
+    begin
+      first_job_arguments = with_agent_job_constructor(job) do
+        @job.send(:dispatch, delivery.id)
+      end
+    ensure
+      AgentRunDelivery.define_method(:mark_delivered!, original_mark_delivered)
+    end
+
+    assert_nil delivery.reload.delivered_at
+    assert delivery.claimed_until.future?
+    delivery.update_columns(claimed_until: 1.second.ago)
+
+    second_job_arguments = with_agent_job_constructor(job) do
+      @job.send(:dispatch, delivery.id)
+    end
+
+    assert_equal first_job_arguments, second_job_arguments
+    assert delivery.reload.delivered_at
+    assert_equal 0, delivery.dispatch_attempts
+    assert_equal 2, enqueue_attempts
+
+    assert run.claim_agent_execution!(token: "first-delivery", expected_generation: first_job_arguments.fetch(3))
+    assert_not run.claim_agent_execution!(token: "duplicate-delivery", expected_generation: second_job_arguments.fetch(3))
+    run.reload
+    generation = run.agent_execution_generation
+    report = nil
+    succeeded = run.succeed!({ "answer" => "one execution" }, agent_execution_token: "first-delivery",
+      agent_execution_generation: generation) do
+      report = run.artifacts.create!(
+        kind: "report",
+        name: "One durable report",
+        content_text: "one execution",
+        metadata_json: {}
+      )
+      { "report_artifact_id" => report.id }
+    end
+    assert succeeded
+
+    assert_not run.claim_agent_execution!(token: "late-duplicate-delivery", expected_generation: second_job_arguments.fetch(3))
+    assert_equal 1, run.artifacts.where(kind: "report", name: "One durable report").count
+    assert_equal report.id, run.reload.result_summary.fetch("report_artifact_id")
+
+    TerminalRunGuardAgentJob.restore_calls = 0
+    TerminalRunGuardAgentJob.perform_now(*second_job_arguments)
+    assert_equal 0, TerminalRunGuardAgentJob.restore_calls
+    assert_equal 1, run.reload.artifacts.where(kind: "report", name: "One durable report").count
   end
 
   private

@@ -119,7 +119,7 @@ module Learning
               step("5. RubyLLM notifications are adapted", "The instrumentation adapter listens to RubyLLM notifications and maps a safe subset to local ai.provider.* lifecycle events. This is an adapter boundary, not provider-native tracing.")
             ),
             code_references: list(
-              reference("app/controllers/messages_controller.rb", "Rails entry point", "Validates the model and enqueues the Run.", 15, 24, "Ai::RunExecutor.enqueue"),
+              reference("app/controllers/messages_controller.rb", "Rails entry point", "Validates the model and enqueues the Run.", 15, 29, "Ai::RunExecutor.enqueue"),
               reference("app/services/ai/run_executor.rb", "Run creation and snapshot", "Creates the durable Run and first Attempt.", 14, 42, "def enqueue"),
               reference("app/jobs/chat_response_job.rb", "Queue handoff", "Moves the durable Run into the executor.", 1, 5, "Ai::ChatExecutor.new"),
               reference("app/services/ai/chat_executor.rb", "Chat execution", "Claims, configures, streams, and completes the Attempt.", 8, 41, "def call"),
@@ -277,7 +277,7 @@ module Learning
               reference("app/views/projects/index.html.erb", "Project creation form", "Uses Rails model-backed form helpers for the Project fields.", 46, 74, "form_with model: @project"),
               reference("app/controllers/projects_controller.rb", "Project creation", "Permits the form contract, persists the Project, and redirects to its workspace.", 7, 15, "def create"),
               reference("app/models/project.rb", "Slug validation and routing", "Validates slug format and uniqueness, derives a missing slug, and uses it in routes.", 12, 20, "before_validation :derive_slug"),
-              reference("app/models/project.rb", "Slug derivation", "Converts the Project name into the default slug before validation.", 51, 53, "name.to_s.parameterize"),
+              reference("app/models/project.rb", "Slug derivation", "Converts the Project name into the default slug before validation.", 54, 56, "name.to_s.parameterize"),
               reference("config/routes.rb", "Nested resource boundary", "Defines Project-owned Chats, tools, Knowledge, Experiments, and Runs.", 6, 22, "resources :projects"),
               reference("app/controllers/projects_controller.rb", "Project page action", "Loads the Project and recent scoped Chats/Runs.", 18, 22, "def show"),
               reference("app/models/project.rb", "Project associations", "Declares the local ownership graph and dependent behavior.", 1, 10, "has_many :chats"),

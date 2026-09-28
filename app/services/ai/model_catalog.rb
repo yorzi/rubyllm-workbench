@@ -46,6 +46,13 @@ module Ai
       RubyLLM.models.find(model_id, provider: provider.presence, config: @config)
     end
 
+    def find_entry(model_id, provider:)
+      model = @models.find do |candidate|
+        candidate.id == model_id && candidate.provider == provider.to_s
+      end
+      descriptor_for(model) if model
+    end
+
     def providers
       entries.map { |entry| [ entry.provider, entry.provider_name ] }.uniq.sort_by(&:last)
     end

@@ -16,6 +16,7 @@ class AgentDefinition < ApplicationRecord
   validates :instructions, presence: true, length: { maximum: MAX_INSTRUCTIONS_LENGTH }
   validates :revision, numericality: { only_integer: true, greater_than: 0 }
   validate :tool_keys_are_enabled_for_project
+  validate :model_supports_local_tools
   validate :provider_tools_are_allowlisted
   validate :options_are_safe
 
@@ -84,6 +85,14 @@ class AgentDefinition < ApplicationRecord
     return if invalid_keys.empty?
 
     errors.add(:tool_keys, "include tools that are unavailable in this Project: #{invalid_keys.join(', ')}")
+  end
+
+  def model_supports_local_tools
+    return if tool_keys.empty?
+
+    Ai::AgentModelEligibility.new.ensure_eligible!(provider:, model_id:, tool_keys:)
+  rescue ArgumentError => error
+    errors.add(:model_id, error.message)
   end
 
   def provider_tools_are_allowlisted

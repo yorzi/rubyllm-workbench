@@ -146,6 +146,35 @@ class Ai::ChatExecutorTest < ActiveSupport::TestCase
     assert @run.reload.running?
   end
 
+  test "fails before asking the provider when the persisted chat changed after enqueue" do
+    @chat.messages.create!(role: "user", content: "Context before enqueue")
+    frozen_context = Ai::ChatContextSnapshot.call(@chat)
+    watermark = @chat.messages.maximum(:id)
+    @run.update!(input_snapshot_json: {
+      "prompt" => "hello",
+      "conversation_context" => frozen_context,
+      "conversation_message_high_watermark" => watermark
+    })
+
+    # Reproduce the stale RubyLLM message cache that can be materialized by
+    # tool configuration before the worker's drift check.
+    provider_called = false
+    with_provider_configuration(@chat.provider) do
+      @chat.to_llm
+      Message.create!(chat: @chat, role: "assistant", content: "Changed after enqueue")
+      with_singleton_method_stub(@chat, :ask, ->(*) { provider_called = true; raise "provider must not be called" }) do
+        Ai::ChatExecutor.new(@run.id, run: @run, chat: @chat).call
+      end
+    end
+
+    @run.reload
+    assert @run.failed?
+    assert_equal false, @run.result_summary.fetch("provider_request_made")
+    assert_equal false, provider_called
+    assert_equal "Context before enqueue", @chat.messages.first.content
+    assert_equal "Changed after enqueue", @chat.messages.last.content
+  end
+
   class ResumingFakeChat < FakeChat
     def complete
       @chat.messages.create!(role: "assistant", content: "Resumed answer")
@@ -155,5 +184,15 @@ class Ai::ChatExecutorTest < ActiveSupport::TestCase
     def ask(*)
       raise "ask should not be used while resuming an approval"
     end
+  end
+
+  private
+
+  def with_singleton_method_stub(object, name, implementation)
+    original = object.method(name)
+    object.define_singleton_method(name, &implementation)
+    yield
+  ensure
+    object.define_singleton_method(name, original)
   end
 end

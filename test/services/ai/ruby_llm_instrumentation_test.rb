@@ -25,7 +25,8 @@ class Ai::RubyLlmInstrumentationTest < ActiveSupport::TestCase
       streaming: true,
       tokens: tokens,
       cost: cost,
-      response: Struct.new(:finish_reason).new("stop")
+      response: Struct.new(:finish_reason).new("stop"),
+      job_id: "ignored-outside-video-job-event"
     }
 
     record_event("chat.ruby_llm", payload)
@@ -42,6 +43,7 @@ class Ai::RubyLlmInstrumentationTest < ActiveSupport::TestCase
     assert_in_delta 0.0042, event.payload["total_cost"], 1e-9
     assert_equal "stop", event.payload["finish_reason"]
     assert_equal "succeeded", event.payload["status"]
+    assert_nil event.payload["provider_job_id"]
     assert event.duration_ms.to_i >= 0
   end
 
@@ -62,6 +64,50 @@ class Ai::RubyLlmInstrumentationTest < ActiveSupport::TestCase
     assert_equal "failed", event.payload["status"]
     assert_equal "RubyLLM::Error", event.payload["error_class"]
     assert_nil event.payload["chat"]
+  end
+
+  test "persists video provider job references as submitted support evidence" do
+    Ai::ExecutionContext.with(run_id: @run.id, attempt_id: @attempt.id) do
+      record_event("video_job.ruby_llm", {
+        provider: "xai",
+        provider_class: "RubyLLM::Providers::XAI",
+        model: "grok-imagine-video",
+        job_id: "provider-video-job-123"
+      })
+    end
+
+    event = LifecycleEvent.find_by!(name: "ai.provider.video")
+    assert_equal @run.id, event.run_id
+    assert_equal @attempt.id, event.attempt_id
+    assert_equal "video", event.payload.fetch("operation")
+    assert_equal "xai", event.payload.fetch("provider")
+    assert_equal "grok-imagine-video", event.payload.fetch("model_id")
+    assert_equal "provider-video-job-123", event.payload.fetch("provider_job_id")
+    assert_equal "submitted", event.payload.fetch("status")
+  end
+
+  test "ignores non-string provider job references" do
+    Ai::ExecutionContext.with(run_id: @run.id, attempt_id: @attempt.id) do
+      record_event("video_job.ruby_llm", {
+        provider: "xai",
+        job_id: Object.new
+      })
+    end
+
+    event = LifecycleEvent.find_by!(name: "ai.provider.video")
+    assert_nil event.payload["provider_job_id"]
+  end
+
+  test "bounds video provider job references" do
+    job_id = "v" * 250
+    Ai::ExecutionContext.with(run_id: @run.id, attempt_id: @attempt.id) do
+      record_event("video_job.ruby_llm", { job_id: })
+    end
+
+    event = LifecycleEvent.find_by!(name: "ai.provider.video")
+    persisted_id = event.payload.fetch("provider_job_id")
+    assert_equal job_id.truncate(200), persisted_id
+    assert_operator persisted_id.length, :<=, 200
   end
 
   test "is idempotent for the same notification" do

@@ -6,6 +6,9 @@ class WorkbenchFlowTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_includes response.body, "Projects"
     assert_includes response.body, "Credential boundary"
+    assert_includes response.body, "Background jobs"
+    assert_includes response.body, "Test adapter"
+    refute_includes response.body, ">healthy<"
 
     get models_path
     assert_response :success
@@ -83,6 +86,39 @@ class WorkbenchFlowTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "current query"
     refute_includes response.body, "later-run-search"
     refute_includes response.body, "later query"
+  end
+
+  test "run inspector shows a submitted video provider job reference" do
+    project = create_project(name: "Video job reference project")
+    chat = create_chat(project)
+    run = chat.runs.create!(
+      project:,
+      operation: "video",
+      status: :running,
+      requested_by: "test",
+      input_snapshot_json: { "video" => { "prompt" => "A synthetic clip" } }
+    )
+    attempt = run.attempts.create!(sequence: 1, provider: "xai", model_id: "grok-imagine-video", status: :running)
+    Ai::LifecycleEventRecorder.persist(
+      "ai.provider.video",
+      payload: {
+        run_id: run.id,
+        attempt_id: attempt.id,
+        operation: "video",
+        provider: "xai",
+        model_id: "grok-imagine-video",
+        provider_job_id: "provider-video-job-123",
+        status: "submitted",
+        event_key: "video-job-submitted-#{run.id}"
+      },
+      source: "ruby_llm"
+    )
+
+    get run_path(run)
+
+    assert_response :success
+    assert_includes response.body, "Provider job reference provider-video-job-123"
+    assert_includes response.body, "submitted"
   end
 
   test "freezes an effective parallel tool policy into a Run snapshot" do

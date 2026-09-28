@@ -67,10 +67,15 @@ module Ai
 
     def succeed!(response, usage_ids_before: [], result_summary: {})
       finish_step!(response, usage_ids_before:)
-      summary = response_summary(response).merge(result_summary).merge("partial_output" => @partial_output.presence)
-      summary.delete("partial_output") if summary["partial_output"].nil?
+      summary = success_summary(response, result_summary:)
       @run.succeed!(summary)
       @run
+    end
+
+    def success_summary(response, result_summary: {})
+      summary = response_summary(response).merge(result_summary).merge("partial_output" => @partial_output.presence)
+      summary.delete("partial_output") if summary["partial_output"].nil?
+      summary
     end
 
     # Finish one Agent step without terminalizing its parent Run. Agent Runs
@@ -96,10 +101,10 @@ module Ai
       @run
     end
 
-    def fail!(error, usage_ids_before: [])
+    def fail!(error, usage_ids_before: [], result_summary: {})
       fail_step!(error, usage_ids_before:)
 
-      summary = { "partial_output" => @partial_output.presence }.compact
+      summary = result_summary.deep_stringify_keys.merge("partial_output" => @partial_output.presence).compact
       @run.fail!(error, summary: summary)
       @run
     end

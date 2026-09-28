@@ -9,6 +9,11 @@ class MessagesController < ApplicationController
       return
     end
 
+    if @chat.remote_tool_outcome_unknown?
+      redirect_to project_chat_path(@project, @chat), alert: Chat::REMOTE_TOOL_OUTCOME_UNKNOWN_MESSAGE
+      return
+    end
+
     model_entry = model_catalog.entries.find do |entry|
       entry.id == @chat.model_id && entry.provider == @chat.provider
     end
@@ -24,6 +29,8 @@ class MessagesController < ApplicationController
     redirect_to project_chat_path(@project, @chat), notice: "Run ##{@run.id} queued.", status: :see_other
   rescue ActiveRecord::RecordInvalid => error
     redirect_to project_chat_path(@project, @chat), alert: error.record.errors.full_messages.to_sentence
+  rescue ArgumentError => error
+    redirect_to project_chat_path(@project, @chat), alert: error.message
   end
 
   private

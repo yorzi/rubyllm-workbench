@@ -36,13 +36,20 @@
       <div>
         <h2 id="start-agent-run-heading" class="text-sm font-semibold text-ink">Run this Agent</h2>
         <p class="mt-1 text-xs leading-5 text-muted">The current definition revision and prompt will be copied into a dedicated Run transcript.</p>
+        <% if @agent_definition.tool_keys.any? %>
+          <% if @local_tools_model_eligible %>
+            <p class="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-700">RubyLLM's registry declares function calling for this model. This does not verify live provider acceptance.</p>
+          <% else %>
+            <p class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">This Agent cannot be queued: its model is missing or does not declare function calling in RubyLLM's chat registry. Choose a listed compatible model or remove its local tools.</p>
+          <% end %>
+        <% end %>
       </div>
       <%= form_with scope: :agent_run, url: project_agent_definition_runs_path(@project, @agent_definition), class: "mt-4" do |form| %>
         <%= form.label :prompt, "Task", class: "text-xs font-medium text-ink" %>
         <%= form.text_area :prompt, required: true, rows: 4, placeholder: "Describe the task this Agent should complete.", class: "mt-2 w-full resize-y rounded-lg border border-line bg-white px-3 py-2.5 text-sm leading-6 outline-none ring-accent/20 placeholder:text-slate-400 focus:border-accent focus:ring-4" %>
         <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
           <p class="text-xs text-muted">Provider: <span class="font-mono"><%= @agent_definition.provider %></span></p>
-          <%= form.submit "Queue Agent Run", class: "inline-flex cursor-pointer items-center rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700" %>
+          <%= form.submit "Queue Agent Run", disabled: !@local_tools_model_eligible, class: "inline-flex cursor-pointer items-center rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50" %>
         </div>
       <% end %>
     </section>

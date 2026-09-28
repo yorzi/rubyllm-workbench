@@ -205,6 +205,117 @@ class AgentRunJobTest < ActiveSupport::TestCase
     end
   end
 
+  class DeterministicRemoteApprovalAgent
+    def initialize(chat, run)
+      @chat = chat
+      @run = run
+    end
+
+    def ask_later(prompt)
+      @chat.messages.create!(role: "user", content: prompt)
+    end
+
+    def awaiting_approval?
+      @run.tool_invocations.waiting_for_approval.exists?
+    end
+
+    def complete?
+      @chat.messages.where(role: "assistant").count >= 2
+    end
+
+    def step
+      tool_call = pending_remote_tool_call
+      if tool_call
+        @chat.run_tools
+        message = @chat.messages.reorder(id: :desc).first
+      else
+        message = @chat.messages.create!(role: "assistant", content: "Hosted approval handled.")
+      end
+
+      yield Data.define(:content).new(message.content) if block_given?
+      message
+    end
+
+    private
+
+    def pending_remote_tool_call
+      RubyLLM::ActiveRecord::ToolCall.where(
+        message_type: Message.polymorphic_name,
+        message_id: @chat.messages.select(:id)
+      ).includes(:result).order(:id).find do |tool_call|
+        tool_call.remote? && tool_call.result.nil?
+      end
+    end
+  end
+
+  class DeterministicRemoteApprovalAgentRunJob < AgentRunJob
+    private
+
+    def restore_agent
+      @agent = DeterministicRemoteApprovalAgent.new(@run.chat, @run)
+      @tool_recorder = Ai::ToolInvocationRecorder.new(
+        run: @run,
+        chat: @run.chat,
+        agent_execution_token: @lease_token,
+        agent_execution_generation: @lease_generation
+      ).attach
+    end
+  end
+
+  class FailingApprovalAgent
+    def initialize(chat, run, tool_recorder)
+      @chat = chat
+      @run = run
+      @tool_recorder = tool_recorder
+    end
+
+    def ask_later(prompt)
+      @chat.messages.create!(role: "user", content: prompt)
+    end
+
+    def awaiting_approval?
+      false
+    end
+
+    def complete?
+      false
+    end
+
+    def step
+      assistant = @chat.messages.create!(role: "assistant", content: "Two calls need approval.")
+      RubyLLM::ActiveRecord::ToolCall.create!(
+        message: assistant,
+        tool_call_id: "failed-local-approval-#{SecureRandom.hex(4)}",
+        name: "save_run_note",
+        arguments: { "note" => "must not execute" },
+        remote: false
+      )
+      RubyLLM::ActiveRecord::ToolCall.create!(
+        message: assistant,
+        tool_call_id: "failed-remote-approval-#{SecureRandom.hex(4)}",
+        name: "web_search",
+        arguments: { "query" => "RubyLLM" },
+        remote: true
+      )
+      @tool_recorder.sync!
+      raise "provider failed after requesting approvals"
+    end
+  end
+
+  class FailingApprovalAgentRunJob < AgentRunJob
+    private
+
+    def restore_agent
+      @tool_recorder = Ai::ToolInvocationRecorder.new(
+        run: @run,
+        chat: @run.chat,
+        agent_execution_token: @lease_token,
+        agent_execution_generation: @lease_generation
+      ).attach
+      @agent = FailingApprovalAgent.new(@run.chat, @run, @tool_recorder)
+    end
+  end
+
   AgentStub = Struct.new(:approval_pending) do
     def awaiting_approval?
       approval_pending
@@ -266,6 +377,28 @@ class AgentRunJobTest < ActiveSupport::TestCase
     assert_equal 3, event.payload_json.fetch("agent_revision")
   end
 
+  test "rejects a frozen local-tool snapshot without function-calling registry metadata before agent construction" do
+    @run.update!(input_snapshot_json: {
+      "prompt" => "verify a claim",
+      "tools" => [],
+      "agent_definition" => {
+        "provider" => @chat.provider,
+        "model_id" => "not-in-the-chat-registry",
+        "instructions" => "Use the local tool.",
+        "tool_keys" => [ "project_snapshot" ],
+        "provider_tools" => [],
+        "options" => {}
+      }
+    })
+    job = AgentRunJob.new
+    job.instance_variable_set(:@run, @run)
+
+    error = assert_raises(ArgumentError) { job.send(:restore_agent) }
+
+    assert_includes error.message, "function_calling"
+    assert_not job.instance_variable_defined?(:@agent)
+  end
+
   test "executes a deterministic multi-step Agent Run through completion" do
     DeterministicAgentRunJob.received_arguments = []
     snapshot = {
@@ -301,6 +434,9 @@ class AgentRunJobTest < ActiveSupport::TestCase
     assert run.reload.succeeded?, "#{run.status}: #{run.error_summary} #{run.result_summary.inspect}"
     assert_nil run.agent_execution_token
     assert_equal 2, run.result_summary.fetch("agent_step_count")
+    research_report = run.artifacts.find_by!(kind: "report", name: "Research report · Source checker")
+    assert_equal "Deterministic step 2.", research_report.content_text
+    assert_equal run.result_summary.fetch("research_report_artifact_id"), research_report.id
     assert_equal [ 0, 1 ], DeterministicAgentRunJob.received_arguments.map { |arguments| arguments[3] }
     assert_equal 3, run.result_summary.dig("agent_definition", "revision")
     assert_equal [ "succeeded", "succeeded" ], run.attempts.order(:sequence).pluck(:status)
@@ -400,6 +536,7 @@ class AgentRunJobTest < ActiveSupport::TestCase
 
     assert run.reload.cancelled?
     assert_equal [ "cancelled" ], run.attempts.order(:sequence).pluck(:status)
+    assert_empty run.artifacts.where(kind: "report")
     assert_not run.result_summary.key?("agent_step_count")
     assert_equal [ "Reply returned after cancellation." ], chat.messages.where(role: "assistant").pluck(:content)
     step_statuses = run.lifecycle_events.where(name: "ai.agent.step").map do |event|
@@ -465,11 +602,190 @@ class AgentRunJobTest < ActiveSupport::TestCase
       assert_equal decision, invocation.approval.reload.status
       assert_equal(decision == "approved" ? "succeeded" : "denied", invocation.reload.status)
       assert_equal 2, run.result_summary.fetch("agent_step_count")
+      report = run.artifacts.where(kind: "report").find do |artifact|
+        artifact.metadata_json.to_h["report_type"] == "agent_research_report"
+      end
+      assert report, "expected a durable Agent research report"
       if decision == "approved"
         assert_equal "Approved note", run.artifacts.find_by!(source_tool_call_id: invocation.tool_call_id).content_text
       else
-        assert_empty run.artifacts.where(kind: "report")
+        assert_empty run.artifacts.where(source_tool_call_id: invocation.tool_call_id)
       end
+    end
+  end
+
+  test "resumes approved and denied provider-hosted MCP calls through Agent Run delivery" do
+    openai_model = RubyLLM.models.chat_models.to_a.find { |candidate| candidate.provider == "openai" }
+    assert openai_model, "expected RubyLLM's OpenAI model registry entry"
+    model = RubyLLM::ActiveRecord::Model.find_or_create_by!(
+      model_id: openai_model.id,
+      provider: openai_model.provider
+    ) do |record|
+      record.assign_attributes(
+        name: openai_model.name,
+        family: openai_model.family,
+        model_created_at: openai_model.created_at,
+        context_window: openai_model.context_window,
+        max_output_tokens: openai_model.max_output_tokens,
+        knowledge_cutoff: openai_model.knowledge_cutoff,
+        modalities: openai_model.modalities.to_h,
+        capabilities: openai_model.capabilities,
+        pricing: openai_model.pricing.to_h,
+        metadata: openai_model.metadata
+      )
+    end
+
+    %w[approved denied].each do |decision|
+      remote_chat = Chat.create!(project: @project, model:)
+      snapshot = {
+        "prompt" => "Search the official documentation.",
+        "tools" => [],
+        "tool_options" => {},
+        "provider_tools" => [],
+        "agent_definition" => {
+          "id" => 44,
+          "name" => "Hosted approval checker",
+          "revision" => 1,
+          "provider" => "openai",
+          "model_id" => model.model_id,
+          "instructions" => "Continue after the hosted approval decision.",
+          "tool_keys" => [],
+          "provider_tools" => [],
+          "options" => {}
+        }
+      }
+      run = remote_chat.runs.create!(
+        project: @project,
+        operation: "agent",
+        status: :waiting_for_approval,
+        requested_by: "test",
+        input_snapshot_json: snapshot
+      )
+      attempt = run.attempts.create!(
+        sequence: 1,
+        provider: "openai",
+        model_id: model.model_id,
+        status: :succeeded
+      )
+      remote_chat.messages.create!(role: "user", content: snapshot.fetch("prompt"))
+      assistant = remote_chat.messages.create!(role: "assistant", content: "Checking the official source.")
+      tool_call = RubyLLM::ActiveRecord::ToolCall.create!(
+        message: assistant,
+        tool_call_id: "mcp-approval-#{decision}-#{SecureRandom.hex(4)}",
+        name: "documentation_search",
+        arguments: { "query" => "RubyLLM Responses approval" },
+        remote: true
+      )
+      Ai::ToolInvocationRecorder.new(run:, chat: remote_chat, attempt:).sync!
+      invocation = run.tool_invocations.find_by!(tool_call_id: tool_call.tool_call_id)
+      run.update!(result_summary_json: {
+        "pending_tool_calls" => [ invocation.tool_key ],
+        "pending_tool_call_ids" => [ invocation.id ]
+      })
+      assert invocation.waiting_for_approval?
+      assert invocation.remote?
+
+      Ai::ApprovalService.decide!(invocation:, decision:, note: "Reviewed hosted request")
+      delivery = run.agent_run_deliveries.find_by!(intent: "approval")
+      assert_equal [ run.id, "approval", invocation.id, run.agent_execution_generation ], delivery.job_arguments
+
+      with_provider_configuration("openai") do
+        perform_enqueued_jobs do
+          DeterministicRemoteApprovalAgentRunJob.perform_later(*delivery.job_arguments)
+        end
+      end
+
+      assert run.reload.succeeded?, "#{decision}: #{run.status} #{run.error_summary}"
+      assert_equal decision, invocation.approval.reload.status
+      assert_equal(decision == "approved" ? "succeeded" : "denied", invocation.reload.status)
+      assert_equal 1, remote_chat.messages.where(role: "user", content: snapshot.fetch("prompt")).count
+      assert tool_call.reload.result_id
+      protocol_result = remote_chat.messages.find(tool_call.result_id)
+      assert_equal "tool", protocol_result.role
+      assert_includes protocol_result.raw_content.to_json, "mcp_approval_response"
+      assert_includes protocol_result.raw_content.to_json, %Q("approve":#{decision == "approved"})
+      assert_equal 1, run.artifacts.where(kind: "report").count
+      assert_equal 2, run.result_summary.fetch("agent_step_count")
+    end
+  end
+
+  test "failure atomically expires local and remote approvals without executing tools" do
+    model = openai_model_record
+    chat = Chat.create!(project: @project, model:)
+    run = chat.runs.create!(
+      project: @project,
+      operation: "agent",
+      status: :queued,
+      requested_by: "test",
+      input_snapshot_json: {
+        "prompt" => "make two approval requests",
+        "tools" => Ai::ToolRegistry.snapshot(@project),
+        "agent_definition" => {
+          "id" => 991,
+          "name" => "Failing approval checker",
+          "revision" => 1,
+          "provider" => "openai",
+          "model_id" => model.model_id,
+          "instructions" => "Request approval before acting.",
+          "tool_keys" => [],
+          "provider_tools" => [],
+          "options" => {}
+        }
+      }
+    )
+
+    with_provider_configuration("openai") do
+      perform_enqueued_jobs do
+        FailingApprovalAgentRunJob.perform_later(run.id)
+      end
+    end
+
+    invocations = run.tool_invocations.order(:tool_call_id).to_a
+    assert run.reload.failed?, "#{run.status}: #{run.error_summary}"
+    assert_equal %w[failed failed], invocations.map(&:status).sort,
+      "#{run.error_summary}: #{run.result_summary.inspect}"
+    assert_equal %w[expired expired], invocations.map { |invocation| invocation.approval.reload.status }.sort
+    assert invocations.all? { |invocation| invocation.approval.decided_at.present? }
+    assert_equal 0, run.agent_run_deliveries.where(intent: "approval").count
+    assert_equal 0, run.artifacts.count
+
+    tool_calls = RubyLLM::ActiveRecord::ToolCall.where(
+      message_type: Message.polymorphic_name,
+      message_id: chat.messages.select(:id)
+    ).index_by(&:name)
+    local_call = tool_calls.fetch("save_run_note")
+    remote_call = tool_calls.fetch("web_search")
+    assert_equal "denied", local_call.approval
+    assert_equal "denied", remote_call.approval
+    assert local_call.result_id
+    assert remote_call.result_id
+
+    local_result = chat.messages.find(local_call.result_id)
+    assert_includes local_result.content, "failed before this tool call was executed"
+    remote_result = chat.messages.find(remote_call.result_id)
+    assert_equal "Denied", remote_result.content
+    assert_includes remote_result.raw_content.to_json, "mcp_approval_response"
+    assert_includes remote_result.raw_content.to_json, '"approve":false'
+    assert_equal 0, run.tool_invocations.waiting_for_approval.count
+  end
+
+  private
+
+  def openai_model_record
+    model_info = RubyLLM.models.chat_models.to_a.find { |candidate| candidate.provider == "openai" }
+    RubyLLM::ActiveRecord::Model.find_or_create_by!(model_id: model_info.id, provider: model_info.provider) do |record|
+      record.assign_attributes(
+        name: model_info.name,
+        family: model_info.family,
+        model_created_at: model_info.created_at,
+        context_window: model_info.context_window,
+        max_output_tokens: model_info.max_output_tokens,
+        knowledge_cutoff: model_info.knowledge_cutoff,
+        modalities: model_info.modalities.to_h,
+        capabilities: model_info.capabilities,
+        pricing: model_info.pricing.to_h,
+        metadata: model_info.metadata
+      )
     end
   end
 end

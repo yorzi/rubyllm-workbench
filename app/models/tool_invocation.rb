@@ -1,5 +1,5 @@
 class ToolInvocation < ApplicationRecord
-  STATUSES = %w[requested waiting_for_approval approved denied running succeeded failed].freeze
+  STATUSES = %w[requested waiting_for_approval approved denied running succeeded failed cancelled].freeze
 
   belongs_to :run
   belongs_to :attempt, optional: true

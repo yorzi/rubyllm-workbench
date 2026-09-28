@@ -8,6 +8,11 @@ class AgentDefinitionsController < ApplicationController
   end
 
   def show
+    @local_tools_model_eligible = Ai::AgentModelEligibility.new.eligible?(
+      provider: @agent_definition.provider,
+      model_id: @agent_definition.model_id,
+      tool_keys: @agent_definition.tool_keys
+    )
   end
 
   def new

@@ -1,4 +1,6 @@
 class Chat < ApplicationRecord
+  REMOTE_TOOL_OUTCOME_UNKNOWN_MESSAGE = "This chat has an approved remote tool call with no saved provider result. Its external outcome is unknown; start a new chat instead of resuming it.".freeze
+
   acts_as_chat
 
   belongs_to :project
@@ -14,5 +16,9 @@ class Chat < ApplicationRecord
 
   def stream_key
     "chat_#{id}"
+  end
+
+  def remote_tool_outcome_unknown?
+    tool_invocations.where(remote: true, error_code: "remote_tool_outcome_unknown").exists?
   end
 end

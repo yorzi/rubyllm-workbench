@@ -5,9 +5,10 @@ class Ai::StructuredExecutorTest < ActiveSupport::TestCase
   Response = Data.define(:content, :tokens, :cost, :finish_reason, :id)
 
   class FakeStructuredChat
-    def initialize(chat, content)
+    def initialize(chat, content, on_response: nil)
       @chat = chat
       @content = content
+      @on_response = on_response
     end
 
     def provider
@@ -52,7 +53,9 @@ class Ai::StructuredExecutorTest < ActiveSupport::TestCase
 
       model = RubyLLM.models.find(@chat.model_id, provider: @chat.provider)
       tokens = RubyLLM::Tokens.new(input: 10, output: 8)
-      Response.new(@content, tokens, model.cost_for(tokens), :stop, "structured-response-1")
+      response = Response.new(@content, tokens, model.cost_for(tokens), :stop, "structured-response-1")
+      @on_response&.call
+      response
     end
   end
 
@@ -107,5 +110,63 @@ class Ai::StructuredExecutorTest < ActiveSupport::TestCase
     assert_equal "schema_validation", @run.result_summary["failure_kind"]
     assert_nil @run.artifacts.first
     assert_includes @run.error_summary, "Structured output validation failed"
+  end
+
+  test "uses the schema snapshot even after the Experiment definition changes" do
+    changed_schema = JSON.parse(Ai::SchemaDefinition.default_json)
+    changed_schema["name"] = "later_schema"
+    changed_schema["schema"]["properties"]["later_field"] = { "type" => "string" }
+    changed_schema["schema"]["required"] = [ "later_field" ]
+    @experiment.update!(schema_json: changed_schema)
+    fake_chat = FakeStructuredChat.new(@chat, '{"summary":"Frozen schema","confidence":0.8}')
+
+    Ai::StructuredExecutor.new(@run.id, run: @run, chat: fake_chat, experiment: @experiment).call
+
+    assert @run.reload.succeeded?
+    assert_equal "response_summary", @run.artifacts.first.metadata_json.fetch("schema_name")
+    assert_equal 1, @run.input_snapshot.dig("experiment", "revision")
+    assert_equal 2, @experiment.reload.revision
+  end
+
+  test "stale evaluation recovery fences a provider response that arrives afterward" do
+    dataset = @project.evaluation_datasets.create!(name: "Late response cases")
+    revision = dataset.create_revision!([
+      { "key" => "late", "input" => { "question" => "sample" }, "expected_output" => { "summary" => "sample", "confidence" => 1 } }
+    ])
+    execution = EvaluationExecution.create!(
+      project: @project,
+      evaluation_dataset_revision: revision,
+      experiment: @experiment,
+      provider: @chat.provider,
+      model_id: @chat.model_id,
+      status: :running,
+      case_count: 1,
+      requested_by: "test",
+      input_snapshot_json: {}
+    )
+    result = execution.evaluation_case_results.create!(
+      evaluation_dataset_revision: revision,
+      case_key: "late",
+      case_position: 0,
+      input_json: { "question" => "sample" },
+      expected_output_json: { "summary" => "sample", "confidence" => 1 },
+      status: :running,
+      started_at: 1.hour.ago,
+      run: @run
+    )
+    @run.update!(started_at: 1.hour.ago)
+    fake_chat = FakeStructuredChat.new(
+      @chat,
+      '{"summary":"sample","confidence":1}',
+      on_response: -> { EvaluationCaseRecoveryJob.perform_now }
+    )
+
+    Ai::StructuredExecutor.new(@run.id, run: @run, chat: fake_chat, experiment: @experiment).call
+
+    assert @run.reload.failed?
+    assert @run.attempts.first.failed?
+    assert result.reload.failed?
+    assert_empty @run.artifacts
+    assert execution.reload.completed?
   end
 end

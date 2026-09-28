@@ -72,14 +72,6 @@ class AgentRunJob < ApplicationJob
       Rails.logger.warn("Agent Run ##{@run&.id} will recover after a temporary lease check failure: #{lease_error.message}")
       return
     end
-    if @run&.chat
-      with_agent_execution_context do
-        with_agent_execution_lease_lock do
-          Ai::ToolErrorFinalizer.new(@run.chat, error).call
-        end
-      end
-    end
-    @tool_recorder&.sync!(failure: error)
     begin
       fail_run(error) if @run
     rescue ExecutionLeaseLost => lease_error
@@ -129,6 +121,11 @@ class AgentRunJob < ApplicationJob
   def restore_agent
     snapshot = agent_snapshot
     tool_keys = Array(snapshot.fetch("tool_keys"))
+    Ai::AgentModelEligibility.new.ensure_eligible!(
+      provider: snapshot.fetch("provider"),
+      model_id: snapshot.fetch("model_id"),
+      tool_keys:
+    )
     verify_frozen_tool_contract!(tool_keys)
     tool_definitions = Ai::ChatTooling.new(chat: @run.chat, project: @run.project, run: @run).tool_definitions
     missing_tools = tool_keys - tool_definitions.map(&:key)
@@ -211,7 +208,10 @@ class AgentRunJob < ApplicationJob
       completed_summary,
       agent_execution_token: @lease_token,
       agent_execution_generation: @lease_generation
-    )
+    ) do
+      report = Ai::AgentResearchReportRecorder.call(run: @run, message: latest_assistant_message)
+      { "research_report_artifact_id" => report.id }
+    end
     raise ExecutionLeaseLost, "the worker no longer owns this Run" unless completed
   end
 
@@ -659,23 +659,28 @@ class AgentRunJob < ApplicationJob
   end
 
   def fail_run(error)
-    @run.with_lock do
-      @run.reload
-      return if @run.terminal?
-      unless @run.owns_active_agent_execution_lease?(@lease_token, generation: @lease_generation)
-        raise ExecutionLeaseLost, "the worker no longer owns this Run"
-      end
+    with_agent_execution_context do
+      @run.with_lock do
+        @run.reload
+        return if @run.terminal?
+        unless @run.owns_active_agent_execution_lease?(@lease_token, generation: @lease_generation)
+          raise ExecutionLeaseLost, "the worker no longer owns this Run"
+        end
 
-      attempt = @run.attempts.order(sequence: :desc, id: :desc).find { |record| record.queued? || record.running? }
-      if attempt
-        recorder = @attempt_recorder || Ai::AttemptRecorder.new(@run, attempt:, chat: @run.chat, continuation: true)
-        recorder.fail!(error, usage_ids_before: @usage_ids_before || [])
-      else
-        @run.fail!(
-          error,
-          agent_execution_token: @lease_token,
-          agent_execution_generation: @lease_generation
-        )
+        Ai::ToolErrorFinalizer.new(@run.chat, error, run: @run).call
+        @tool_recorder&.sync!(failure: error)
+
+        attempt = @run.attempts.order(sequence: :desc, id: :desc).find { |record| record.queued? || record.running? }
+        if attempt
+          recorder = @attempt_recorder || Ai::AttemptRecorder.new(@run, attempt:, chat: @run.chat, continuation: true)
+          recorder.fail!(error, usage_ids_before: @usage_ids_before || [])
+        else
+          @run.fail!(
+            error,
+            agent_execution_token: @lease_token,
+            agent_execution_generation: @lease_generation
+          )
+        end
       end
     end
   end

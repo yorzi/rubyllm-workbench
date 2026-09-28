@@ -25,12 +25,12 @@ module Ai
     end
 
     def sync!(failure: nil)
-      with_agent_execution_lease do
-        @mutex.synchronize do
-          persisted_tool_calls.each do |tool_call_record|
-            sync_record(tool_call_record, failure:)
-          end
-          @run.tool_invocations.reload
+      if @agent_execution_token
+        with_agent_execution_lease { sync_persisted_records(failure:) }
+      else
+        @run.with_lock do
+          @run.reload
+          sync_persisted_records(failure:)
         end
       end
     end
@@ -70,11 +70,23 @@ module Ai
       end
     end
 
+    def sync_persisted_records(failure:)
+      @mutex.synchronize do
+        unless @run.terminal?
+          persisted_tool_calls.each do |tool_call_record|
+            sync_record(tool_call_record, failure:)
+          end
+        end
+        @run.tool_invocations.reload
+      end
+    end
+
     def sync_record(tool_call_record, failure: nil)
       invocation = find_or_initialize(tool_call_record.tool_call_id, tool_call_record.name)
       definition = @run.project.tool_definitions.find_by(key: tool_call_record.name)
       result_record = tool_call_record.result
       approval_status = tool_call_record.approval.to_s.presence
+      remote_approval_pending = remote?(tool_call_record) && approval_status.nil? && result_record.nil?
 
       invocation.assign_attributes(
         attempt: invocation.attempt || @attempt,
@@ -90,6 +102,7 @@ module Ai
           finished_at: Time.current,
           duration_ms: duration_for(invocation),
           error_class: failure.class.name,
+          error_code: Ai::ErrorClassifier.code(failure),
           error_message: safe_error_message(failure)
         )
       elsif approval_status == "denied"
@@ -115,14 +128,15 @@ module Ai
         ) if failed_result
       elsif approval_status == "approved"
         invocation.status = :approved
-      elsif definition&.approval_required?
+      elsif remote_approval_pending || definition&.approval_required?
         invocation.status = :waiting_for_approval
       else
         invocation.status = :requested
       end
 
       invocation.save!
-      sync_approval!(invocation, definition, approval_status, tool_call_record.created_at)
+      sync_approval!(invocation, definition, approval_status, tool_call_record.created_at,
+        remote_approval_pending:, failure:)
       notify("ai.tool.requested", invocation)
       if invocation.succeeded? || invocation.failed? || invocation.denied?
         notify("ai.tool.completed", invocation)
@@ -130,8 +144,9 @@ module Ai
       invocation
     end
 
-    def sync_approval!(invocation, definition, approval_status, requested_at)
-      return unless definition&.approval_required? || approval_status.present?
+    def sync_approval!(invocation, definition, approval_status, requested_at, remote_approval_pending:, failure:)
+      return if failure
+      return unless definition&.approval_required? || approval_status.present? || remote_approval_pending
 
       approval = invocation.approval || invocation.build_approval(
         actor: "local_user",
