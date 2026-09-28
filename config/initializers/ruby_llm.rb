@@ -45,3 +45,7 @@ RubyLLM.configure do |config|
     config.public_send("#{option}=", value) if value.present?
   end
 end
+
+# Temporary, self-disabling fix for a RubyLLM 2.0.0 OpenRouter streaming gap.
+require Rails.root.join("lib/ruby_llm_workarounds/openrouter_stream_evidence").to_s
+RubyLLMWorkarounds::OpenRouterStreamEvidence.install!
