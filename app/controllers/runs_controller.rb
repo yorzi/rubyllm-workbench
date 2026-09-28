@@ -34,15 +34,78 @@ class RunsController < ApplicationController
     end
     @structured_artifact = @run.artifacts.reverse.find { |artifact| artifact.kind == "json" }
     @citation_artifacts = @run.artifacts.reverse.select { |artifact| artifact.kind == "citation_set" }
+    @agent_research_report = @run.artifacts.find do |artifact|
+      artifact.kind == "report" && artifact.metadata_json["report_type"] == Ai::AgentResearchReportRecorder::REPORT_TYPE
+    end
+    if @agent_research_report
+      citation_ids = Array(@agent_research_report.content_json["citation_artifact_ids"]).map(&:to_i)
+      @agent_research_citations = @citation_artifacts.select { |artifact| citation_ids.include?(artifact.id) }
+    else
+      @agent_research_citations = []
+    end
+    @image_artifacts = @run.artifacts.select { |artifact| artifact.kind == "image" && artifact.media_file.attached? }
+    @video_artifacts = @run.artifacts.select { |artifact| artifact.kind == "video" && artifact.media_file.attached? }
+    @transcript_artifacts = @run.artifacts.reverse.select { |artifact| artifact.kind == "transcript" }
+    @upstream_candidates = @run.artifacts.select do |artifact|
+      artifact.kind == "report" && artifact.metadata_json["report_type"] == "upstream_candidate"
+    end.sort_by(&:created_at).reverse
+  end
+
+  def reproduction
+    run = Run.includes(:attempts, :artifacts, :lifecycle_events, tool_invocations: :approval).find(params[:id])
+    bundle = Ai::RunReproductionExporter.call(run)
+    response.headers["Cache-Control"] = "private, no-store"
+    send_data JSON.pretty_generate(bundle),
+      filename: "run-#{run.id}-reproduction.json",
+      type: "application/json; charset=utf-8",
+      disposition: "attachment"
+  end
+
+  def events
+    run = Run.find(params[:id])
+    bundle = Ai::RunReproductionExporter.new(run).events
+    response.headers["Cache-Control"] = "private, no-store"
+    send_data JSON.pretty_generate(bundle),
+      filename: "run-#{run.id}-events.json",
+      type: "application/json; charset=utf-8",
+      disposition: "attachment"
+  end
+
+  def upstream_candidates
+    run = Run.find(params[:id])
+    Ai::UpstreamCandidateRecorder.call(run:, attributes: upstream_candidate_params)
+    redirect_to run_path(run, anchor: "upstream-candidates"), notice: "Upstream candidate saved as an append-only report.", status: :see_other
+  rescue ArgumentError, ActiveRecord::RecordInvalid => error
+    redirect_to run_path(params[:id], anchor: "upstream-candidates"), alert: error.message
+  end
+
+  def upstream_issue_draft
+    run = Run.find(params[:id])
+    artifact = run.artifacts.find_by!(id: params[:artifact_id], kind: "report")
+    raise ActiveRecord::RecordNotFound unless artifact.metadata_json["report_type"] == "upstream_candidate"
+
+    response.headers["Cache-Control"] = "private, no-store"
+    send_data Ai::UpstreamIssueDraft.call(artifact),
+      filename: "run-#{run.id}-upstream-candidate-#{artifact.id}.md",
+      type: "text/markdown; charset=utf-8",
+      disposition: "attachment"
+  rescue ActiveRecord::RecordNotFound
+    head :not_found
   end
 
   def cancel
     run = Run.find(params[:id])
-    raise ActiveRecord::RecordNotFound unless run.operation == "agent"
+    raise ActiveRecord::RecordNotFound unless run.operation.in?(%w[agent image speech transcription video])
 
     run.cancel!
-    redirect_to run_path(run), notice: "Agent Run ##{run.id} cancelled.", status: :see_other
+    redirect_to run_path(run), notice: "Run ##{run.id} cancelled.", status: :see_other
   rescue ActiveRecord::RecordNotFound
     head :not_found
+  end
+
+  private
+
+  def upstream_candidate_params
+    params.expect(upstream_candidate: [ :category, :title, :expected_behavior, :observed_behavior, :reproduction_steps, :regression_test_reference ])
   end
 end

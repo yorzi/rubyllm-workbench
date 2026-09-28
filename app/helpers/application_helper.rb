@@ -33,6 +33,52 @@ module ApplicationHelper
     "#{status.to_s.capitalize}: $#{format('%.6f', value.to_f)}"
   end
 
+  def format_evaluation_metric_rate(rate)
+    rate.nil? ? "Unknown" : number_to_percentage(rate * 100, precision: 1)
+  end
+
+  def format_evaluation_metric_tokens(total, sample_count:, attempts_count:)
+    return "No token usage reported (0/#{attempts_count} Attempts)" if total.nil?
+
+    "#{number_with_delimiter(total)} tokens (#{sample_count}/#{attempts_count} Attempts)"
+  end
+
+  def format_evaluation_cost_totals(totals)
+    return "—" if totals.blank?
+
+    totals.sort.map do |currency, amount|
+      formatted_amount = format("%.6f", amount.to_f)
+      currency == "USD" ? "$#{formatted_amount} USD" : "#{currency} #{formatted_amount}"
+    end.join(" · ")
+  end
+
+  def format_evaluation_latency(metrics, execution_mode:)
+    if execution_mode.to_s == "provider_batch"
+      return "Not comparable: Attempt duration includes Batch wait and refresh time."
+    end
+    return "No known provider request duration samples." if metrics.latency_sample_count.zero?
+
+    median = "#{metrics.latency_median_ms} ms median"
+    p95 = metrics.latency_p95_ms ? "#{metrics.latency_p95_ms} ms p95" : "p95 shown at n≥#{Ai::EvaluationMetrics::LATENCY_P95_MINIMUM_SAMPLES}"
+    "#{median} · #{p95} · n=#{metrics.latency_sample_count} · app-observed"
+  end
+
+  def queue_readiness
+    @queue_readiness ||= Ai::QueueReadiness.call
+  end
+
+  def speech_models_available?
+    return @speech_models_available if instance_variable_defined?(:@speech_models_available)
+
+    @speech_models_available = Ai::SpeechCatalog.entries.any?
+  end
+
+  def run_status_label(run)
+    return "Continuation queued" if run.agent_continuation_queued?
+
+    run.status.tr("_", " ").capitalize
+  end
+
   def capability_label(capability)
     capability.to_s.tr("_", " ").capitalize
   end
@@ -46,9 +92,9 @@ module ApplicationHelper
 
   def status_classes(status)
     case status.to_s
-    when "succeeded" then "bg-emerald-50 text-success"
-    when "failed" then "bg-rose-50 text-rose-700"
-    when "running", "queued", "waiting_for_approval" then "bg-amber-50 text-warning"
+    when "succeeded", "ready" then "bg-emerald-50 text-success"
+    when "failed", "submission_unknown", "unavailable", "unknown" then "bg-rose-50 text-rose-700"
+    when "running", "queued", "preparing", "submitting", "waiting_for_approval", "needs_attention" then "bg-amber-50 text-warning"
     else "bg-slate-100 text-muted"
     end
   end
@@ -72,9 +118,11 @@ module ApplicationHelper
       [ payload["failure_kind"], payload["error_class"] ].compact.join(" · ").presence || "Run failed"
     when "ai.run.cancelled"
       "Run cancelled"
-    when "ai.provider.chat", "ai.provider.tool", "ai.provider.embedding", "ai.provider.rerank"
+    when "ai.provider.chat", "ai.provider.tool", "ai.provider.embedding", "ai.provider.rerank",
+         "ai.provider.speech", "ai.provider.image", "ai.provider.transcription", "ai.provider.video"
       summary = [ payload["operation"], payload["provider"], payload["model_id"] ].compact.join(" / ")
       details = []
+      details << "Provider job reference #{payload['provider_job_id']}" if payload["provider_job_id"].present?
       details << "#{payload["input_tokens"]} in / #{payload["output_tokens"]} out" if payload["input_tokens"] || payload["output_tokens"]
       details << payload["finish_reason"] if payload["finish_reason"].present?
       details << payload["status"] if payload["status"].present?

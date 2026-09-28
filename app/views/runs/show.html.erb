@@ -29,14 +29,17 @@
     <div class="mt-3 flex flex-col justify-between gap-4 border-b border-line pb-5 sm:flex-row sm:items-end">
       <div>
         <div class="flex items-center gap-3"><h1 class="font-mono text-2xl font-semibold tracking-tight text-ink">Run #<%= @run.id %></h1><%= render "runs/status", run: @run %></div>
-        <p class="mt-2 break-all font-mono text-xs text-muted"><%= @run.chat.provider %> / <%= @run.chat.model_id %> · <%= @run.operation %></p>
+        <% primary_attempt = @run.attempts.first %>
+        <p class="mt-2 break-all font-mono text-xs text-muted"><%= primary_attempt&.provider || @run.chat.provider %> / <%= primary_attempt&.model_id || @run.chat.model_id %> · <%= @run.operation %></p>
         <% if @run.experiment? %><p class="mt-2 text-xs text-muted">Experiment: <%= link_to @run.experiment.name, project_experiment_path(@run.project, @run.experiment), class: "font-medium text-accent hover:underline" %> · revision <%= @run.input_snapshot.dig("experiment", "revision") || @run.experiment.revision %></p><% end %>
       </div>
       <div class="flex flex-wrap gap-2">
-        <% if @run.operation == "agent" && !@run.terminal? %>
-          <%= button_to "Cancel Agent Run", cancel_run_path(@run), method: :post, form: { data: { turbo_confirm: "Cancel this Agent Run?" } }, class: "inline-flex cursor-pointer items-center justify-center rounded-lg border border-rose-200 px-3 py-2 text-xs font-medium text-rose-700 hover:bg-rose-50" %>
+        <%= link_to "Download events JSON", events_run_path(@run), data: { turbo_confirm: "This export contains sanitized event metadata, limited to the latest 100 events. Review it before sharing." }, class: "inline-flex items-center justify-center rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
+        <%= link_to "Download reproduction JSON", reproduction_run_path(@run), data: { turbo_confirm: "This export contains the Chat history and Run messages plus sanitized execution context. Review it before sharing." }, class: "inline-flex items-center justify-center rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
+        <% if %w[agent image speech transcription video].include?(@run.operation) && !@run.terminal? %>
+          <%= button_to "Cancel Run", cancel_run_path(@run), method: :post, form: { data: { turbo_confirm: "Cancel this Run? The provider may already have accepted the request." } }, class: "inline-flex cursor-pointer items-center justify-center rounded-lg border border-rose-200 px-3 py-2 text-xs font-medium text-rose-700 hover:bg-rose-50" %>
         <% end %>
-        <%= link_to "Return to chat", project_chat_path(@run.project, @run.chat), class: "inline-flex items-center justify-center rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
+        <%= link_to "Return to chat", project_chat_path(@run.project, @run.chat), class: "inline-flex items-center justify-center rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" if @run.chat %>
       </div>
     </div>
 
@@ -54,6 +57,83 @@
         <% if @run.result_summary["failure_kind"].present? %><p class="mt-2 font-mono text-[11px] text-rose-700">failure_kind: <%= @run.result_summary["failure_kind"] %></p><% end %>
       </section>
     <% end %>
+
+    <% if @agent_research_report %>
+      <% research_report = @agent_research_report.content_json %>
+      <section id="agent-research-report" class="mt-8 rounded-xl border border-line bg-panel p-5" aria-labelledby="agent-research-report-heading">
+        <div class="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
+          <div>
+            <h2 id="agent-research-report-heading" class="text-sm font-semibold text-ink">Agent research report</h2>
+            <p class="mt-1 text-xs text-muted"><%= research_report.dig("agent", "name") %> · revision <%= research_report.dig("agent", "revision") %> · <%= research_report["provider"] %> / <%= research_report["model_id"] %></p>
+          </div>
+          <span class="font-mono text-[10px] text-muted">Artifact #<%= @agent_research_report.id %></span>
+        </div>
+        <div class="mt-4 whitespace-pre-wrap break-words text-sm leading-6 text-ink"><%= @agent_research_report.content_text %></div>
+        <% if @agent_research_citations.any? %>
+          <div class="mt-4 border-t border-line pt-3">
+            <p class="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">Sources attached to this report</p>
+            <ul class="mt-2 flex flex-wrap gap-2">
+              <% @agent_research_citations.each do |citation_artifact| %>
+                <li><%= link_to "Attempt #{citation_artifact.attempt&.sequence || '—'} · #{Array(citation_artifact.parsed_content).size} sources", "#citation-artifact-#{citation_artifact.id}", class: "inline-flex rounded-lg border border-line px-3 py-2 text-xs font-medium text-accent hover:border-accent" %></li>
+              <% end %>
+            </ul>
+          </div>
+        <% end %>
+      </section>
+    <% end %>
+
+    <section id="upstream-candidates" class="mt-8 rounded-xl border border-line bg-panel p-5" aria-labelledby="upstream-candidates-heading">
+      <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+        <div>
+          <h2 id="upstream-candidates-heading" class="text-sm font-semibold text-ink">Upstream gap report</h2>
+          <p class="mt-1 max-w-3xl text-xs leading-5 text-muted">Record a reviewed hypothesis from this Run. Each report is saved as a new Artifact. The Markdown draft includes a redacted reproduction export and still needs human review before sharing.</p>
+        </div>
+      </div>
+
+      <% if @upstream_candidates.any? %>
+        <div class="mt-4 space-y-2">
+          <% @upstream_candidates.each do |candidate| %>
+            <article class="flex flex-col justify-between gap-3 rounded-lg border border-line bg-canvas p-3 sm:flex-row sm:items-center">
+              <div class="min-w-0">
+                <p class="break-words text-xs font-medium text-ink"><%= candidate.content_json["title"] %></p>
+                <p class="mt-1 font-mono text-[10px] text-muted"><%= candidate.metadata_json["category"] %> · <%= candidate.created_at.utc.strftime("%Y-%m-%d %H:%M UTC") %> · Artifact #<%= candidate.id %></p>
+              </div>
+              <%= link_to "Download issue draft", upstream_issue_draft_run_path(@run, artifact_id: candidate.id), class: "inline-flex w-fit items-center justify-center rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
+            </article>
+          <% end %>
+        </div>
+      <% end %>
+
+      <%= form_with url: upstream_candidates_run_path(@run), scope: :upstream_candidate, class: "mt-5 grid gap-4 sm:grid-cols-2" do |form| %>
+        <div>
+          <%= form.label :category, "Classification", class: "mb-1 block text-xs font-medium text-ink" %>
+          <%= form.select :category, options_for_select([["Application bug", "app_bug"], ["RubyLLM gap", "ruby_llm_gap"], ["Provider limitation", "provider_limitation"], ["Unconfirmed", "unconfirmed"]], "unconfirmed"), {}, class: "w-full rounded-lg border border-line bg-canvas px-3 py-2 text-xs text-ink" %>
+        </div>
+        <div>
+          <%= form.label :title, "Issue title", class: "mb-1 block text-xs font-medium text-ink" %>
+          <%= form.text_field :title, required: true, maxlength: 200, class: "w-full rounded-lg border border-line bg-canvas px-3 py-2 text-xs text-ink" %>
+        </div>
+        <div>
+          <%= form.label :expected_behavior, "Expected behavior", class: "mb-1 block text-xs font-medium text-ink" %>
+          <%= form.text_area :expected_behavior, required: true, rows: 3, class: "w-full rounded-lg border border-line bg-canvas px-3 py-2 text-xs leading-5 text-ink" %>
+        </div>
+        <div>
+          <%= form.label :observed_behavior, "Observed behavior", class: "mb-1 block text-xs font-medium text-ink" %>
+          <%= form.text_area :observed_behavior, required: true, rows: 3, class: "w-full rounded-lg border border-line bg-canvas px-3 py-2 text-xs leading-5 text-ink" %>
+        </div>
+        <div>
+          <%= form.label :reproduction_steps, "Minimal reproduction steps", class: "mb-1 block text-xs font-medium text-ink" %>
+          <%= form.text_area :reproduction_steps, required: true, rows: 4, class: "w-full rounded-lg border border-line bg-canvas px-3 py-2 text-xs leading-5 text-ink" %>
+        </div>
+        <div>
+          <%= form.label :regression_test_reference, "Regression test reference (optional)", class: "mb-1 block text-xs font-medium text-ink" %>
+          <%= form.text_area :regression_test_reference, rows: 4, maxlength: 500, class: "w-full rounded-lg border border-line bg-canvas px-3 py-2 text-xs leading-5 text-ink" %>
+        </div>
+        <div class="sm:col-span-2">
+          <%= form.submit "Save candidate report", class: "cursor-pointer rounded-lg bg-accent px-4 py-2.5 text-xs font-medium text-white hover:bg-indigo-700" %>
+        </div>
+      <% end %>
+    </section>
 
     <section class="mt-8" aria-labelledby="attempts-heading">
       <div class="flex items-center justify-between gap-3"><h2 id="attempts-heading" class="text-sm font-semibold text-ink">Attempts</h2><span class="font-mono text-xs text-muted"><%= @run.attempts.size %> recorded</span></div>
@@ -113,7 +193,7 @@
                 <div class="min-w-0"><p class="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">Arguments</p><pre class="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-canvas p-3 font-mono text-[11px] leading-5 text-muted"><%= JSON.pretty_generate(invocation.arguments) %></pre></div>
                 <div class="min-w-0"><p class="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">Result</p><% if invocation.result.present? %><pre class="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-canvas p-3 font-mono text-[11px] leading-5 text-muted"><%= JSON.pretty_generate(invocation.result) %></pre><% else %><p class="mt-2 rounded-lg bg-canvas p-3 text-xs text-muted">No result yet.</p><% end %></div>
               </div>
-              <dl class="mt-4 flex flex-wrap gap-x-5 gap-y-2 border-t border-line pt-3 text-[11px] text-muted"><div><dt class="inline">Approval: </dt><dd class="inline font-medium text-ink"><%= invocation.approval&.status || "not required" %></dd></div><div><dt class="inline">Duration: </dt><dd class="inline font-mono text-ink"><%= format_duration(invocation.duration_ms) %></dd></div><% if invocation.error_message.present? %><div class="basis-full"><dt class="inline">Diagnostic: </dt><dd class="inline break-words text-rose-700"><%= invocation.error_message %></dd></div><% end %></dl>
+              <dl class="mt-4 flex flex-wrap gap-x-5 gap-y-2 border-t border-line pt-3 text-[11px] text-muted"><div><dt class="inline">Approval: </dt><dd class="inline font-medium text-ink"><%= invocation.approval&.status || "not required" %></dd></div><div><dt class="inline">Duration: </dt><dd class="inline font-mono text-ink"><%= format_duration(invocation.duration_ms) %></dd></div><% if invocation.error_message.present? %><div class="basis-full"><dt class="inline">Diagnostic: </dt><dd class="inline break-words text-rose-700"><% if invocation.error_code.present? %><code class="font-mono"><%= invocation.error_code %></code> · <% end %><%= invocation.error_message %></dd></div><% end %></dl>
               <% if invocation.approval_pending? %><%= link_to "Review in chat", project_chat_path(@run.project, @run.chat, anchor: "tool-approvals"), class: "mt-3 inline-flex text-xs font-medium text-accent hover:underline" %><% end %>
             </article>
           <% end %>
@@ -131,6 +211,16 @@
         <% if @structured_artifact %>
           <div class="mt-4 flex items-center justify-between gap-3"><span class="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-medium text-success">JSON artifact · valid</span><span class="font-mono text-[10px] text-muted"><%= @structured_artifact.name %></span></div>
           <pre class="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-canvas p-4 font-mono text-xs leading-5 text-ink"><%= JSON.pretty_generate(@structured_artifact.parsed_content) %></pre>
+        <% elsif @transcript_artifacts.any? %>
+          <% transcript = @transcript_artifacts.first %>
+          <div class="mt-4 flex items-center justify-between gap-3"><span class="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-medium text-success">Transcript Artifact</span><span class="font-mono text-[10px] text-muted"><%= transcript.metadata_json["provider"] %> / <%= transcript.metadata_json["model_id"] %></span></div>
+          <% if transcript.content_text.present? %>
+            <div class="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-canvas p-4 text-sm leading-6 text-ink"><%= transcript.content_text %></div>
+          <% else %>
+            <p class="mt-3 rounded-lg bg-canvas p-4 text-sm text-muted">The transcription completed without detecting spoken words.</p>
+          <% end %>
+        <% elsif @video_artifacts.any? %>
+          <p class="mt-4 rounded-lg bg-canvas p-4 text-sm text-muted">Video generation completed. Preview and download the video Artifact below.</p>
         <% else %>
           <% result_text = @source_assistant_message&.content.presence || @run.result_summary["partial_output"] %>
           <% if result_text.present? %>
@@ -141,6 +231,89 @@
         <% end %>
       </div>
     </section>
+
+    <% audio_artifacts = @run.artifacts.select { |artifact| artifact.kind == "audio" && artifact.audio_file.attached? } %>
+    <% if audio_artifacts.any? %>
+      <section class="mt-8" aria-labelledby="audio-artifacts-heading">
+        <h2 id="audio-artifacts-heading" class="text-sm font-semibold text-ink">Audio Artifacts</h2>
+        <div class="mt-3 space-y-3">
+          <% audio_artifacts.each do |artifact| %>
+            <article class="rounded-xl border border-line bg-panel p-4">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 class="text-sm font-medium text-ink"><%= artifact.name %></h3>
+                  <p class="mt-1 break-all font-mono text-[10px] text-muted"><%= artifact.metadata_json["provider"] %> / <%= artifact.metadata_json["model_id"] %> · <%= artifact.metadata_json["mime_type"] %> · <%= number_to_human_size(artifact.metadata_json["byte_size"]) %></p>
+                </div>
+                <%= link_to "Download", rails_blob_path(artifact.audio_file, disposition: "attachment"), class: "rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
+              </div>
+              <audio class="mt-4 w-full" controls preload="none" src="<%= rails_blob_path(artifact.audio_file, disposition: "inline") %>">Your browser does not support embedded audio playback.</audio>
+            </article>
+          <% end %>
+        </div>
+      </section>
+    <% end %>
+
+    <% if @image_artifacts.any? %>
+      <section class="mt-8" aria-labelledby="image-artifacts-heading">
+        <h2 id="image-artifacts-heading" class="text-sm font-semibold text-ink">Image Artifacts</h2>
+        <div class="mt-3 grid gap-4 sm:grid-cols-2">
+          <% @image_artifacts.each do |artifact| %>
+            <article class="overflow-hidden rounded-xl border border-line bg-panel">
+              <%= image_tag rails_blob_path(artifact.media_file, disposition: "inline"), alt: "Generated image for Run ##{@run.id}", loading: "lazy", class: "max-h-[32rem] w-full bg-canvas object-contain" %>
+              <div class="flex flex-wrap items-center justify-between gap-3 p-4">
+                <div>
+                  <h3 class="text-sm font-medium text-ink"><%= artifact.name %></h3>
+                  <p class="mt-1 break-all font-mono text-[10px] text-muted"><%= artifact.metadata_json["provider"] %> / <%= artifact.metadata_json["model_id"] %> · <%= artifact.metadata_json["mime_type"] %> · <%= number_to_human_size(artifact.metadata_json["byte_size"]) %></p>
+                </div>
+                <%= link_to "Download", rails_blob_path(artifact.media_file, disposition: "attachment"), class: "rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
+              </div>
+            </article>
+          <% end %>
+        </div>
+      </section>
+    <% end %>
+
+    <% if @video_artifacts.any? %>
+      <section class="mt-8" aria-labelledby="video-artifacts-heading">
+        <h2 id="video-artifacts-heading" class="text-sm font-semibold text-ink">Video Artifacts</h2>
+        <div class="mt-3 space-y-4">
+          <% @video_artifacts.each do |artifact| %>
+            <article class="overflow-hidden rounded-xl border border-line bg-panel">
+              <video class="max-h-[36rem] w-full bg-black" controls preload="metadata" src="<%= rails_blob_path(artifact.media_file, disposition: "inline") %>">Your browser does not support embedded video playback.</video>
+              <div class="flex flex-wrap items-center justify-between gap-3 p-4">
+                <div>
+                  <h3 class="text-sm font-medium text-ink"><%= artifact.name %></h3>
+                  <p class="mt-1 break-all font-mono text-[10px] text-muted"><%= artifact.metadata_json["provider"] %> / <%= artifact.metadata_json["model_id"] %> · <%= artifact.metadata_json["mime_type"] %> · <%= number_to_human_size(artifact.metadata_json["byte_size"]) %><% if artifact.metadata_json["duration_seconds"] %> · <%= artifact.metadata_json["duration_seconds"] %> sec<% end %></p>
+                </div>
+                <%= link_to "Download", rails_blob_path(artifact.media_file, disposition: "attachment"), class: "rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
+              </div>
+            </article>
+          <% end %>
+        </div>
+      </section>
+    <% end %>
+
+    <% if @transcript_artifacts.any? %>
+      <section class="mt-8" aria-labelledby="transcript-artifacts-heading">
+        <h2 id="transcript-artifacts-heading" class="text-sm font-semibold text-ink">Transcript Artifacts</h2>
+        <div class="mt-3 space-y-3">
+          <% @transcript_artifacts.each do |artifact| %>
+            <article class="rounded-xl border border-line bg-panel p-4">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <h3 class="text-sm font-medium text-ink"><%= artifact.name %></h3>
+                <p class="font-mono text-[10px] text-muted"><%= artifact.metadata_json["provider"] %> / <%= artifact.metadata_json["model_id"] %> · <%= artifact.metadata_json["language"].presence || "language not reported" %></p>
+              </div>
+              <p class="mt-1 text-[10px] text-muted">Source audio SHA-256: <span class="font-mono"><%= artifact.metadata_json["source_sha256"] %></span></p>
+              <% if artifact.content_text.present? %>
+                <div class="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-canvas p-4 text-sm leading-6 text-ink"><%= artifact.content_text %></div>
+              <% else %>
+                <p class="mt-3 rounded-lg bg-canvas p-4 text-sm text-muted">No spoken words were detected.</p>
+              <% end %>
+            </article>
+          <% end %>
+        </div>
+      </section>
+    <% end %>
 
     <% provider_tool_calls = Array(@run.result_summary["provider_tool_calls"]) %>
     <% if provider_tool_calls.any? %>
@@ -155,7 +328,7 @@
         <div class="flex items-center justify-between gap-3"><h2 id="citations-heading" class="text-sm font-semibold text-ink">Source citations</h2><span class="font-mono text-xs text-muted"><%= @citation_artifacts.sum { |artifact| Array(artifact.parsed_content).size } %> recorded</span></div>
         <div class="mt-3 space-y-3">
           <% @citation_artifacts.each do |artifact| %>
-            <article class="rounded-xl border border-line bg-panel p-4">
+            <article id="citation-artifact-<%= artifact.id %>" class="rounded-xl border border-line bg-panel p-4">
               <p class="mb-3 font-mono text-[10px] text-muted"><%= artifact.name %> · Attempt <%= artifact.attempt&.sequence || "—" %></p>
               <ul class="space-y-2 text-xs">
                 <% Array(artifact.parsed_content).each do |citation| %>
