@@ -1,0 +1,9 @@
+<% content_for :title, "New evaluation dataset · #{@project.name}" %>
+<%= render "shared/shell", active: "evaluations", project: @project do %>
+  <div class="mx-auto max-w-4xl px-5 py-8 sm:px-8 lg:px-10">
+    <%= link_to "← Evaluations", project_evaluation_datasets_path(@project), class: "text-xs font-medium text-accent hover:underline" %>
+    <h1 class="mt-3 text-3xl font-semibold tracking-tight text-ink">New evaluation dataset</h1>
+    <p class="mt-2 max-w-2xl text-sm leading-6 text-muted">Each case is immutable after this revision is created. Editing later creates a new revision; queued executions keep their own copy.</p>
+    <%= render "form" %>
+  </div>
+<% end %>

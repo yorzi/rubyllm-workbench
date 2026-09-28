@@ -1,0 +1,33 @@
+<div class="rounded-lg border border-line bg-canvas p-3 <%= compact ? 'min-w-[34rem]' : '' %>" aria-label="Evaluation metrics">
+  <dl class="grid gap-3 text-[10px] leading-4 text-muted sm:grid-cols-2 xl:grid-cols-3">
+    <div>
+      <dt class="font-semibold text-ink">Observed provider response</dt>
+      <dd><%= format_evaluation_metric_rate(metrics.transport_success_rate) %> · <%= metrics.transport_received_count %> received / <%= metrics.transport_received_count + metrics.transport_failed_count %> received-or-failed outcomes</dd>
+      <dd><%= metrics.transport_failed_count %> failed · <%= metrics.transport_cancelled_count %> cancelled · <%= metrics.transport_unknown_count %> unknown · <%= metrics.transport_not_attempted_count %> not attempted</dd>
+    </div>
+    <div>
+      <dt class="font-semibold text-ink">Schema validation</dt>
+      <dd><%= format_evaluation_metric_rate(metrics.schema_valid_rate) %> · <%= metrics.schema_valid_count %>/<%= metrics.schema_valid_count + metrics.schema_invalid_count %> known responses valid</dd>
+      <dd><%= metrics.schema_invalid_count %> invalid · <%= metrics.schema_unknown_count %> unknown · <%= metrics.schema_not_attempted_count %> not attempted</dd>
+    </div>
+    <div>
+      <dt class="font-semibold text-ink">Latency</dt>
+      <dd><%= format_evaluation_latency(metrics, execution_mode: execution.execution_mode) %></dd>
+      <% if execution.individual? %><dd>p95 requires at least <%= Ai::EvaluationMetrics::LATENCY_P95_MINIMUM_SAMPLES %> samples.</dd><% end %>
+    </div>
+    <div>
+      <dt class="font-semibold text-ink">Input tokens</dt>
+      <dd><%= format_evaluation_metric_tokens(metrics.input_tokens_total, sample_count: metrics.input_tokens_sample_count, attempts_count: metrics.input_tokens_attempt_count) %></dd>
+    </div>
+    <div>
+      <dt class="font-semibold text-ink">Output tokens</dt>
+      <dd><%= format_evaluation_metric_tokens(metrics.output_tokens_total, sample_count: metrics.output_tokens_sample_count, attempts_count: metrics.output_tokens_attempt_count) %></dd>
+    </div>
+    <div>
+      <dt class="font-semibold text-ink">Cost</dt>
+      <dd>Reported: <%= format_evaluation_cost_totals(metrics.reported_cost_totals) %></dd>
+      <dd>Estimated: <%= format_evaluation_cost_totals(metrics.estimated_cost_totals) %></dd>
+      <dd><%= metrics.unknown_cost_attempt_count %>/<%= metrics.cost_attempt_count %> provider Attempts have unknown cost.</dd>
+    </div>
+  </dl>
+</div>

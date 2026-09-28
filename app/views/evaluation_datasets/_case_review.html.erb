@@ -1,0 +1,70 @@
+<% if case_result.completed? %>
+  <% reviews = case_result.evaluation_case_reviews %>
+  <% rubric = case_result.rubric %>
+  <% rating_options = EvaluationCaseReview::RATINGS.map { |rating| [rating.humanize, rating] } %>
+  <details id="human-review-<%= case_result.id %>" class="mt-3 rounded-lg border border-line bg-canvas p-3">
+    <summary class="cursor-pointer text-[10px] font-semibold text-ink">Human review · <%= reviews.size %> recorded</summary>
+    <div class="mt-3 space-y-3">
+      <% if rubric.any? %>
+        <section class="rounded-md border border-line bg-white p-3">
+          <h3 class="text-[10px] font-semibold text-ink">Criterion ratings</h3>
+          <p class="mt-1 text-[10px] leading-4 text-muted">Descriptive counts per criterion across recorded reviews; these are not combined into a score.</p>
+          <% if reviews.empty? %>
+            <p class="mt-2 text-[10px] text-muted">No rubric ratings yet.</p>
+          <% else %>
+            <div class="mt-2 space-y-2">
+              <% case_result.rubric_rating_summary.each do |summary| %>
+                <div>
+                  <p class="text-[10px] font-medium text-ink"><%= summary.fetch(:criterion).fetch("description") %> · <%= summary.fetch(:denominator) %> review(s)</p>
+                  <p class="mt-1 text-[10px] leading-4 text-muted"><%= EvaluationCaseReview::RATINGS.map { |rating| "#{rating.humanize}: #{summary.fetch(:counts).fetch(rating)}" }.join(" · ") %></p>
+                </div>
+              <% end %>
+            </div>
+          <% end %>
+        </section>
+      <% else %>
+        <p class="rounded-md border border-line bg-white p-3 text-[10px] leading-4 text-muted">No rubric is configured for this case; reviews can record an overall verdict and rationale.</p>
+      <% end %>
+      <% reviews.each do |review| %>
+        <article class="rounded-md border border-line bg-white p-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <span class="text-[10px] font-semibold text-ink"><%= review.verdict.humanize %></span>
+            <span class="text-[10px] text-muted"><%= review.reviewer_label %> · <%= review.created_at.utc.strftime("%Y-%m-%d %H:%M UTC") %></span>
+          </div>
+          <% if rubric.any? %>
+            <ul class="mt-2 space-y-1 text-[10px] leading-4 text-muted">
+              <% rubric.each do |criterion| %>
+                <li><span class="font-medium text-ink"><%= criterion.fetch("description") %>:</span> <%= review.rubric_ratings.fetch(criterion.fetch("key")).humanize %></li>
+              <% end %>
+            </ul>
+          <% end %>
+          <% if review.rationale.present? %><p class="mt-2 whitespace-pre-wrap text-[10px] leading-4 text-muted"><%= review.rationale %></p><% end %>
+        </article>
+      <% end %>
+      <%= form_with url: project_evaluation_dataset_execution_case_result_reviews_path(@project, @dataset, case_result.evaluation_execution, case_result), scope: :evaluation_case_review, class: "grid gap-3 border-t border-line pt-3" do |form| %>
+        <p class="text-[10px] leading-4 text-muted">This self-reported judgment is separate from exact JSON and provider metrics. Submitting again appends a new review.</p>
+        <% rubric.each do |criterion| %>
+          <% field_id = "evaluation_case_review_rubric_ratings_#{criterion.fetch('key')}" %>
+          <% field_name = "#{form.object_name}[rubric_ratings][#{criterion.fetch('key')}]" %>
+          <div>
+            <%= label_tag field_id, criterion.fetch("description"), class: "block text-[10px] font-medium text-ink" %>
+            <%= select_tag field_name, options_for_select(rating_options), id: field_id, include_blank: "Rate this criterion", required: true, class: "mt-1 w-full rounded-md border border-line bg-white px-2 py-2 text-xs" %>
+          </div>
+        <% end %>
+        <div>
+          <%= form.label :verdict, "Review verdict", class: "block text-[10px] font-medium text-ink" %>
+          <%= form.select :verdict, options_for_select(EvaluationCaseReview::VERDICTS.map { |verdict| [verdict.humanize, verdict] }), { prompt: "Choose a verdict" }, required: true, class: "mt-1 w-full rounded-md border border-line bg-white px-2 py-2 text-xs" %>
+        </div>
+        <div>
+          <%= form.label :reviewer_label, "Reviewer label (self-reported)", class: "block text-[10px] font-medium text-ink" %>
+          <%= form.text_field :reviewer_label, required: true, maxlength: 80, autocomplete: "off", class: "mt-1 w-full rounded-md border border-line bg-white px-2 py-2 text-xs" %>
+        </div>
+        <div>
+          <%= form.label :rationale, "Rationale (optional)", class: "block text-[10px] font-medium text-ink" %>
+          <%= form.text_area :rationale, rows: 3, maxlength: 2_000, class: "mt-1 w-full rounded-md border border-line bg-white px-2 py-2 text-xs" %>
+        </div>
+        <%= form.submit "Append review", class: "inline-flex cursor-pointer justify-center rounded-md border border-line px-3 py-2 text-[10px] font-medium text-ink hover:border-accent hover:text-accent" %>
+      <% end %>
+    </div>
+  </details>
+<% end %>

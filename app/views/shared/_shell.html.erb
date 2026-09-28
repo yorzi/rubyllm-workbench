@@ -24,6 +24,10 @@
         <span>Experiments</span>
         <span class="font-mono text-[11px]">E</span>
       <% end %>
+      <%= link_to(project ? project_evaluation_datasets_path(project) : root_path(anchor: "new-project"), class: "flex items-center justify-between rounded-lg px-3 py-2 #{active == 'evaluations' ? 'bg-accent-soft font-medium text-accent' : 'text-muted hover:bg-slate-50 hover:text-ink'}") do %>
+        <span>Evaluations</span>
+        <span class="font-mono text-[11px]">V</span>
+      <% end %>
       <%= link_to(project ? project_agent_definitions_path(project) : root_path(anchor: "new-project"), class: "flex items-center justify-between rounded-lg px-3 py-2 #{active == 'agents' ? 'bg-accent-soft font-medium text-accent' : 'text-muted hover:bg-slate-50 hover:text-ink'}") do %>
         <span>Agents</span>
         <span class="font-mono text-[11px]">A</span>

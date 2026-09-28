@@ -5,6 +5,7 @@ class Experiment < ApplicationRecord
   belongs_to :project
   has_many :runs, dependent: :nullify
   has_many :experiment_executions, dependent: :destroy
+  has_many :evaluation_executions, dependent: :nullify
 
   enum :status, STATUSES.index_with(&:itself), validate: true
 

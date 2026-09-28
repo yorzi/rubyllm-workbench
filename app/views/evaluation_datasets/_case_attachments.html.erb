@@ -1,0 +1,29 @@
+<% attachments = revision.case_attachments_for(case_key) %>
+<div class="mt-2 space-y-2" aria-label="Files for case <%= case_key %>">
+  <% attachments.each do |attachment| %>
+    <div class="flex flex-wrap items-center gap-2 text-[10px]">
+      <%= link_to attachment.file.filename.to_s,
+        project_evaluation_dataset_revision_case_attachment_path(@project, @dataset, revision, attachment),
+        class: "break-all font-medium text-accent hover:underline" %>
+      <span class="text-muted"><%= number_to_human_size(attachment.file.blob.byte_size) %> · <%= attachment.file.blob.content_type %></span>
+      <% if allow_mutations %>
+        <%= button_to "Remove in next revision",
+          project_evaluation_dataset_case_attachment_path(@project, @dataset, attachment),
+          method: :delete,
+          form: { data: { turbo_confirm: "This removes the file from the next revision. Earlier revisions keep their copy." } },
+          class: "cursor-pointer rounded border border-line px-2 py-1 text-muted hover:border-rose-300 hover:text-rose-700" %>
+      <% end %>
+    </div>
+  <% end %>
+  <% if allow_mutations %>
+    <%= form_with url: project_evaluation_dataset_case_attachments_path(@project, @dataset),
+      scope: :evaluation_case_attachment,
+      multipart: true,
+      class: "flex flex-wrap items-center gap-2" do |form| %>
+      <%= form.hidden_field :case_key, value: case_key %>
+      <%= form.file_field :files, multiple: true, accept: EvaluationDatasetCaseAttachment::ALLOWED_CONTENT_TYPES.join(","), class: "max-w-full text-[10px] text-muted" %>
+      <%= form.submit "Add files as new revision", class: "cursor-pointer rounded border border-line px-2 py-1 text-[10px] font-medium text-ink hover:border-accent hover:text-accent" %>
+    <% end %>
+    <p class="text-[10px] leading-4 text-muted">Up to <%= EvaluationDatasetCaseAttachment::MAX_FILES_PER_CASE %> files per case, <%= EvaluationDatasetCaseAttachment::MAX_FILE_BYTES / 1.megabyte %> MB each. Files are local review material and are not sent to providers.</p>
+  <% end %>
+</div>

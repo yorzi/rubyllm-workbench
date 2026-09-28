@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_20_103000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_21_183000) do
 # Could not dump table "_sqliteai_vector" because of following StandardError
 #   Unknown type 'ANY' for column 'value'
 
@@ -153,6 +153,140 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_20_103000) do
     t.index ["project_id", "created_at"], name: "index_chats_on_project_id_and_created_at"
     t.index ["project_id"], name: "index_chats_on_project_id"
     t.index ["ruby_llm_model_id"], name: "index_chats_on_ruby_llm_model_id"
+  end
+
+  create_table "evaluation_case_judgments", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.text "error_summary"
+    t.integer "evaluation_case_result_id", null: false
+    t.datetime "finished_at"
+    t.json "input_snapshot_json", null: false
+    t.json "result_json"
+    t.integer "run_id", null: false
+    t.datetime "started_at"
+    t.string "status", default: "queued", null: false
+    t.datetime "updated_at", null: false
+    t.index ["evaluation_case_result_id"], name: "index_evaluation_case_judgments_on_case_result", unique: true
+    t.index ["run_id"], name: "index_evaluation_case_judgments_on_run_id", unique: true
+    t.index ["status", "started_at"], name: "index_evaluation_case_judgments_for_recovery"
+  end
+
+  create_table "evaluation_case_results", force: :cascade do |t|
+    t.json "actual_output_json"
+    t.string "case_key", null: false
+    t.integer "case_position", null: false
+    t.datetime "created_at", null: false
+    t.text "error_summary"
+    t.integer "evaluation_dataset_revision_id", null: false
+    t.integer "evaluation_execution_id", null: false
+    t.json "expected_output_json", null: false
+    t.datetime "finished_at"
+    t.json "input_json", null: false
+    t.boolean "passed"
+    t.json "rubric_json", default: [], null: false
+    t.integer "run_id"
+    t.string "schema_status"
+    t.datetime "started_at"
+    t.string "status", default: "queued", null: false
+    t.datetime "submission_unknown_at"
+    t.string "transport_status"
+    t.datetime "updated_at", null: false
+    t.index ["evaluation_dataset_revision_id"], name: "idx_on_evaluation_dataset_revision_id_3e65cf63d6"
+    t.index ["evaluation_execution_id", "case_key"], name: "index_evaluation_case_results_unique_case", unique: true
+    t.index ["evaluation_execution_id"], name: "index_evaluation_case_results_on_evaluation_execution_id"
+    t.index ["run_id"], name: "index_evaluation_case_results_on_run_id", unique: true
+  end
+
+  create_table "evaluation_case_reviews", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.integer "evaluation_case_result_id", null: false
+    t.text "rationale"
+    t.string "reviewer_label", null: false
+    t.json "rubric_ratings_json", default: {}, null: false
+    t.datetime "updated_at", null: false
+    t.string "verdict", null: false
+    t.index ["evaluation_case_result_id"], name: "index_evaluation_case_reviews_on_case_result"
+  end
+
+  create_table "evaluation_comparisons", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.json "dataset_snapshot_json", null: false
+    t.integer "evaluation_dataset_revision_id", null: false
+    t.integer "experiment_id"
+    t.json "experiment_snapshot_json", null: false
+    t.json "model_targets_json", null: false
+    t.integer "project_id", null: false
+    t.string "requested_by", null: false
+    t.datetime "updated_at", null: false
+    t.index ["evaluation_dataset_revision_id"], name: "index_evaluation_comparisons_on_evaluation_dataset_revision_id"
+    t.index ["experiment_id"], name: "index_evaluation_comparisons_on_experiment_id"
+    t.index ["project_id", "created_at"], name: "index_evaluation_comparisons_on_project_and_created"
+    t.index ["project_id"], name: "index_evaluation_comparisons_on_project_id"
+  end
+
+  create_table "evaluation_dataset_case_attachments", force: :cascade do |t|
+    t.string "case_key", null: false
+    t.datetime "created_at", null: false
+    t.integer "evaluation_dataset_revision_id", null: false
+    t.integer "position", null: false
+    t.datetime "updated_at", null: false
+    t.index ["evaluation_dataset_revision_id", "case_key", "position"], name: "index_evaluation_case_attachments_on_revision_case_position", unique: true
+    t.index ["evaluation_dataset_revision_id"], name: "idx_on_evaluation_dataset_revision_id_bcfb68356f"
+  end
+
+  create_table "evaluation_dataset_revisions", force: :cascade do |t|
+    t.json "cases_json", null: false
+    t.datetime "created_at", null: false
+    t.integer "evaluation_dataset_id", null: false
+    t.integer "revision", null: false
+    t.datetime "updated_at", null: false
+    t.index ["evaluation_dataset_id", "revision"], name: "index_evaluation_dataset_revisions_unique_version", unique: true
+    t.index ["evaluation_dataset_id"], name: "index_evaluation_dataset_revisions_on_evaluation_dataset_id"
+  end
+
+  create_table "evaluation_datasets", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.integer "current_revision", default: 0, null: false
+    t.text "description"
+    t.string "name", null: false
+    t.integer "project_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["project_id", "name"], name: "index_evaluation_datasets_on_project_id_and_name", unique: true
+    t.index ["project_id", "updated_at"], name: "index_evaluation_datasets_on_project_id_and_updated_at"
+    t.index ["project_id"], name: "index_evaluation_datasets_on_project_id"
+  end
+
+  create_table "evaluation_executions", force: :cascade do |t|
+    t.integer "case_count", null: false
+    t.datetime "created_at", null: false
+    t.integer "evaluation_comparison_id"
+    t.integer "evaluation_dataset_revision_id", null: false
+    t.string "execution_mode", default: "individual", null: false
+    t.integer "experiment_id"
+    t.datetime "finished_at"
+    t.json "input_snapshot_json", null: false
+    t.string "model_id", null: false
+    t.integer "project_id", null: false
+    t.string "provider", null: false
+    t.text "provider_batch_error"
+    t.string "provider_batch_id"
+    t.string "provider_batch_raw_status"
+    t.datetime "provider_batch_refresh_started_at"
+    t.datetime "provider_batch_refreshed_at"
+    t.string "provider_batch_status"
+    t.datetime "provider_batch_submitted_at"
+    t.string "requested_by", null: false
+    t.datetime "started_at"
+    t.string "status", default: "queued", null: false
+    t.datetime "updated_at", null: false
+    t.index ["evaluation_comparison_id", "provider", "model_id"], name: "index_evaluation_executions_on_comparison_and_model", unique: true, where: "evaluation_comparison_id IS NOT NULL"
+    t.index ["evaluation_comparison_id"], name: "index_evaluation_executions_on_evaluation_comparison_id"
+    t.index ["evaluation_dataset_revision_id", "created_at"], name: "index_evaluation_executions_on_dataset_revision_and_created"
+    t.index ["evaluation_dataset_revision_id"], name: "index_evaluation_executions_on_evaluation_dataset_revision_id"
+    t.index ["experiment_id"], name: "index_evaluation_executions_on_experiment_id"
+    t.index ["project_id", "created_at"], name: "index_evaluation_executions_on_project_id_and_created_at"
+    t.index ["project_id"], name: "index_evaluation_executions_on_project_id"
+    t.index ["provider", "provider_batch_id"], name: "index_evaluation_executions_on_provider_batch", unique: true, where: "provider_batch_id IS NOT NULL"
   end
 
   create_table "experiment_executions", force: :cascade do |t|
@@ -452,6 +586,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_20_103000) do
     t.datetime "created_at", null: false
     t.integer "duration_ms"
     t.string "error_class"
+    t.string "error_code"
     t.text "error_message"
     t.datetime "finished_at"
     t.boolean "remote", default: false, null: false
@@ -484,6 +619,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_20_103000) do
   add_foreign_key "attempts", "runs"
   add_foreign_key "chats", "projects"
   add_foreign_key "chats", "ruby_llm_models"
+  add_foreign_key "evaluation_case_judgments", "evaluation_case_results", on_delete: :cascade
+  add_foreign_key "evaluation_case_judgments", "runs", on_delete: :cascade
+  add_foreign_key "evaluation_case_results", "evaluation_dataset_revisions"
+  add_foreign_key "evaluation_case_results", "evaluation_executions"
+  add_foreign_key "evaluation_case_results", "runs", on_delete: :nullify
+  add_foreign_key "evaluation_case_reviews", "evaluation_case_results", on_delete: :cascade
+  add_foreign_key "evaluation_comparisons", "evaluation_dataset_revisions"
+  add_foreign_key "evaluation_comparisons", "experiments", on_delete: :nullify
+  add_foreign_key "evaluation_comparisons", "projects"
+  add_foreign_key "evaluation_dataset_case_attachments", "evaluation_dataset_revisions", on_delete: :cascade
+  add_foreign_key "evaluation_dataset_revisions", "evaluation_datasets"
+  add_foreign_key "evaluation_datasets", "projects"
+  add_foreign_key "evaluation_executions", "evaluation_comparisons"
+  add_foreign_key "evaluation_executions", "evaluation_dataset_revisions"
+  add_foreign_key "evaluation_executions", "experiments", on_delete: :nullify
+  add_foreign_key "evaluation_executions", "projects"
   add_foreign_key "experiment_executions", "experiments"
   add_foreign_key "experiment_executions", "projects"
   add_foreign_key "experiments", "projects"

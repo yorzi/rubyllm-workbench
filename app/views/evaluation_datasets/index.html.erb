@@ -1,0 +1,37 @@
+<% content_for :title, "Evaluations · #{@project.name}" %>
+<%= render "shared/shell", active: "evaluations", project: @project do %>
+  <div class="mx-auto max-w-6xl px-5 py-8 sm:px-8 lg:px-10">
+    <%= render "shared/flash" %>
+    <%= link_to "← #{@project.name}", project_path(@project), class: "text-xs font-medium text-accent hover:underline" %>
+    <div class="mt-3 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+      <div>
+        <h1 class="text-3xl font-semibold tracking-tight text-ink">Evaluation datasets</h1>
+        <p class="mt-2 max-w-2xl text-sm leading-6 text-muted">Keep versioned input/expected-output cases and run them through a saved structured Experiment.</p>
+      </div>
+      <%= link_to "New dataset", new_project_evaluation_dataset_path(@project), class: "inline-flex items-center justify-center rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700" %>
+    </div>
+
+    <div class="mt-8 space-y-3">
+      <% @datasets.each do |dataset| %>
+        <%= link_to project_evaluation_dataset_path(@project, dataset), class: "block rounded-xl border border-line bg-panel p-5 shadow-sm hover:border-accent" do %>
+          <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <h2 class="truncate text-base font-semibold text-ink"><%= dataset.name %></h2>
+                <span class="rounded-full bg-slate-100 px-2 py-1 font-mono text-[10px] text-muted">v<%= dataset.current_revision %></span>
+              </div>
+              <p class="mt-2 text-sm leading-6 text-muted"><%= dataset.description.presence || "No description yet." %></p>
+            </div>
+            <p class="shrink-0 text-xs text-muted"><%= dataset.current_revision_record&.cases&.size || 0 %> cases · <%= dataset.evaluation_executions.size %> executions</p>
+          </div>
+        <% end %>
+      <% end %>
+      <% if @datasets.empty? %>
+        <div class="rounded-xl border border-dashed border-line bg-panel p-8 text-center">
+          <p class="text-sm font-medium text-ink">No evaluation datasets yet.</p>
+          <p class="mt-2 text-sm leading-5 text-muted">Create a bounded case set, then execute it with a structured-output Experiment.</p>
+        </div>
+      <% end %>
+    </div>
+  </div>
+<% end %>
