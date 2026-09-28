@@ -4,15 +4,19 @@
 AI agent 持续修改系统之后，仍能快速回答：系统为什么存在、现在有什么、一次
 操作如何完成、数据在哪里、哪些能力还不能宣称已经存在。
 
-更新时间：2026-09-20
-当前实现：M0–M4 已验证切片、M5.1 provider 搜索与引用、M5.2 保存的 Agent 定义与 Run 执行骨架
-当前代码基线：RubyLLM 2.0.0 stable；M5.2 的快照、outbox、恢复扫描、租约隔离、取消终态、late-response cancellation、step/citation 关联、两步 AgentRunJob 成功、审批/拒绝续跑和过期 lease 后空响应恢复已有确定性测试；Solid Queue 进程重启和 provider dogfood 待完成
+更新时间：2026-09-21
+当前实现：M0–M4 已验证切片、M5.1 provider 搜索与引用、M5.2 保存的 Agent 定义与 Run 执行骨架、M5.3 持久化 Agent 报告、M6 media 首片、M7 evaluation 与 provider Batch 首片、M8 per-Run reproduction export 首片
+当前代码基线：RubyLLM 2.0.0 stable；M5 的快照、outbox、恢复扫描、租约隔离、取消终态、late-response cancellation、step/citation 关联、成功报告 Artifact、两步 AgentRunJob 成功、审批/拒绝续跑、过期 lease 后空响应恢复、worker 崩溃重放，以及 Agent 定义到 Run inspector 的请求级集成流程均有本地测试证据；M5.4 覆盖本地与远程待审批调用取消后的结果闭合，也覆盖 Run 仍为 `running` 时取消已登记审批的竞态。M5.5 仅覆盖 RubyLLM Responses/MCP pending ToolCall 的 Approval 卡片与 Chat/Agent 决策续跑；UI 标明远程调用由 provider 执行，批准/拒绝响应使用 `mcp_approval_response`。M5.6 在 lease 校验后于 Run 锁内收尾失败 Run；pending remote MCP 调用记录拒绝结果，已经批准但未保存结果的远程调用和执行中被取消的远程调用保留 unknown outcome，并阻止该 Chat 再运行；相关 provider-free 定向覆盖为 19 runs、199 assertions，没有发起 provider 请求。Runtime inspector 现在把 web 响应与后台队列 readiness 分开：Solid Queue 模式下核对最近五分钟内配置了 Agent dispatcher schedule 的 Scheduler、Dispatcher 和处理 maintenance 队列的 Worker，并显示到期 outbox 条目数；test adapter 明确显示为不执行工作的测试队列。隔离 test DB 的浏览器验收已检查合成成功报告、citation、待审批、拒绝后排队状态和已取消 Run；390px 的 Run 与 Chat 文档没有横向溢出。浏览器使用 test adapter，没有执行 worker 或调用 provider。Selenium system tests 后续实际提交了取消表单并检查 JavaScript 确认框：取消后仍保持 running，确认后 Run 与 Attempt 都进入 cancelled；整套 system tests 为 2 runs、9 assertions。M5 live provider dogfood 仍未完成，其他 hosted-tool 协议也未因此获得兼容性证明。M6 的 speech、image、video 与 transcription 均有 fake-provider 集成证据；四种操作都覆盖 enqueue rejection 与 stale queued recovery，speech 另覆盖 stale running recovery，image/video 覆盖 stale recovery 后的迟到成功响应 fencing。输入/生成媒体存储失败、可下载字节、取消竞态和孤儿 Blob 清理也有本地测试证据。尚无这些新路径的真实 provider dogfood。
+
+本地工具 Agent 还会在定义保存、Run 入队和每次 worker 恢复时要求 RubyLLM chat registry 的精确模型条目声明 `function_calling`。此声明只是本地准入条件，不证明真实 provider 接受工具调用；provider-hosted web search 不经过该门槛。
 
 ## 实现状态与证据
 
 本指南描述这个仓库当前实际实现的行为。代码与数据库迁移定义运行时；现有测试、
 浏览器检查和 provider dogfood 记录哪些路径经过验证；`TODO.md` 与 `CHANGELOG.md`
 记录计划和历史。文档中的状态与证据标签分开使用，避免把计划写成已交付能力。
+
+失败收尾会在 Run 锁和 lease 校验通过后清理未决审批，再把 Run 标为 failed。本地待审批调用写入拒绝结果，remote MCP 调用保存 RubyLLM Responses 格式的拒绝消息；不会执行这些调用或排 continuation。失败同步不再新建 pending Approval，stale lease 不会改写审批状态。该路径已有合成记录与 provider-free 自动化覆盖，真实 provider dogfood 仍未完成。
 
 ## 一句话理解
 
@@ -42,10 +46,13 @@ Artifact，并把文本来源保存为可追溯的 KnowledgeItem/KnowledgeChunk�
   每次 Agent Run 使用独立 Chat 和冻结的定义快照，按 RubyLLM Agent step 工作，并接入审批、引用、
   生命周期事件和取消状态。Rails `ActiveJob::Continuable` 配合带 owner token/generation 的数据库租约，
   在行锁内保护 Chat transcript、usage 和当前本地工具写入；普通迟到 Job 不会接管审批等待状态。工具
-  contract 变更会阻止旧 Run 继续，内置笔记 Artifact 按 tool-call id 去重。确定性自动化测试覆盖快照、
-  outbox 派发/重试、恢复扫描、租约代次、取消终态和 step/citation 记录；完整 Agent worker 执行、真实
-  provider dogfood 或 worker 重启仍未验证。已经被 provider 接受的请求仍可能在中断后产生费用。
-  审批已写入主数据库但续跑还未进入独立队列数据库时，仍可能因入队故障而滞留。
+  contract 变更会阻止旧 Run 继续，内置笔记 Artifact 按 tool-call id 去重。自动化测试覆盖快照、
+  outbox 派发/重试、恢复扫描、租约代次、取消终态和 step/citation 记录；真实 forked Solid Queue worker
+  被终止后重新派发并重放笔记的本地演练也已通过。真实 provider dogfood 仍待完成；provider-free 浏览器已复核合成报告/引用、审批决定、取消终态及窄屏布局。
+  已经被 provider 接受的请求仍可能在中断后产生费用。
+  审批决定和 continuation delivery intent 会在同一主数据库事务中写入 outbox。入队或 scheduler 故障会延迟
+  continuation；dispatcher 会重试未接受的投递，并从“所有审批已决议但仍等待”的 Run 重建缺失投递。恢复依赖
+  recurring scheduler 与 maintenance worker 重新运行；跨数据库投递仍是 at-least-once，重复 job 由 Run lease fencing。
 - 不是完整的 M4 知识库/RAG/文档 OCR 系统：当前有本地文本 collection、chunk、
   provider embedding、SQLite vector adapter、lexical/semantic/hybrid 证据检索、
   兼容 provider rerank，以及文件上传后的本地抽取和 provenance Artifact；provider
@@ -70,7 +77,13 @@ Artifact，并把文本来源保存为可追溯的 KnowledgeItem/KnowledgeChunk�
 | M4 文档来源 | 上传文件、本地抽取或 provider OCR、查看 provenance Artifact | `ocr_document` Artifact、extractor、页数、blob/内容 checksum | `IMPLEMENTED` · `LOCAL_VERIFIED`（OCR 路径仅测试证据） |
 | M4 完整目标 | provider 文件引用与更细的引用 Artifact | provider file ref lifecycle | `PLANNED` |
 | M5.1 | 每次 Chat Run 可选 provider 网页搜索，检查来源与远程工具步骤 | 冻结的 provider tool 快照、`citation_set` Artifact、Run 级工具步骤摘要 | `PARTIAL` · `LOCAL_VERIFIED`；provider dogfood 待完成 |
-| M5.2 | 保存 Project Agent 定义，按冻结 revision 启动专属 Run/Chat；记录 step、工具、审批、引用并可取消 | `AgentDefinition`、Run snapshot、执行租约、primary delivery outbox、周期派发/崩溃扫描、专属 Chat、Attempt、ToolInvocation、Approval、Artifact、LifecycleEvent | `PARTIAL` · success, approved/denied continuation, expired-lease placeholder recovery and same-tool-call note replay covered locally；真实队列进程重启和 provider dogfood 待完成 |
+| M5.2 | 保存 Project Agent 定义，按冻结 revision 启动专属 Run/Chat；记录 step、工具、审批、引用并可取消 | `AgentDefinition`、Run snapshot、执行租约、primary delivery outbox、周期派发/崩溃扫描、精确 `function_calling` registry 门控、专属 Chat、Attempt、ToolInvocation、Approval、Artifact、LifecycleEvent | `PARTIAL` · durable worker paths, local-tool registry gate and provider-free Agent flows covered locally; registry metadata does not verify provider acceptance; live provider dogfood remains pending |
+| M5.3 | 将成功 Agent 的最终回答作为可检查报告保存，并连接来源消息、Attempt、Agent revision 与引用 | Run-owned `report` Artifact written atomically with success and linked from the inspector | `PARTIAL` · provider-free flow and cancellation/idempotency coverage; live Agent/provider presentation check pending |
+| M5.6 | 失败 Run 时关闭待审批记录；已批准但无结果的远程调用保持 outcome unknown，并阻止同一 Chat 再运行 | lease 校验后的 Run 锁内清理；pending 本地/远程请求分别记录拒绝结果；approved remote MCP 与执行中被取消的 remote call 保留 unknown 状态、不合成拒绝响应、不自动重放 | `PARTIAL` · provider-free focused coverage: 19 runs / 199 assertions; live provider behavior remains open |
+| M5.7 | 冻结排队 Chat 的多轮上下文，避免并发 Run 和队列拒绝留下不明状态 | Chat 行锁下的历史消息快照、首次请求前持久化上下文校验、本次 Run message ID 水位线、首个 Attempt 的队列失败收尾 | `PARTIAL` · provider-free coverage passed (14 runs / 135 assertions); live provider behavior remains open |
+| M6 media | 从 assistant 回复生成语音、在 chat 中生成图像/视频或上传音频转录；在 Run inspector 查看 Artifact | 冻结的 prompt/文件元数据、Run/Attempt、provider lifecycle event、成功前已上传的 Active Storage image/audio/video 与 transcript Artifacts | `PARTIAL` · fake-provider flows, disabled unsupported Chat actions, storage failure, downloadable bytes, cancellation/recovery fencing and cleanup covered locally; video submission ID is visible in the Run timeline and redacted from exports; live provider dogfood, public video-job restore API and normalized video usage/cost remain open |
+| M7 evaluation 首片 | 在固定数据集 revision 和 Experiment snapshot 上比较 2–5 个结构化模型，并逐例查看结果、附件、标签、rubric 人工评审、可选自动 rubric judge 和原始 Run | 不可变 EvaluationComparison、每模型 EvaluationExecution、每例普通 Structured Run/Attempt、精确 JSON 比较、individual 与单模型 provider Batch 生命周期、有界 case tags/rubric、revision-owned Active Storage case attachments（最多 5 个/case、50 个/dataset revision；10 MB/文件、50 MB/revision）；新增修订前检查 PDF/JPEG/PNG 标记、JSON/CSV 语法和 UTF-8 文本；追加式 `EvaluationCaseReview` 和独立 `EvaluationCaseJudgment` | `PARTIAL` · 人工 rubric 测试 18 runs / 237 assertions；附件边界 8 runs / 87 assertions；可选 Judge 专项及页面披露 24 runs / 259 assertions；均无 provider 调用。新增附件格式检查尚无测试证据，也不等同完整文件解码或恶意内容扫描。自动 Judge 另发 provider 请求并单独记成本，不包含 expected output、tags、attachments；provider dogfood 与 judge 校准未完成 |
+| M8 reproduction export 首片 | 下载单个 Run 的复现 JSON，记录 upstream 候选并下载 Markdown 草稿 | 冻结输入/结果、版本、Attempt、脱敏工具/event、文本 Artifact 和 Chat 前序/本次消息上下文；schema v2 总字节/文本/结构预算与省略计数；排除附件字节与既有 candidate report；append-only candidate report | `PARTIAL` · bounds are implemented but not separately tested; representative real-Run review and manual upstream workflow remain open |
 
 这里的状态描述本仓库当前实现；路线图中的 `PLANNED` 项表示尚未实现的后续能力。
 
@@ -78,8 +91,15 @@ Artifact，并把文本来源保存为可追溯的 KnowledgeItem/KnowledgeChunk�
 
 ### Project
 
-Project 是最外层的长期上下文边界。它拥有 Chat、Experiment、ToolDefinition 和
-Run。切换 Project 意味着切换资源、历史和工具开关的边界。
+Project 是最外层的长期上下文边界。它拥有 Chat、Experiment、EvaluationDataset、
+EvaluationComparison、ToolDefinition 和 Run。切换 Project 意味着切换资源、历史和工具开关的边界。
+
+- **EvaluationComparison**：一次跨模型评测的不可变输入组，保存 dataset revision、Experiment
+  snapshot 和模型清单；每个模型有独立 EvaluationExecution，每个 case 保留自己的 Run/Attempt，
+  汇总只从这些原始 case 结果即时计算。
+  执行指标分开记录 received/failed/cancelled/unknown/not-attempted、schema validity、app-observed
+  individual latency、token coverage 与按币种区分的 reported/estimated cost；Batch 等待时间不作为请求延迟。
+  指标不代表 provider SLA 或模型质量。已完成响应可添加 append-only 的 acceptable/needs-work/inconclusive 人工评审，保存自报 reviewer label 与理由；这不会改变 exact-JSON 结果或执行指标。每个 case 可定义 1–8 个有界 rubric criteria；人工评审必须逐项选择 meets/partially-meets/does-not-meet/not-applicable，页面按 case 展示各项计数，不生成合并分数。Rubric 不进入 generation prompt。可选 Judge 会把 case input、生成输出和 rubric 发送给单独选定的 provider；expected output、tags、attachments 均排除。Judge 有独立 Run、Attempt 与成本记录，不改变 exact-match、human review 或 evaluation metrics。其 prompt 隔离、队列恢复和迟到响应测试通过（24 runs、259 assertions），未调用 provider；模型评审未经校准，也不构成质量分数。人工 rubric 测试通过（18 runs、237 assertions）。Case attachments 以 project/dataset/revision/case 关联，最多 5 个/case、每个 10 MB、每个 dataset revision 最多 50 个文件且总计 50 MB，格式限 text、JSON、CSV、PDF、JPEG、PNG。新增和移除会建立新 revision，旧 revision 保留文件；project 删除会清理 Active Storage Blob。附件本身及其本地元数据不进入 individual 或 Batch prompt；附件专项测试通过（8 runs、87 assertions），未调用 provider。50 MB 限制按 revision 计算，没有 dataset/project 生命周期累计上限；每次上传到新 revision 都可能增加长期存储量。应用没有认证 reviewer 身份。
 
 ### Chat / Message
 
@@ -136,7 +156,7 @@ Tool Lab 为 Project 保存一个新 Chat Run 的默认执行模式，默认为 
 - **Experiment**：可复用、带 revision 的结构化 prompt 和受限 JSON Schema。
 - **Execution**：一次按冻结定义运行的比较任务，通常为每个目标模型创建一个独立
   child Run。
-- **Artifact**：耐久产物，例如 JSON、文本、报告或未来的引用/媒体；Artifact 不
+- **Artifact**：耐久产物，例如 JSON、文本、报告、引用或生成媒体；Artifact 不
   取代原始 Run/Attempt，而是和原始证据并存。
 
 ### KnowledgeCollection / KnowledgeItem / KnowledgeChunk / KnowledgeEmbedding
@@ -230,6 +250,12 @@ Tool Lab 只管理代码中已注册的 allowlist 条目。它不是在线执行
 - **Run inspector**：稳定查看单次证据。即使页面不是当前 Chat，也可以从全局 Runs
   回到同一个执行；Lifecycle events 时间线展示状态、流式首字节、工具/审批和
   Artifact 事件的本地顺序。
+- **Speech Run**：从已保存的 assistant 回复创建独立 Run。文本、来源 message id、
+  provider 和 model 冻结在输入快照；合成由 Solid Queue 后台执行，结果进入 audio
+  Artifact，并在 inspector 中提供播放器和下载。费用按 RubyLLM `audio_tokens` 类别
+ 估算，缺少 provider usage 或价格时保持 unknown。worker 卡住 30 分钟后 scheduler
+  将 Run/Attempt 标成失败，不自动重放；若要重试，应从原回复新建 Run。真实 provider
+ 调用尚未验证，发起时回复文本会发送给所选 provider。
 
 ## 最容易误读的地方
 
@@ -247,7 +273,7 @@ Attempt、cost provenance、tool result、approval 以及是否存在 provider f
 
 M3 是 Chat 中的 allowlisted Ruby tool + 审批 + 审计。M5.2 增加了版本化定义和专属 Agent Run；
 Run 继续作为执行边界，定义和 prompt 快照进入 Run，编辑定义不会改写旧 Run。Agent 会按 step
-推进，工具执行与审批仍复用项目 allowlist 和 Run 记录。该路径实现尚未通过自动化执行测试。
+推进，工具执行与审批仍复用项目 allowlist 和 Run 记录；其 provider-free job 生命周期和恢复边界有自动化测试。
 
 ### “失败”不等于“历史丢失”
 
@@ -268,11 +294,10 @@ Run 继续作为执行边界，定义和 prompt 快照进入 Run，编辑定义�
   continuation 的新 Attempt；Run inspector 也展示这条时间线。
 - 当前本地回归覆盖并行策略的能力门控、side-effect 工具串行降级、冻结的 RubyLLM
   options，以及多个 tool calls 的独立 ToolInvocation/request/completion 事件。
-- M5.2 新增测试覆盖冻结快照、primary outbox 入队/重试、过期租约与多审批恢复、generation fencing、
+- M5.2 新增测试覆盖冻结快照、primary outbox 入队/重试及“队列接受但确认丢失”后的过期 claim 重投、活跃 lease fencing 和成功后 stale Agent Job 在重建 Agent 前退出、过期租约与多审批恢复、generation fencing、
   取消后的终态保护、late-response cancellation、step/citation Artifact 时间线、假 Agent 两步 `AgentRunJob#perform` 成功收尾，以及
   approved/denied `save_run_note` continuation、过期 lease 后空响应恢复、stale delivery generation 拒绝和相同 tool-call id 的笔记 Artifact 重放幂等。
-  OpenRouter Agent live test 已提供 opt-in 命令，但尚未取得 provider 结果；实际 Solid Queue 进程重启也未验证。本地浏览器 system test
-  受 sandbox 禁止 Selenium 回环 socket 绑定影响，未完成断言。
+  真实 forked Solid Queue worker 终止/替换演练和 provider-free 并发取消竞态测试均已通过。隔离 test DB 浏览器检查覆盖 synthetic report/citation、pending/denied approval、cancelled Run 与 390px 布局；此前手动浏览器检查没有提交 JavaScript 确认框，后续 Selenium system test 已覆盖取消确认框的 dismiss/accept 分支（整套 system tests 为 2 runs、9 assertions）。OpenRouter Agent live test 已提供 opt-in 命令，但尚未取得 provider 结果。
 - 当前本地回归覆盖 Knowledge collection、文本 checksum、确定性 chunk offset、ready
   状态、embedding 记录/provenance、vector adapter、三种检索模式的证据分量和降级
   原因；这只证明 M4 本地文本与 embedding 检索切片。
@@ -296,3 +321,11 @@ Run 继续作为执行边界，定义和 prompt 快照进入 Run，编辑定义�
 4. 看 [CHANGELOG.md](CHANGELOG.md) 最近一条，确认变更的目标和验证。
 5. 最后才跳进具体 service/model；用
    [IMPLEMENTATION_MAP.md](../IMPLEMENTATION_MAP.md) 把概念映射回代码。
+
+## 2026-09-26 验证更新
+
+Rails 已升级到 8.1.4，RubyLLM 2.0.0 经官方版本接口核验仍是最新稳定版。修复附件校验缺失 CSV 依赖、复现导出消息倒序问题；批量评测在任何结果写入前拒绝异常索引。完整证据和 provider 边界见 [升级检查](UPGRADE_REVIEW_2026-09-26.md)。
+
+## 2026-09-27 — Run event export
+
+Run 页面新增 **Download events JSON**，用于单独分析执行时间线。文件保留关联记录 ID，最多导出最近 100 条本地事件，并显示省略信息；没有 provider tracing 或历史补录。复现 JSON 的容量限制已有定向回归覆盖。

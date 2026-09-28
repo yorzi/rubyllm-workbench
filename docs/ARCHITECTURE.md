@@ -3,8 +3,8 @@
 这些图是仓库内的当前实现视图，用来帮助人恢复系统关系。它们不是从数据库自动生成的
 ERD，也不是未来架构承诺；具体字段和行为仍以代码、迁移、测试和运行证据为准。
 
-更新时间：2026-09-20
-当前实现：M0–M3 核心闭环、本地 LifecycleEvent 目录、并行策略切片和 M4 Knowledge 检索/rerank/文件来源 `IMPLEMENTED`；M5 Agent 持久执行骨架 `PARTIAL`
+更新时间：2026-09-21
+当前实现：M0–M3 核心闭环、本地 LifecycleEvent 目录、并行策略切片和 M4 Knowledge 检索/rerank/文件来源 `IMPLEMENTED`；M5 Agent、M6 speech/image/video/transcription、M7 evaluation 和 M8 Run export 首片 `PARTIAL`
 当前图表范围：已验证的本地运行路径；未来节点全部显式标为 `PLANNED`
 校准依据：routes、models、migrations、jobs、services、测试、M3 OpenRouter
 dogfood（Run #11、Run #13）、M4 Knowledge 本地回归和 M5 Agent 边界测试
@@ -30,15 +30,15 @@ flowchart LR
     Human["人 / 本地开发者"] --> UI["Rails HTML / Turbo UI"]
     UI --> App["Rails Workbench"]
     App --> DB[("SQLite\nrecords + knowledge chunks + lifecycle events")]
-    App --> Queue["Solid Queue\nChatResponseJob + AgentRunJob"]
+App --> Queue["Solid Queue\nChat + Agent + Media + Evaluation jobs\n+ stale-work recovery"]
     Queue --> RubyLLM["RubyLLM boundary"]
     App --> RubyLLM
     RubyLLM --> Providers["Configured providers\nOpenRouter, etc."]
     App --> Blobs["Active Storage\nlocal disk"]
 ```
 
-当前含义：provider 操作从 RubyLLM 边界进入；Run、Message、Attempt、Artifact、AgentDefinition、工具
-调用、审批、KnowledgeItem/KnowledgeChunk 和 LifecycleEvent 等证据落在本地持久化层；队列负责 Chat 与 Agent Run continuation。远程部署、账号、
+当前含义：provider 操作从 RubyLLM 边界进入；Run、Message、Attempt、Artifact、AgentDefinition、EvaluationComparison/Evaluation
+dataset/revision/execution/case、工具调用、审批、KnowledgeItem/KnowledgeChunk 和 LifecycleEvent 等证据落在本地持久化层；队列负责 Chat、Agent continuation、speech/image/video/transcription、evaluation cases 和 stale-work recovery。远程部署、账号、
 外部数据库和公开访问不属于这张当前实现图。
 
 ## 2. L1 — 已实现组件如何连接
@@ -50,10 +50,13 @@ flowchart TD
     subgraph UI["工作台页面"]
         ProjectUI["Project shell"]
         ChatUI["Project Chat"]
+        SpeechUI["Saved assistant reply speech action"]
+        MediaUI["Image/video generation + audio transcription"]
         ExperimentUI["Experiment workspace"]
         ToolUI["Tool Lab"]
         KnowledgeUI["Knowledge workspace"]
         AgentUI["Agent definitions + task form"]
+        EvaluationUI["Evaluation datasets + case results"]
         RunUI["Run history / inspector"]
     end
 
@@ -63,6 +66,14 @@ flowchart TD
     ChatJob["ChatResponseJob"]
     AgentRunExecutor["Ai::AgentRunExecutor"]
     AgentJob["AgentRunJob\nActiveJob::Continuable"]
+    AgentReportRecorder["Ai::AgentResearchReportRecorder"]
+    SpeechExecutor["Ai::SpeechRunExecutor + SpeechCatalog"]
+    SpeechJob["SpeechRunJob"]
+    SpeechRecovery["SpeechRunRecoveryJob\n30 minute stale failure"]
+    MediaRuns["ImageRunJob + VideoRunJob + TranscriptionRunJob\nMediaRunRecoveryJob"]
+    EvaluationExecutor["Ai::EvaluationExecutor"]
+    EvaluationJob["EvaluationCaseJob + recovery"]
+    ReproductionExporter["Ai::RunReproductionExporter"]
     AgentDefinition["AgentDefinition\nproject-scoped revision"]
     StructuredJob["StructuredResponseJob"]
     ChatExecutor["Ai::ChatExecutor"]
@@ -72,22 +83,41 @@ flowchart TD
     Audit["ToolInvocationRecorder + ApprovalService"]
     Events["LifecycleEventRecorder\nActiveSupport Notifications"]
     ProviderEvents["Ai::RubyLlmInstrumentation\n*.ruby_llm adapter + ExecutionContext"]
-    Records["Project / AgentDefinition / Chat / Run / Attempt\n/ Artifact / tool / Knowledge records / LifecycleEvent"]
-    RubyLLM["RubyLLM Agent + Chat + embed + provider boundary"]
+    Records["Project / AgentDefinition / Evaluation / Chat / Run / Attempt\n/ Artifact / tool / Knowledge records / LifecycleEvent"]
+    RubyLLM["RubyLLM Agent + Chat + embed + speak + provider boundary"]
 
     ChatUI --> RunExecutor
     ExperimentUI --> ExperimentExecutor
     ToolUI --> Tooling
     KnowledgeUI --> KnowledgeServices
     AgentUI --> AgentRunExecutor
+    ChatUI --> SpeechUI
+    ChatUI --> MediaUI
+    SpeechUI --> SpeechExecutor
+    SpeechExecutor --> SpeechJob
+    SpeechJob --> RubyLLM
+    SpeechJob --> Records
+    SpeechRecovery --> Records
+    MediaUI --> MediaRuns
+    MediaRuns --> RubyLLM
+    MediaRuns --> Records
     AgentRunExecutor --> AgentDefinition
     RunUI --> Records
+    EvaluationUI --> EvaluationExecutor
+    EvaluationExecutor --> EvaluationJob
+    EvaluationJob --> StructuredExecutor
+    EvaluationJob --> Records
+    EvaluationJob --> RubyLLM
+    EvaluationJob --> Events
+    RunUI --> ReproductionExporter
     RunExecutor --> ChatJob
     ExperimentExecutor --> StructuredJob
     StructuredJob --> StructuredExecutor
     ChatJob --> ChatExecutor
     AgentRunExecutor --> AgentJob
     AgentJob --> RubyLLM
+    AgentJob --> AgentReportRecorder
+    AgentReportRecorder --> Records
     ChatExecutor --> RubyLLM
     ChatExecutor --> CitationRecorder
     CitationRecorder --> Records
@@ -98,12 +128,14 @@ flowchart TD
     ChatExecutor --> Events
     AgentJob --> Events
     StructuredExecutor --> Events
+    SpeechJob --> Events
     Events --> Records
     ProviderEvents --> Records
     RubyLLM -. "instrumentation" .-> ProviderEvents
     Tooling --> ChatExecutor
     RunExecutor --> Records
     StructuredExecutor --> Records
+    ReproductionExporter --> Records
     KnowledgeServices --> Records
     KnowledgeServices --> RubyLLM
 ```
@@ -133,8 +165,16 @@ erDiagram
     PROJECT ||--o{ TOOL_DEFINITION : enables
     PROJECT ||--o{ KNOWLEDGE_COLLECTION : owns
     PROJECT ||--o{ RUN : contains
+    PROJECT ||--o{ EVALUATION_COMPARISON : owns
     CHAT ||--o{ MESSAGE : persists
     CHAT ||--o{ RUN : starts
+    PROJECT ||--o{ EVALUATION_DATASET : owns
+    EVALUATION_DATASET ||--o{ EVALUATION_DATASET_REVISION : versions
+    EVALUATION_DATASET_REVISION ||--o{ EVALUATION_COMPARISON : evaluated
+    EVALUATION_DATASET_REVISION ||--o{ EVALUATION_EXECUTION : evaluated
+    EVALUATION_COMPARISON ||--|{ EVALUATION_EXECUTION : compares_models
+    EVALUATION_EXECUTION ||--o{ EVALUATION_CASE_RESULT : measures
+    EVALUATION_CASE_RESULT }o--o| RUN : links
     EXPERIMENT ||--o{ EXPERIMENT_EXECUTION : runs
     EXPERIMENT ||--o{ RUN : defines
     EXPERIMENT_EXECUTION ||--o{ RUN : groups
@@ -190,6 +230,41 @@ erDiagram
         bigint experiment_id
         string status
         json input_snapshot_json
+    }
+    EVALUATION_DATASET {
+        bigint project_id
+        string name
+        integer current_revision
+    }
+    EVALUATION_DATASET_REVISION {
+        bigint evaluation_dataset_id
+        integer revision
+        json cases_json
+    }
+    EVALUATION_COMPARISON {
+        bigint project_id
+        bigint evaluation_dataset_revision_id
+        bigint experiment_id
+        json experiment_snapshot_json
+        json model_targets_json
+    }
+    EVALUATION_EXECUTION {
+        bigint project_id
+        bigint evaluation_comparison_id
+        bigint evaluation_dataset_revision_id
+        bigint experiment_id
+        string provider
+        string model_id
+        string status
+    }
+    EVALUATION_CASE_RESULT {
+        bigint evaluation_execution_id
+        bigint run_id
+        string case_key
+        string status
+        boolean passed
+        string transport_status
+        string schema_status
     }
     RUN {
         bigint project_id
@@ -317,15 +392,18 @@ exact cosine 扫描。后者不直接扫 `knowledge_embeddings.vector`（该列�
 的派生索引表 `knowledge_vector_index_<dimension>`；该表不在 `db/schema.rb` 中，可
 由源表重建。扩展不可用时 registry 回退到默认 adapter 并写明原因。
 
-### 仍未进入当前关系图的扩展
+### 当前存在的部分实现
 
 ```mermaid
 flowchart LR
     Current["当前 Run / Artifact / Knowledge 证据"]
-    Current -. "未来扩展" .-> Media["PLANNED: Media / batch / export"]
+    Current --> Media["M6: speech / image / video / transcription PARTIAL"]
+    Current --> Evaluation["M7: model comparison + exact JSON + outcomes and usage metrics + provider Batch PARTIAL"]
+    Current --> Export["M8: redacted Run reproduction PARTIAL"]
 ```
 
-媒体、批量评估和导出不是当前表，仍属于项目路线图后续方向。
+媒体 Artifact、EvaluationDataset revision、EvaluationExecution/CaseResult 和 Run reproduction export
+已经进入当前 schema 与页面；provider dogfood、更广 evaluation 和 upstream-gap 工作流仍在路线图中。
 
 ## 4. Runtime — 带审批的 Chat Run
 
@@ -514,6 +592,10 @@ sequenceDiagram
             DB->>Outbox: 同一 primary transaction 写 approval continuation
         end
     end
+    opt Agent 成功完成
+        Queue->>Audit: 保存带来源、revision 和引用链接的 report Artifact
+        Queue->>DB: 与 Run succeeded 状态在同一事务提交
+    end
     Human->>DB: 可取消 queued/running/approval-waiting Run
 ```
 
@@ -527,15 +609,23 @@ generation 和 5 分钟到期租约阻止同一 Run 被两个有效 owner 同时
 
 恢复仍遵循至少一次语义：provider 已接受的请求无法因租约丢失而撤销，可能发生重复请求或费用；但旧 owner
 迟到的响应不会写入 Chat transcript 或 usage。Agent 启动时会比较冻结的本地工具 schema/policy 快照与当前
-注册 contract，发现 drift 就停止，要求创建新 Run。内置只读 `project_snapshot` 无需副作用去重；
+注册 contract，发现 drift 就停止，要求创建新 Run；若 Agent 选择了本地工具，还会在定义保存、
+Run 入队和每次 worker 恢复时要求精确模型条目显式声明 `function_calling`。这只是 RubyLLM registry
+准入提示，不代表真实 provider/model 已接受工具调用。provider-hosted `web_search` 不经过这条本地工具门槛。
+内置只读 `project_snapshot` 无需副作用去重；
 `save_run_note` 在 Run 锁内按 RubyLLM tool-call id 唯一复用 Artifact。未来有副作用的工具仍需各自实现
 原子租约检查和幂等性。RubyLLM 会先创建空 assistant 占位消息；恢复时若只找到该占位，会将 Attempt
 记为失败、删除占位并重新请求，不会把空结果报告为成功。初始 Run、审批续跑与恢复意图先写入 primary
 数据库 outbox，再由每分钟 dispatcher 投递到独立 Solid Queue 数据库；dispatcher 也扫描未领取 Run、过期
 租约和所有审批均已决定的等待 Run。投递失败会保留并退避重试。队列写入与 outbox 确认无法跨数据库原子
 提交，因此确认前崩溃仍可能重复投递；Run lease/generation 会拒绝迟到 owner。开发与生产都必须运行
-Solid Queue recurring scheduler，才能持续派发和扫描。执行回归、取消竞态和 worker 重启演练尚未运行，
-因此这些恢复保证仍待实测。
+Solid Queue recurring scheduler，才能持续派发和扫描。完整 Agent job 回归、并发取消竞态和 forked worker
+终止/替换后的 `save_run_note` 重放均已有本地自动化证据；真实 provider 请求与生产环境 scheduler 运维仍需
+在对应环境验证。Runtime inspector 会把 Web 响应与 Background jobs readiness 分开，读取 Scheduler、Dispatcher、
+maintenance Worker 的最近心跳、Agent dispatcher schedule 和到期 outbox 数量；这反映队列进程状态，不证明 provider
+可达或单个 Job 成功。成功结束时，`Ai::AgentResearchReportRecorder` 从最终持久化 assistant Message 创建 Run-owned
+`report` Artifact，并关联最后一次 Attempt、冻结的 Agent revision 与该 Run 的 citation-set Artifacts；报告与
+Run 的 `succeeded` 状态在同一锁定事务中提交。取消或失败不会生成报告，重复记录同一最终消息会复用现有 Artifact。
 
 ## 5. Runtime — 状态如何推进
 
@@ -610,10 +700,10 @@ flowchart LR
     M2 --> M3["M3 Tools + Approval\nIMPLEMENTED"]
     M3 --> M3P["M3 Parallel Calls\nAPP PATH IMPLEMENTED"]
     M3P --> M4["M4 Knowledge\nRETRIEVAL + RERANK + DOCUMENT SOURCES\nLOCAL PATH IMPLEMENTED"]
-    M4 --> M5["M5 Agent Runs\nM5.1 search + M5.2 saved agents\nPARTIAL"]
-    M5 --> M6["M6 Media\nPLANNED"]
-    M6 --> M7["M7 Batch + Evals\nPLANNED"]
-    M7 --> M8["M8 Exports + Public Reference\nPLANNED"]
+    M4 --> M5["M5 Agent Runs\nM5.1 search + M5.2 saved agents + M5.3 report Artifact\nPARTIAL"]
+    M5 --> M6["M6 Media\nspeech / image / video / transcription PARTIAL"]
+    M6 --> M7["M7 Evaluation\nimmutable cross-model summaries + exact JSON + provider Batch code\nPARTIAL; fake paths locally verified"]
+    M7 --> M8["M8 Run Reproduction Export\nredacted JSON slice PARTIAL"]
 ```
 
 `APP PATH IMPLEMENTED` 的含义是：Project opt-in、能力/安全门控、Run snapshot 和
@@ -630,8 +720,70 @@ M5.1 已接入每次 Run 单独 opt-in 的 provider web search，搜索步骤和
 generation fencing、取消终态及 step/citation 时间线关联的确定性自动化测试；假 Agent 也通过
 `AgentRunJob#perform` continuation 完成两步成功、approved/denied `save_run_note`、过期 lease 后空响应恢复和
 late-response cancellation 路径。
-outbox continuation 会携带新 generation，迟到的重复 delivery 会被拒绝。整体 M5 仍是 `PARTIAL`：真实 worker
-重启与副作用重放演练和 provider-backed 执行仍待验证。
+Run 取消也会在同一事务中过期待审批并结束未完成的 ToolInvocation，记录独立的 approval/tool 生命周期事件；
+系统按实际待处理状态清理审批，因此 Run 仍是 `running`、审批记录已保存但 `waiting_for_approval` 尚未提交时也会为本地调用写入拒绝结果、为远程调用保存 RubyLLM 协议响应，并避免留下 Chat 级取消标志。
+M5.5 将 RubyLLM 2.0 Responses/MCP 持久化的 provider-hosted pending ToolCall 同步为本地 Approval，并在 Chat 页标明它由 provider 执行；批准或拒绝沿用现有 Chat/Agent 决策服务与 durable continuation，RubyLLM Responses 将决定写成 `mcp_approval_response`。本地测试用合成 ToolCall 验证记录与 UI/协议形状，不代表真实 provider 已验收，也不代表其他 hosted-tool 协议兼容。
+失败路径在执行 lease 校验通过后，于同一 Run 锁内结束待审批记录并把 Run 标为 failed。失败同步不会新建 pending Approval；工具错误收尾只处理当前 Run 中正在执行的本地调用。尚未开始的本地审批调用记录结构化拒绝结果，仍在等待批准的 remote MCP 调用记录 RubyLLM Responses 格式的拒绝消息，且不运行 pending 工具或发起新的 provider 请求。已批准但没有持久化结果的 remote MCP 调用保留 approved 决策，不合成拒绝响应；ToolInvocation 以 `remote_tool_outcome_unknown` 保存不确定结果，并阻止该 Chat 再创建 Run。执行中被取消且没有远程结果的调用同样标为未知。被拒的 stale lease 不会修改审批或工具记录。
+聊天页同步会与 Run 取消串行化，终态 Run 不再从 RubyLLM 记录恢复旧的待审批状态。
+outbox continuation 会携带新 generation，迟到的重复 delivery 会被拒绝。请求级集成测试还会从 Agent 定义页面
+创建定义并启动 Run，再重载 Run inspector 检查冻结 revision、step 时间线和 citation Artifact。整体 M5 仍是
+`PARTIAL`：provider-backed 执行和手动浏览器视觉验收仍待验证。
+M6 当前支持从已保存的 assistant 回复排队生成语音，在 chat 页提交 image/video prompt，
+以及上传音频提交 transcription。各操作使用 capability-filtered model catalog 与后台 Run；
+image/audio/video 先同步上传 Active Storage Blob，再与 Run 成功和 Artifact attachment 一起提交，
+事务失败或取消竞态时清理未附加 Blob；transcription 输入音频也在创建 Run 前完成上传。每天清理超过 24 小时的未附加 Blob，覆盖上传后进程退出的窗口；transcript 以文本 Artifact 保存，并把空白响应规范成空文本。Chat 入口按 RubyLLM capability catalog 提供 media 操作；没有兼容模型时显示禁用状态与原因。image、
+video、speech 和 transcription 的成功及失败 Attempt/Run 写入与并发取消使用 Run 行锁保护；stale
+queued Run 超过 30 分钟且未被 worker claim 时记录为 `worker_not_started`，running Run 超时则记录为
+`worker_interrupted`，两者都不自动重放。定向测试覆盖 running/queued recovery、queue rejection 与取消竞态；
+image/video 的迟到 provider 成功响应也不能越过 recovery 写入 Artifact。Video 使用 RubyLLM blocking poller 在 worker 中
+运行；提交通知会把 provider job ID 作为 `submitted` 生命周期证据写入 Run 时间线，供排障时识别已提交任务，
+M8 reproduction export 会脱敏该 ID。RubyLLM 2.0.0 没有从 provider job ID 恢复 `VideoJob` 的 public API，
+且 `Video` 没有 normalized usage/cost 字段。Speech
+路径已有 fake-provider 本地测试；image/video/transcription 也新增 fake-provider 集成覆盖，验证排队、
+worker 执行、Artifact 元数据与 Run inspector。测试没有连接真实 provider，因此 M6 仍为 `PARTIAL`。
+M7 把有界、不可变的数据集 revision 和 Experiment snapshot 对照 2–5 个结构化模型。
+`EvaluationComparison` 冻结数据 revision、Experiment snapshot 和目标模型清单；每个模型各有
+`EvaluationExecution`，每个 case 建立普通 Structured Run/Attempt。页面即时计算逐模型汇总与逐 case
+结果矩阵，每个结果都链接回原始 Run；Expected JSON 不进入 provider prompt，判定按 JSON 结构精确比较。
+`EvaluationCaseResult` 另存 transport/schema outcome。`Ai::EvaluationMetrics` 汇总
+已收到、失败、取消、未知和未尝试请求；响应率/schema 有效率以已知结果为分母。
+Individual latency 使用 app-observed Attempt 时长，仅在样本数达到 20 时给出 p95；provider Batch
+等待和刷新时长不混入请求延迟。Token 与 reported/estimated cost 显示采集覆盖，成本按币种分别统计。
+这些指标描述本地观察到的执行，不代表 provider 可用率或模型质量。
+`EvaluationCaseReview` 允许对已完成输出追加 `acceptable`、`needs_work` 或 `inconclusive`
+人工评审，并记录自报 reviewer label 与可选理由；
+历史记录不能经界面修改或删除，也不会改变 exact-JSON `passed` 或 `Ai::EvaluationMetrics`。
+每个 case 可选定义 1–8 个有界 rubric criteria。启用 rubric 后，每条 review 必须给每个 criterion
+记录 `meets`、`partially_meets`、`does_not_meet` 或 `not_applicable`；页面按单个 case 汇总各 rating
+的次数和样本数，不跨 case 混合，也不生成加权或总分。Rubric 冻结在 revision、case result 和 Run 的本地
+evaluation context 中，不进入 provider prompt；rubric 专项测试为 18 runs、237 assertions、无失败或错误。
+每个 case 可上传最多 5 个 10 MB 文件，每个 dataset revision 最多 50 个文件且总计最多 50 MB，仅接受文本、JSON、CSV、PDF、JPEG 和 PNG。
+文件以 revision-owned Active Storage 记录保存，新增/移除都会创建新 revision；旧 revision 保留原文件，Project 删除触发 Blob 清理。
+附件元数据只进入本地 revision/Run snapshot；Structured individual 与 provider Batch prompt 均不包含文件名、内容或 ID。
+附件专项测试为 8 runs、87 assertions；没有 provider 调用。50 个文件和 50 MB 均为单 dataset revision 限额，没有 dataset/Project 生命周期累计限额，重复上传会增加保留存储。
+Reviewer label 不是认证身份。可选自动 rubric judge 会把 case input、生成输出和 rubric
+发送给指定 judge provider，expected output、tags 与 attachments 不发送；Judge 使用独立 Run、Attempt
+与成本记录，不改变 exact-JSON 结果、人工 review 或 evaluation metrics。它是未经校准的辅助判断，
+并不代表通用模型质量分数。自动化语义判断有 provider-free 专项覆盖，但真实 provider dogfood 和校准仍待完成。
+case tags 保存在本地上下文，不发送给 provider。
+刷新只允许重新排队尚未开始的 case；超过 30 分钟的运行 case 失败且不自动重放，Run 锁保护
+迟到的结构化完成写入。另有仅对同时声明 structured-output 与 batch capability 的模型开放的
+provider Batch 提交和手动刷新路径；提交 ID 不确定时不会重放。Fake Batch 测试覆盖提交 readiness、精确有序
+chat-set Store 对账、未知提交的迟到 Store 恢复、按 case position 刷新、局部取消和逐例 Artifact/Attempt/token
+映射。跨模型比较有 provider-free 的快照/排队/逐例 Run 与摘要请求测试。没有真实 provider 证据；未知提交经过
+30 分钟等待与再次本地 store 对账后，可以由操作人员明确关闭为本地失败，但无法因此取消 provider 请求；语义评估仍未实现。
+M8 首片提供每个 Run 的 JSON reproduction 下载，并允许把人工分类的 upstream candidate
+保存为 append-only report Artifact，再下载包含该次脱敏 reproduction snapshot 的 Markdown issue
+草稿。字段白名单、敏感键、URL userinfo、已知签名 URL 查询值、常见凭证文本与本机路径清理会应用于 Run 导出和候选文本；URL 保留 scheme、host、path 和非敏感查询值，二进制仍被排除。
+既有候选报告不进入后续 reproduction bundle，避免候选草稿递归嵌套。
+Chat Run 入队时冻结此前 RubyLLM 消息结构，worker 在首次 provider 请求前核对持久化上下文；
+发现排队期间上下文变化就失败关闭。同一 Chat 只接受一个活动 Run。导出再用入队和完成时的
+message ID 水位线加入本次 Run 写入的消息，覆盖 user/assistant/tool 消息及审批续跑中的协议字段；
+附件字节仍被排除并标注为未包含。该快照固定消息上下文，不固定 provider 外部状态、运行时配置或
+模型非确定性。定向 provider-free 自动化覆盖了上下文冻结、drift rejection、队列拒绝、
+并发提交、审批续跑和导出水位线。既有 provider-free 自动化覆盖 candidate 校验、
+append-only 保存、证据、脱敏和 Markdown 草稿；代表性真实 Run 样本审查、分类复核和外部提交由人完成。
+通用脱敏也不保证能识别任意用户文本中的秘密。
 
 ## 8. 如何保持图表可信
 
@@ -646,3 +798,11 @@ outbox continuation 会携带新 generation，迟到的重复 delivery 会被拒
 
 图表是帮助人理解当前系统的压缩视图，不是新的事实来源；当图与代码冲突时，应
 先修正图或记录偏差，而不是用图替代代码证据。
+
+## Evaluation Batch result integrity
+
+`EvaluationBatchRefreshJob` collects results through `Ai::EvaluationBatchResults`. Its instance-local RubyLLM 2.0.0 workaround validates the complete normalized index set before any Chat delivery or status mutation, using the frozen evaluation case count. Duplicate, negative, non-integer and out-of-range indices stop collection; the existing refresh error path keeps cases unchanged and exposes the error. This uses the private `Batch#result_slot_count` hook and must be rechecked on RubyLLM upgrades. See [the upstream reproduction and evidence](UPGRADE_REVIEW_2026-09-26.md).
+
+## 2026-09-27 — Run event export
+
+`RunsController#events` → `Ai::RunReproductionExporter#events` → Run-scoped `LifecycleEvent` query. An event ID watermark excludes later inserts; timestamp/ID ordering selects the latest 100 records and returns them chronologically. The path reuses redaction and bounded serialization without loading messages, snapshots, tools or Artifacts. Related record IDs allow local joins; omitted records/values and byte-overflow fallback are explicit.

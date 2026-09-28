@@ -4,17 +4,21 @@ This documentation set explains the application's current behavior, evidence,
 limits, and planned growth. The repository can be understood and run without
 files outside this checkout.
 
-Updated: 2026-09-20
+Updated: 2026-09-27
+
+Latest local verification: [Rails/RubyLLM upgrade review](UPGRADE_REVIEW_2026-09-26.md).
 
 ## If you have five minutes
 
 1. Read [SYSTEM_GUIDE.md](SYSTEM_GUIDE.md) for the product shape and current
    capability boundaries.
-2. Review [ARCHITECTURE.md](ARCHITECTURE.md) to see how requests, records, and
+2. Check [CAPABILITIES.md](CAPABILITIES.md) for the RubyLLM registry gates and
+   the difference between declared and provider-verified support.
+3. Review [ARCHITECTURE.md](ARCHITECTURE.md) to see how requests, records, and
    approval continuations connect.
-3. Use [OPERATIONS.md](OPERATIONS.md) for local setup, provider configuration,
+4. Use [OPERATIONS.md](OPERATIONS.md) for local setup, provider configuration,
    and evidence interpretation.
-4. Read [CHANGELOG.md](CHANGELOG.md) for the implementation history and the
+5. Read [CHANGELOG.md](CHANGELOG.md) for the implementation history and the
    reasons behind recent changes.
 
 ## What each document covers
@@ -22,6 +26,7 @@ Updated: 2026-09-20
 | Document | Question it answers |
 | --- | --- |
 | `SYSTEM_GUIDE.md` | What does the application do, and what should a user infer from its output? |
+| `CAPABILITIES.md` | Which model metadata gates each operation, and what remains unverified? |
 | `ARCHITECTURE.md` | How do the app's services, jobs, records, and states connect? |
 | `OPERATIONS.md` | How do I run the application and interpret local or provider evidence? |
 | `LEARNING.md` | How does the in-page, source-anchored explanation layer work? |

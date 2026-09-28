@@ -2,7 +2,8 @@
 
 ## Scope
 
-This implementation covers M0–M4 slices and the first two M5 slices:
+This implementation covers M0–M4 slices, three M5 slices, and first local
+slices of M6 media, M7 evaluation comparisons and M8 Run reproduction export:
 
 `Project -> Chat/Tool Lab/Knowledge/Agent definition -> persisted execution and evidence records -> inspectors`
 
@@ -17,10 +18,108 @@ lease and local tool-contract drift check. Focused tests cover the durable
 snapshot, outbox, recovery, lease, citation and timeline boundaries, plus
 two-step job success, approved/denied continuation through the delivery outbox,
 recovery from an expired lease with an interrupted blank response, and a late
-Agent response that cannot overturn cancellation. Stale
-delivery generations are rejected. Provider file references, real OCR/page-level
-provenance, actual Solid Queue worker restart/replay, provider-backed Agent
-behavior, media, batch/evals and operational polish remain incomplete or deferred.
+Agent response that cannot overturn cancellation. A forked Solid Queue worker
+crash/restart drill also verified that replay after `save_run_note` committed its
+Artifact reused that Artifact. Stale delivery generations are rejected. M5.3
+stores each successful Agent's final assistant answer as a Run-owned report
+Artifact, linked to its source Message, final Attempt, frozen Agent revision and
+citation Artifacts. Report creation shares the Run success transaction, and the
+inspector links the report back to its citations; provider-free tests cover
+success, cancellation and idempotency. M5.4 expires pending approvals, stores a
+denial result to close local calls and uses RubyLLM's provider-specific approval
+response for remote calls, then cancels unfinished tool invocations with Run
+cancellation; a waiting approval does not leave a Chat-level
+cancel request, and terminal-state reconciliation cannot restore stale approval
+controls; provider-free browser review of synthetic report, citation, pending and
+denied approval, cancellation, and narrow layout is complete. Live
+Agent/provider presentation remains unverified. M6 adds
+asynchronous speech, image, video and transcription, capability-based model catalogs,
+Active Storage media/text Artifacts, media cost categories, provider lifecycle events,
+disabled Chat entry actions when the catalog has no matching capability, and stale-Run
+recovery that fails rather than automatically replaying provider work.
+Video runs use RubyLLM's blocking poller inside the queue worker; RubyLLM 2.0.0 has
+no public API to restore a VideoJob from its provider ID, and normalized video
+cost/usage is unavailable. The observed video submission ID is stored as `submitted`
+Run timeline evidence and redacted from reproduction exports; this does not resume
+polling. Speech, image, video and transcription have fake-provider integration
+evidence, including enqueue rejection and stale queued recovery; image and video
+also test a late successful response after stale recovery. No live provider
+acceptance is claimed. Media failure writes now share the Run lock with cancellation.
+Generated speech, image and video bytes
+are uploaded before the successful Run/Artifact transaction; unattached Blobs are
+purged if the transaction fails or cancellation wins. Incoming transcription audio
+is uploaded before the Run is created. A recurring job purges unattached Blobs
+older than 24 hours, covering process death between upload and attachment.
+Whitespace-only transcripts are normalized to empty text while retaining
+`empty_transcript: true`. Tests cover downloadable media bytes, storage upload
+failure, orphan cleanup, failures after cancellation, late provider completion
+after stale recovery for image/video, and rejected enqueues and stale queued Runs
+for speech/image/video/transcription.
+M7 groups 2–5 model-specific `EvaluationExecution` records under one immutable
+`EvaluationComparison`, which freezes one dataset revision and Experiment snapshot;
+every model/case pair retains its ordinary Run/Attempt, and the page derives
+per-model plus per-case summaries with links to raw Runs. The comparison entry
+uses individual jobs. M7 also includes an opt-in RubyLLM Batch path for models advertising both structured output and batch;
+the refresh path maps documented submission-order messages to frozen case
+positions, checks queue admission before reporting refresh as queued, and leaves
+state unchanged when the refresh job is rejected. Submission state transitions fence stale recovery and permit
+  late local-store reconciliation. Fake-provider tests cover readiness, ordered
+  Store matching and late reconciliation, positional refresh with a cancelled case,
+  and per-case JSON Artifact/Attempt/token mapping. Optional bounded case tags
+  stay in immutable revision/Run context, appear in evaluation views and are
+  excluded from provider prompts. Optional bounded rubric criteria are frozen
+  into each case result and local Run evaluation context; completed cases accept
+  append-only per-criterion human ratings with descriptive per-case counts and no
+  combined score. Rubric-specific checks have not run in this pass. Live provider acceptance
+  remains open. An operator can close an unresolved submission
+  locally after acknowledging that the provider request cannot be cancelled from
+this state. M8 now saves append-only upstream candidate
+report Artifacts and downloads Markdown issue drafts with a redacted Run snapshot.
+Chat Runs freeze the prior RubyLLM message context, reject context drift before the
+first request, serialize one active Run per Chat, and export messages bounded to
+that Run. Focused regression coverage for this addition is pending.
+`docs/CAPABILITIES.md` maps registry/application gates to the
+surfaces and current evidence limits, including historical pre-2.0.0 dogfood.
+Representative Run review remains open. Provider file
+references, real OCR/page-level provenance, live provider-backed Agent behavior,
+broader evaluation and operational polish remain incomplete or deferred.
+
+Evaluation summaries separately report known provider responses/failures, schema
+validity, app-observed individual Attempt latency, token coverage and reported or
+estimated cost by currency. Unknown and cancelled outcomes remain visible; p95 is
+shown only with at least 20 latency samples, and provider Batch wait/refresh time
+is excluded. Completed evaluation outputs also accept append-only human review
+records with a self-reported reviewer label, verdict and optional rationale. These
+records are displayed beside the corresponding case result and leave exact-JSON
+outcomes and provider metrics unchanged. Cases may freeze up to eight rubric
+criteria, with one append-only human rating per criterion and per-case descriptive
+counts. Ratings are not a semantic evaluator or consensus score, and no combined
+quality score is calculated. The optional automated rubric judge freezes a
+provider/model target plus prompt and schema versions, and stores generated
+ratings in a distinct EvaluationCaseJudgment linked to its own Run/Attempt and
+cost. It receives only case input, generated output and rubric; expected output,
+tags and attachment names/content/IDs are excluded. Queue rejection is visibly
+resumable before a Run starts; recovery re-enqueues only unstarted judgments and
+marks stale started requests `submission_unknown` without replay, fencing late
+responses. It does not change exact-JSON results, human reviews or generation
+metrics, and is not a calibrated quality score. Focused provider-free judge and
+page-disclosure checks passed: 24 runs, 259 assertions; no provider call was
+made. Human rubric checks passed: 18 runs, 237 assertions. Judge dogfood and
+quality/cost calibration remain open.
+Project-scoped case attachments are revision-owned, bounded to 5 files per case,
+10 MB per file and 50 MB per revision, and allowed only for text, JSON, CSV, PDF,
+JPEG and PNG. New revisions copy retained files by case key; removing a file
+affects only the new revision, and Project deletion purges old Blobs. Attachment
+uploads are checked before revision creation using the declared MIME, with the
+filename extension selecting a check only for missing or generic MIME, plus
+basic PDF/image signatures, JSON parsing, CSV syntax and UTF-8/control-byte
+checks for text. This is not full document decoding or malware scanning. Attachment and
+local metadata are excluded from individual and Batch prompts; focused
+provider-free coverage for the earlier attachment boundary passed: 8 runs, 87
+assertions, but the new byte validator has no test evidence yet. There is no lifetime
+dataset/project storage budget, so repeated new uploads can grow retained storage.
+Reviewer labels are not authenticated identities.
+Execution metrics do not score model quality.
 
 Current status: M0–M3 core, the M4 local-text foundation and the M4
 embedding/retrieval/rerank/document slices are `IMPLEMENTED` for their verified
@@ -32,11 +131,34 @@ M5.2 now has deterministic tests for frozen definitions, durable queue delivery,
 stale-run and approval recovery, lease fencing, cancellation terminal state,
 Agent step citation/timeline linkage, fake-Agent success plus approved/denied
 continuation, deterministic recovery of an interrupted placeholder, and terminal
-cancellation after a late Agent response. Actual
-Solid Queue restart/replay and provider calls remain unverified. The dispatcher persists
+cancellation after a late Agent response. M5.3 report persistence, citation
+linkage, retry idempotency, cross-Chat rejection, and cancellation are covered by
+provider-free tests. Local Solid Queue worker crash/restart
+and note Artifact replay passed; local-tool Agents additionally require an exact
+RubyLLM chat-registry model entry declaring `function_calling` during definition
+validation, before enqueue, and before each worker restoration. This registry
+gate is not evidence of provider acceptance. A dispatcher regression also
+covers an accepted
+queue enqueue whose outbox acknowledgement is lost, expired-claim redelivery,
+Run lease fencing while the first execution is active, one successful report
+Artifact, and the stale duplicate `AgentRunJob` exiting before Agent reconstruction
+after success. A threaded provider-free cancellation race confirmed no late
+response persists. Live provider calls remain unverified. The dispatcher persists
 delivery intents in the primary database and scans stale leases; scheduler
-operation still depends on the recurring worker. M5 remains `PARTIAL`, while
-M6–M8 remain `PLANNED` behind the M5 gates.
+operation still depends on the recurring worker. The Runtime inspector now separates web
+availability from job readiness, checking the recent Scheduler Agent-dispatch task,
+Dispatcher, maintenance-queue Worker, and due Agent outbox count. Test mode and
+other unmonitored queue adapters are not presented as healthy. This reports local
+process/readiness evidence only. M5 remains `PARTIAL`. M6 remains
+`PARTIAL`: speech, image, video and transcription have fake-provider local flow
+coverage; durable video-job recovery remains blocked on a public RubyLLM restore
+API, with normalized video cost/usage and live provider behavior open. M7 exact-JSON
+and provider-batch code paths and M8 redacted Run export/candidate workflow are
+`PARTIAL`; M7's provider Batch lifecycle and M8 candidate capture both have
+deterministic fake coverage. M7 case-review submission, history and deletion
+behavior also have provider-free integration coverage. Live provider acceptance,
+judge calibration, representative reproduction review and deployment
+readiness remain open.
 
 ## Human understanding layer
 
@@ -65,8 +187,9 @@ behavior. `TODO.md` is the current roadmap.
 - **Experiment execution:** one frozen definition snapshot grouping one Run per
   selected model; reruns create a new execution and preserve prior evidence.
 - **Artifact:** a bounded JSON result attached to the successful structured Run,
-  a citation set attached to a cited provider response, or source-extraction
-  provenance; raw chat/Run/Attempt history remains inspectable alongside it.
+  a citation set attached to a cited provider response, source-extraction
+  provenance, or generated audio stored by Active Storage; raw chat/Run/Attempt
+  history remains inspectable alongside it.
 - **LifecycleEvent:** a Run-scoped, metadata-only event catalog entry with a fixed
   name, optional links to an Attempt/Artifact/ToolInvocation/Approval, occurrence
   time, duration and idempotency key. It indexes transitions; it is not a content
@@ -148,6 +271,50 @@ behavior. `TODO.md` is the current roadmap.
 - `Ai::AttemptRecorder` normalizes provider/model, timing, usage, cost and
   errors without mutating historical attempts.
 - `Ai::ChatExecutor` performs chat execution through RubyLLM only.
+- `Ai::SpeechCatalog`, `Ai::SpeechRunExecutor` and `SpeechRunJob` filter for
+  speech-capable models, freeze the assistant reply and provider/model in a Run,
+  then store returned audio as an Active Storage Artifact. `SpeechRunRecoveryJob`
+  fails work stuck in `running` for 30 minutes instead of replaying a provider call.
+- `Ai::MediaCatalog`, `Ai::ImageRunExecutor` and `ImageRunJob` require the
+  `image_generation` capability and store one generated raster image with provider,
+  model, usage/cost, byte size and digest. `Ai::TranscriptionRunExecutor` accepts a
+  bounded allowlist of audio uploads, stores the source as an audio Artifact and
+  queues `TranscriptionRunJob` to persist transcript text and provenance. The shared
+  `MediaRunRecoveryJob` fails stale work without replay. Image, video and
+  transcription queue-to-Artifact paths have fake-provider local coverage;
+  configured-provider acceptance remains open.
+- `Ai::EvaluationExecutor` snapshots an immutable dataset revision and structured
+  Experiment for either one model or a bounded multi-model `EvaluationComparison`;
+  each model gets independent per-case Structured Runs. `EvaluationCaseJob`
+  compares JSON values exactly; stale recovery fails uncertain provider work and
+  only unstarted cases can be resumed. Queue admission is checked: rejected
+  individual cases remain queued with a visible, sanitized error and can be
+  retried; a rejected provider-batch submission closes its still-queued local
+  cases as failed before provider work can begin.
+- `EvaluationBatchSubmissionJob`, `RubyLLM::Batch` and `EvaluationBatchRefreshJob`
+  stage those same per-case chats for one configured structured/batch-capable
+  provider model, save the provider batch reference and map ordered results back
+  into the existing Runs. A stale submission with no recoverable reference is
+  marked uncertain and is never replayed; deterministic fake-batch tests cover
+  readiness, Store reconciliation, positional refresh and per-case evidence.
+- `Ai::EvaluationCaseOutcome` and `Ai::EvaluationMetrics` distinguish received,
+  failed, cancelled, unknown and not-attempted requests; schema validity uses
+  only known structured responses. Token totals include coverage counts, costs
+  preserve reported/estimated provenance and currency, and p95 latency requires
+  20 individual samples. Batch duration is not treated as request latency.
+- `Ai::RunReproductionExporter` builds an explicit per-Run JSON bundle from
+  allowlisted fields, redacts sensitive values, URL userinfo and local paths, omits binary
+  Artifact content, and enforces schema-v2 text, structure, record and byte budgets with
+  explicit omission counts. Export budget regressions cover collections, depth, text/value limits, escaped-byte
+  overflow, recent messages, Artifact scanning and oversized Markdown;
+  exports still require human review before sharing.
+- `Ai::UpstreamCandidateRecorder` stores a sanitized triage report as a new Run
+  Artifact with provider/model/version evidence; `Ai::UpstreamIssueDraft` downloads
+  Markdown containing that candidate and its redacted reproduction snapshot, with a
+  final rendered-draft size cap and a compact fallback for oversized drafts.
+  Provider-free tests cover candidate validation, evidence, sanitization, export
+  exclusion and draft download. Candidate review and external submission remain
+  manual.
 - `Ai::CitationSetRecorder` writes normalized RubyLLM citations as a Run/Attempt
   Artifact; provider tool steps remain on the persisted RubyLLM Message.
 - `Ai::CostNormalizer` labels reported, estimated or unknown cost.
@@ -197,7 +364,7 @@ complete distributed event stream, a cost dashboard or a historical backfill sys
 
 ## Integrations and constraints
 
-- Rails 8.1.3.1, RubyLLM 2.0.0, SQLite, Active Storage local disk,
+- Rails 8.1.4, RubyLLM 2.0.0, SQLite, Active Storage local disk,
   Hotwire/Turbo/Stimulus, Tailwind and Vite following the loaded Rails MVP
   conventions.
 - Provider credentials are read from environment/Rails credentials only; they
@@ -227,15 +394,20 @@ keyboard-friendly.
 ## Pre-flight record
 
 - Milestone: M0 + M1 + M2 + M3 plus the M4 local-text, embedding/retrieval,
-  rerank and document-source slices; M5.1 provider search is locally tested and
-  M5.2 Agent durability boundaries have deterministic test coverage.
+  rerank and document-source slices; M5.1 provider search is locally tested,
+  M5.2 Agent durability boundaries have deterministic test coverage, M6
+  speech/image/video/transcription have fake-provider local flow coverage, and
+  M7's provider-batch path has deterministic fake-batch coverage; live provider
+  evidence remains open for M5-M7.
 - Scope: local chat with optional per-Run provider web search, structured experiment comparison, code-defined tools,
   durable approval continuation, and Project-scoped text evidence retrieval with
   provider embeddings, lexical/semantic/hybrid modes, a compatible-provider
   rerank stage, file sources with extraction provenance, and saved Agent Runs.
-  Provider file references, real OCR dogfood, actual Agent-worker restart/replay
-  and M6–M8 remain open.
-- Runtime verified: Ruby 4.0.2 and Rails 8.1.3.1.
+  Provider file references, real OCR dogfood, provider-backed Agent execution,
+  durable M6 video-job recovery, M7 judge provider dogfood and calibration,
+  broader M8 upstream-gap reporting, real provider acceptance and release
+  readiness remain open.
+- Runtime verified: Ruby 4.0.2 and Rails 8.1.4.
 - Dependency target: RubyLLM 2.0.0 stable. Provider calls use the public 2.0 API;
   future upgrades should be checked against the official migration guide.
 - RubyLLM instrumentation is consumed through an adapter
@@ -337,7 +509,7 @@ definition creates new evidence without mutating the saved definition.
   message and two assistant messages, with no duplicate prompt from the queue
   continuation.
 - **Still unverified:** no live provider has yet been accepted for a parallel
-  response; provider-native tracing, event export/backfill and M5
+  response; provider-native tracing, historical backfill and M5
   provider-hosted tools/agents are not part of this slice.
 
 ## Lifecycle event catalog — current slice
@@ -353,3 +525,13 @@ The application emits a fixed local catalog through `ActiveSupport::Notification
 `LifecycleEvent` rows are scoped to a Run and ordered by `occurred_at` plus `id`.
 Repeated application notifications with the same `event_key` are ignored. Runs
 created before the migration do not receive synthetic historical events.
+
+## Run event export — 2026-09-27
+
+`GET /runs/:id/events` downloads sanitized lifecycle JSON via
+`Ai::RunReproductionExporter#events`. It captures the highest event ID, selects
+the latest 100 records by timestamp/ID, returns them chronologically, includes
+related record IDs, and reports omissions. It shares the 512 KiB reproduction
+budget and falls back to an identifiable compact export on byte overflow.
+The response is an attachment with `Cache-Control: private, no-store`.
+No provider request, historical backfill or external telemetry delivery occurs.

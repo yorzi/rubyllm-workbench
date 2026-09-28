@@ -6,6 +6,670 @@
 原则上只追加，不静默改写历史。代码细节回到对应 commit 和
 [IMPLEMENTATION_MAP.md](../IMPLEMENTATION_MAP.md)。
 
+## 2026-09-27 — Run 事件导出与 M8 容量验证
+
+### 变化
+
+- Run 页面增加 **Download events JSON**：单独下载最新 100 条本地事件，按发生时间和 ID
+  升序排列，包含关联 Attempt/Artifact/工具/审批 ID；不加载 Chat、输入快照或 Artifact 内容。
+- 导出开始时固定事件 ID 上界，复用复现导出的脱敏和 512 KiB 限制；报告省略数量，
+  字节超限时返回 Run 标识和省略原因。下载响应禁止缓存，分享前仍需检查 metadata。
+- 补齐 M8 容量边界回归：嵌套集合和深度、值数量、Unicode 文本总量、JSON 转义字节膨胀、
+  最近 100 条 Run 消息、最多扫描 1,000 条 Artifact，以及超大 Markdown 草稿降级。
+- 修正 TODO 与 implementation map 中“附件校验/导出容量未测试”和“事件导出未实现”的旧状态。
+
+### 验证
+
+- 定向导出回归：14 runs、143 assertions，0 failures/errors/skips。
+- 全量 Rails：333 runs、2,892 assertions，0 failures/errors；两个真实 provider 测试按默认设置跳过。
+- 浏览器回归：2 runs、9 assertions；272 个 Ruby 文件 RuboCop 通过，Zeitwerk 通过，
+  Brakeman 0 warnings/errors，diff whitespace 检查通过。
+- 未调用真实 provider、推送代码或发布外部内容；事件导出不代表 provider tracing 或历史补录。
+  临时浏览器服务只绑定回环地址，测试结束已退出。
+
+## 2026-09-26 — Rails 升级与 RubyLLM Batch 完整性检查
+
+- 官方版本接口核验：RubyLLM 2.0.0 仍是最新稳定版；Rails 升级到 8.1.4。
+- 补齐 CSV 依赖，修复 Ruby 4 环境中的附件校验加载失败；修复复现导出的消息倒序。
+- 在未修改的 RubyLLM 2.0.0 中复现 Batch 对重复、负数和越界索引缺少校验的问题。
+  Workbench 批量评测增加实例级防护，在任何结果写入前校验整批索引；独立脚本可复现上游行为。
+- 本地 Rails 回归：322 runs / 2,818 assertions，无 failures/errors，两个真实 provider 测试跳过。
+  浏览器测试：2 runs / 9 assertions。RuboCop、Zeitwerk、Brakeman、依赖审计与生产资源构建通过。
+- 没有调用真实 provider、发布上游 issue、推送代码或部署；本地构建 Node 版本与项目 pin 的差异
+  以及完整证据见 [升级检查记录](UPGRADE_REVIEW_2026-09-26.md)。
+
+## 2026-09-21 — M5 Agent 生命周期跨切片回归
+
+### 验证
+
+- 将 Agent 定义、执行、审批、delivery/replay、取消与报告相关的 12 个测试文件
+  一起运行：47 runs、501 assertions、0 failures、0 errors、0 skips。
+- 测试在排除凭据文件的临时副本中运行，Vite test manifest 本地构建；未配置
+  provider key，也未发起网络/provider 请求。
+- 该结果补充了 M5 本地生命周期覆盖；真实 provider 网页搜索、引用、工具行为及
+  hosted CI 仍未验证，M5 继续标记为 `PARTIAL`。
+
+## 2026-09-21 — M8 reproduction export 总量预算
+
+### 变化
+
+- reproduction JSON 升级到 schema v2，限制格式化输出为 512 KiB、总文本为
+  100,000 字符、嵌套深度/集合/value 数量，以及 Attempt、工具、事件、Artifact
+  和每段 Chat 消息数量；Artifact 扫描最多 1,000 条。
+- 导出记录被省略的数量；超出 512 KiB 时只返回 Run 标识、状态和明确的省略原因。这样避免异常 provider metadata 或长 Chat 历史生成无界下载，同时让接收者知道内容不完整。
+- Chat 消息仍按 Run 的 message ID 边界选择；超过上限时保留最近 100 条，并写入
+  省略数。附件 payload 和 upstream candidate report 仍不导出。
+- Markdown issue 草稿设 768 KiB 上限；超限时不附 reproduction JSON 和长文本，只保留标题、类别、Run id 与省略说明。
+
+### 验证边界
+
+- 本次未运行测试或 lint；Ruby `-c` 语法检查与 diff whitespace 检查通过。RubyLLM/provider 没有被调用。格式预算行为尚无新增自动化证据；代表性真实 Run 与隐私审查仍待人工完成。
+
+## 2026-09-21 — M5.7 Chat 入队上下文与 M8 多轮导出
+
+### 变化
+
+- Chat Run 在 Chat 行锁内冻结 RubyLLM 的前序消息结构；同一 Chat 有 queued、running 或 waiting-for-approval Run 时，不再接受新的 Chat Run。
+- worker 首次请求 provider 前核对已冻结的历史。队列等待期间消息上下文发生变化时，Run 会在没有 provider 请求的情况下失败并保留该事实。
+- Chat Run 的队列拒绝现在会关闭 Run 和首个 Attempt，并返回脱敏后的错误。
+- reproduction JSON 现在包含冻结的前序消息，以及由该 Run 写入的 user、assistant、tool 消息；message ID 水位线避免把后续 Run 的内容并入旧导出。
+- 消息导出保留 provider 原始内容、工具调用 ID/参数、引用、reasoning signature 和 cache boundary。附件字节不导出，仅保留经过脱敏的附件元数据并明确标记未包含。
+
+### 验证边界
+
+- 本次没有新增或运行测试；Chat context drift、并发入队、队列拒绝、导出水位线和审批续跑的定向自动化证据仍待补齐。
+- 没有调用真实 provider。provider 状态、运行时配置变化和模型非确定性不由 reproduction JSON 固定。
+
+### 后续验证更新 — 2026-09-21
+
+- 快照改为直接读取并转换持久化 Message 记录，避免初始化 provider，也避免 RubyLLM memoized Chat 隐藏数据库中的新消息；worker 在比较前 reload Chat。
+- 审批等待时也保存当前消息结束水位线，续跑完成后再用新的结束水位线包含同一 Run 的完整消息链。
+- 针对上下文冻结/漂移、队列拒绝、同 Chat 重复提交、普通多轮导出、附件字节排除、等待审批时的导出边界及续跑完成导出增加 provider-free 回归：14 runs、135 assertions，0 failures/errors/skips。没有调用 provider。
+- 更新后的本地全量 Rails 回归通过：315 runs、2,758 assertions、0 failures/errors、2 个 opt-in provider skips；全量 RuboCop 检查 265 个文件无 offenses，Zeitwerk 通过，Brakeman 8.0.6 为 0 warnings/errors；文档契约测试通过（5 runs、143 assertions）。
+
+## 2026-09-21 — M7 可选 rubric judge 与 M8 签名 URL 脱敏
+
+### 变化
+
+- M7 增加可选自动 rubric judge。它使用冻结的模型和 prompt/schema 版本，为已完成 case 建立独立 Judgment、Run、Attempt 与成本记录；精确 JSON 结果、人工评审和原生成执行指标保持独立。
+- 只把 case input、生成输出和 rubric 发送到被选中的 judge provider；expected output、tags 和附件排除。界面披露 provider 请求范围与额外成本。队列拒绝可以在 Run/Attempt 尚未启动时恢复；已启动的超时请求记为 `submission_unknown`，不自动重放，迟到响应不能写入结果。
+- M8 reproduction export 现在保留 URL 的非敏感查询参数，同时遮盖通用签名、AWS/GCS 签名和 Azure SAS `sig`，以及敏感 token/credential 值。Markdown upstream 草稿使用同一脱敏逻辑。
+- M8 导出只含该 Run 冻结的 prompt，不含此前 Chat 消息；多轮对话复现仍不完整。该边界已同步到使用文档。
+
+### 验证边界
+
+- M7 provider-free 定向检查：24 runs、259 assertions；Ruby 文件 RuboCop 15 个文件无 offenses；Zeitwerk 通过。没有调用 judge provider。
+- M8 provider-free 导出与 Markdown 检查：4 runs、112 assertions；Rubocop 3 个 Ruby 文件无 offenses。没有调用 provider。
+- 真实 judge provider、评分校准、代表性真实 Run 审查与外部 RubyLLM issue 提交仍未验证。
+
+## 2026-09-21 — M5 failed Run approval cleanup
+
+### Changes
+
+- Failed tool synchronization no longer creates new pending Approval records. The error finalizer now adds ordinary tool errors only for local invocations that were running in the failed Run.
+- After the execution lease check, failure closes pending approvals and incomplete tool calls in the same Run transaction. Local pending calls receive a structured denial result; unresolved remote MCP calls receive a local RubyLLM Responses `mcp_approval_response` denial without executing a tool or making another provider request.
+- Agent and Chat failure handling keep transcript/tool synchronization, attempt failure and Run failure under the Run lock. A stale lease cannot close another worker's approvals.
+
+### Verification boundary
+
+- Focused provider-free checks passed: 27 runs, 307 assertions, 0 failures/errors/skips. Coverage includes local and remote Agent failure cleanup, stale approval UI/decisions, failure sync without new approvals, and stale lease fencing. Synthetic records were used; no provider request was made.
+
+## 2026-09-21 — M5.6 Preserve uncertain remote tool outcomes
+
+### Why
+
+A review found that an already-approved remote MCP call with no persisted result
+could be rewritten as denied when its Run failed. The provider may have executed
+the external action before the response was lost, so a synthetic denial would
+misstate the record and could invite a duplicate action.
+
+### Changes
+
+- Pending remote approvals still receive a local RubyLLM Responses denial; an
+  already-approved remote call with no result keeps its approved decision and
+  records `remote_tool_outcome_unknown` without a fabricated protocol response.
+- Remote calls cancelled while in progress also retain an explicit unknown
+  outcome. The same Chat is blocked from starting another Run and links the user
+  to a new Chat, preventing automatic replay of the unresolved call.
+- Added `tool_invocations.error_code` so this outcome is queryable and durable.
+
+### Verification boundary
+
+- Focused provider-free coverage: 19 runs, 199 assertions, 0 failures/errors/skips.
+  The tests verify approval preservation, no denial result, blocked same-Chat
+  continuation, and cancellation outcome labeling. No provider request was made.
+
+## 2026-09-21 — M7 rubric criteria and human ratings
+
+### Changes
+
+- Evaluation cases may define 1–8 bounded rubric criteria in the immutable revision. The rubric is copied to each case result and the local Run evaluation context; it is not added to provider prompts.
+- Completed cases accept append-only, allowlisted ratings for every configured criterion. The case view shows rating counts and denominators, including `not_applicable`, without a combined score.
+- Ratings remain separate from exact-JSON `passed`, transport/schema outcomes and provider metrics. Existing cases without a rubric continue to support overall verdicts and rationales.
+
+### Verification update
+
+- Focused rubric checks passed: 18 runs, 237 assertions, 0 failures/errors/skips. No provider calls were made.
+
+## 2026-09-21 — M7 evaluation case attachments
+
+### Changes
+
+- Cases can hold project-scoped files in immutable dataset revisions. Uploads and removals create a new revision; retained files are copied by case key, while prior revisions remain inspectable. Deleting a project removes its attachment records and purges associated blobs.
+- Uploads are limited to 5 files per case, 10 MB per file, and 50 files / 50 MB per dataset revision, with an explicit MIME allowlist. Filenames, bytes and attachment identifiers stay out of individual and provider Batch prompts; attachment metadata stays in the local Run snapshot.
+- The limits apply per revision only. There is no cumulative dataset or project storage quota, so retaining many historical revisions can grow storage usage without a project lifetime cap.
+
+### Evidence boundary
+
+- Focused provider-free attachment checks: 8 runs, 87 assertions, 0 failures/errors/skips. No provider calls were made.
+
+## 2026-09-21 — Release and milestone post-flight checks
+
+### Verification
+
+- Provider-free Rails suite passed: 294 runs, 2,524 assertions, 0 failures/errors and 2 opt-in provider tests skipped. System tests passed: 2 runs, 9 assertions.
+- Full RuboCop inspected 256 files with no offenses; Zeitwerk passed. Bundler Audit found no vulnerabilities. `bundle exec brakeman --no-pager` reported 0 warnings.
+- A production Docker image built from the current checkout with Node 24.21.0; `npm ci` reported 0 vulnerabilities and Vite completed a clean production build. This is local build evidence, not a hosted CI result.
+- No provider calls were made. Live M5/M6/M7 behavior and hosted CI remain unverified.
+
+## 2026-09-21 — M5 本地工具 Agent 能力门控
+
+### 变化
+
+- 选择本地工具的 Agent，必须在 RubyLLM chat registry 中找到精确 provider/model 条目，并由该条目显式声明 `function_calling`。
+- 同一门槛在定义保存、Run 创建前和每次 worker 从冻结快照恢复 Agent 时执行；缺失条目或能力声明都会 fail closed。
+- 定义页解释准入规则，Agent 详情页在元数据不满足时显示原因并禁用入队按钮。provider-hosted `web_search` 不受这条本地工具门槛影响。
+- Registry 声明只支持本地准入判断，不能证明实际 provider/model 接受工具调用；真实 Agent dogfood 仍待完成。
+
+### 验证边界
+
+- 新增确定性本地测试覆盖支持、不支持、缺失 registry 元数据、无本地工具跳过门槛、入队无副作用拒绝和 worker 恢复前拒绝；未调用 provider。
+
+## 2026-09-21 — M5 opt-in Agent dogfood 验收范围
+
+### 变化
+
+- 扩充 OpenRouter Agent opt-in 测试：获批执行时会核对 live Run 的成功状态、多步/hosted-search 证据、成功本地工具、报告与最终 Attempt/冻结 revision/source message/citation 的关联，并渲染 Run inspector 中的报告和 citation 链接。
+- M5.3 的真实 Agent Run 仍未验收；扩大测试断言不等于 provider dogfood 结果。
+
+### 验证边界
+
+- 只检查了默认关闭状态下的本地测试；没有设置 opt-in，也没有调用 provider。
+
+## 2026-09-21 — M8 RubyLLM 能力矩阵与兼容性边界
+
+### 变化
+
+- 新增 [CAPABILITIES.md](CAPABILITIES.md)，逐项列出 Chat、structured output、Agent tools、provider web search、embeddings、rerank、OCR、media 与 Batch 的 registry/application 准入条件。
+- 将当前 provider-free 路径、历史 OpenRouter dogfood、未验证兼容性分别记录；标明历史 Chat/structured-output/embedding/rerank 验收早于稳定版 2.0.0 pin。
+- 明确 web search 没有可靠的 model-level capability 标记；RubyLLM registry 声明不等于 provider/model 服务保证。
+- README 与文档索引新增入口；M8 的代表性真实 Run 复核和 upstream 外部流程仍未完成。
+
+### 验证边界
+
+- 文档由本地代码、测试和 TODO 历史记录交叉核对；结构化文档回归为 5 runs、141 assertions、0 failures/errors/skips；没有调用 provider。
+
+## 2026-09-21 — M7 不可变评测 case 标签
+
+### 变化
+
+- Dataset case 接受最多 12 个唯一、非空、每个不超过 40 字符的可选标签；无效类型、重复项、空白填充和超限输入会被拒绝。
+- 标签随 immutable dataset revision、comparison/execution snapshot 和子 Run 的本地 evaluation context 保存，并在当前 case、comparison 与 execution 页面展示。
+- 标签不会进入 provider prompt，不改变 exact-JSON 比较、transport/schema 统计或质量口径；在本条历史记录形成时，case 附件引用仍未实现。后续实现见本 changelog 的「2026-09-21 — M7 evaluation case attachments」条目。
+
+### 验证边界
+
+- Revision 验证、Evaluation enqueue/snapshot 与页面回归：20 runs、195 assertions、0 failures/errors/skips。
+- 修改后的完整 Rails 套件：274 runs、2,323 assertions、0 failures/errors、2 skips；完整 RuboCop 检查 248 个文件无 offense，Zeitwerk eager loading 通过。
+- Brakeman 8.0.6 扫描 79 项检查、0 warnings、0 errors；`git diff --check` 通过。只使用本地合成数据，未调用 provider。
+
+## 2026-09-21 — M7 评测 case 的追加式人工评审
+
+### 变化
+
+- 已完成的评测响应可记录 `acceptable`、`needs_work` 或 `inconclusive` 评审，附 self-reported reviewer label 与可选理由；每次提交新增记录，旧记录保留。
+- 数据集页在跨模型 case 单元格和单模型执行历史中显示评审及追加入口；Project/dataset/execution/case 逐层限定路由范围。
+- 人工评审不改写 exact-JSON `passed`、schema/transport 状态或 token、cost、latency 指标；评审标签未经身份认证，也没有 rubric 聚合或共识分数。
+- M7 仍为 `PARTIAL`；配置 provider dogfood、rubric 定义、case 附件/tag 与评审汇总仍未完成。
+
+### 验证边界
+
+- Human review 集成回归：3 runs、38 assertions、0 failures/errors/skips。
+- RuboCop 检查 6 个 Ruby 文件无 offense；仅使用本地合成数据，没有调用 provider。
+
+## 2026-09-20 — M5 outbox 确认丢失后的重复投递回归
+
+### 变化
+
+- 新增确定性回归：队列已接受 Agent Job，但 outbox 确认未能落库；delivery claim 过期后 dispatcher 再次投递相同 job 参数。
+- 验证 Run lease 在首次执行仍活跃时拒绝重复 owner，成功事务只产生一份 report Artifact；成功后的旧 delivery 进入真实 `AgentRunJob#perform` 时，会在 Agent 重建前退出。该测试覆盖至少一次投递的已知故障窗，没有改变运行时投递语义。
+- M5 仍为 `PARTIAL`；真实 provider dogfood 和生产 scheduler 运维仍未验证。
+
+### 验证边界
+
+- Agent dispatcher 与 execution lease 定向测试：8 runs、40 assertions、0 failures/errors/skips。
+- 仅使用假队列和本地数据库；没有发起真实 provider 请求，也未验证托管 CI 或生产行为。
+
+## 2026-09-20 — M7 评测指标口径与 Batch 结果分类
+
+### 变化
+
+- Evaluation case 将 provider response、schema validity 与精确 JSON match 分开记录；Batch 明确取消的请求显示为 `cancelled`，schema validation 标为未尝试。
+- 执行汇总提供 received/failed、schema valid/invalid、app-observed individual Attempt latency、token coverage，以及按币种区分的 reported/estimated cost；unknown 与 not-attempted 独立列示。
+- Provider Batch 在提交前准备失败的 case 明确记为 not attempted，不计入潜在 provider Attempt 的 token/cost 覆盖率。缺失 token usage 保持 unknown，不渲染成零。
+- p95 latency 仅在至少 20 个 individual samples 时展示；Batch Attempt 时长包含提交等待和刷新耗时，因此不进入请求延迟分布。
+- 同步 README、路线图、实现地图、系统指南和架构图；case tags/attachments、human rubric review 和 provider dogfood 继续标为未完成。
+
+### 验证边界
+
+- Outcome、metrics、Batch workflow、evaluation page 与 human-doc checks：27 runs、313 assertions、0 failures/errors/skips。
+- RuboCop 检查 9 个受影响 Ruby 文件无 offense；`git diff --check` 通过。
+- 本地 fake provider/测试队列覆盖；没有发起真实 provider 请求。本次没有重跑完整 Rails suite。
+
+## 2026-09-20 — M5 continuation recovery 文档与 M6 media action 状态
+
+### 变化
+
+- 修正系统指南中关于 Agent 审批 continuation 可能永久滞留的旧描述：delivery intent 与决定在主库事务中落入 outbox；dispatcher 会重试并重建缺失投递，恢复仍依赖 recurring scheduler 和 maintenance worker。
+- Chat 在模型目录没有对应能力时，明确禁用 image、transcription、video 和 speech 入口并说明原因。
+- Assistant 消息 partial 由后台任务等非 Chat controller 上下文渲染时，也会查询并缓存 speech 能力，避免缺失模板局部变量导致 Agent Run 失败。
+- M5 仍待真实 provider dogfood；M6 仍待真实媒体 provider 验收和 durable video-job resumption。
+
+### 验证边界
+
+- Agent Run 与媒体 focused regression：22 runs、356 assertions、0 failures/errors/skips。
+- 完整 Rails suite：257 runs、2,156 assertions、0 failures/errors、2 skips；RuboCop 检查 238 个文件无 offense；Zeitwerk 与 `git diff --check` 通过。
+- 验证使用 fake provider/本地队列；没有发起真实 provider 请求，也未验证托管 CI 或生产行为。
+
+## 2026-09-20 — M8 reproduction export 遮蔽 URL 凭据
+
+### 变化
+
+- Run snapshot 中 `https://user:password@host/path` 与 `postgresql://user:password@host/db` 的 userinfo 现在会被替换成 `REDACTED`，scheme、host、port 与 path 保留。
+- 对应检查覆盖 Run JSON 下载、upstream candidate Artifact 和包含 reproduction JSON 的 Markdown 草稿。
+- M8 仍为 `PARTIAL`；通用脱敏不能识别任意自定义秘密或私人数据，分享前仍需人工复核。
+
+### 验证边界
+
+- M8 reproduction/candidate 定向测试：7 runs、166 assertions、0 failures/errors/skips。
+- 全部使用合成快照，没有调用 provider；没有由此证明任意私有内容都能自动识别。
+
+## 2026-09-20 — M7 Provider Batch 刷新队列准入
+
+### 变化
+
+- Provider Batch 状态刷新现在检查 Active Job 是否接受了 refresh job；拒绝时显示 alert，并保留原 execution、provider ID、case、Run 与 Attempt 状态。
+- 只有队列实际接受后，页面才显示 refresh queued。
+
+### 验证边界
+
+- M7 evaluation 定向测试：24 runs、224 assertions、0 failures/errors/skips。
+- 队列结果由假 Active Job 返回值控制；实际 refresh job 未运行，没有调用 provider。
+
+## 2026-09-20 — M6 media recovery 边界回归覆盖
+
+### 变化
+
+- 补齐 speech stale queued recovery 与队列拒绝的集成覆盖；Run/Attempt 必须可见失败，且不能开始 provider 工作。
+- 补齐 video provider 晚到成功与 stale recovery 竞态覆盖；失败 Run 不得写入 video Artifact。image 同类竞态也有覆盖。
+- README、TODO、实现地图和系统说明明确列出四种操作的 queued recovery/enqueue rejection 覆盖，以及 image/video 的 late-success fence。
+- M6 仍为 `PARTIAL`；真实 provider dogfood 与 durable video resumption 仍未验收。
+
+### 验证边界
+
+- 定向 speech/media 测试：19 runs、217 assertions、0 failures/errors/skips。
+- 完整 Rails suite：256 runs、2,135 assertions、0 failures/errors、2 skips；RuboCop 检查 238 个文件无 offense。
+- 所有新增行为使用假队列与假 provider；没有发起真实 provider 请求。
+
+## 2026-09-20 — M7 跨模型 EvaluationComparison 汇总
+
+### 变化
+
+- 一次 comparison 冻结同一 dataset revision、Experiment snapshot 与 2–5 个模型清单；每个模型仍有独立 EvaluationExecution，每个 case 仍有自己的 Run/Attempt。
+- Evaluations 页面按模型汇总 pass/fail/pending 与成本状态，并在逐 case 矩阵中链接回原始 Run。未知成本保留为 Unknown。
+- Comparison 首版走 individual jobs；已有 Provider Batch 流程仍按单个 Execution 管理。
+- `.gitignore` 增加 `config/credentials/*.key`，覆盖 Rails 嵌套 credentials 解密密钥路径。
+
+### 验证边界
+
+- Evaluation service 与 request integration：16 runs、136 assertions、0 failures/errors/skips；使用本地 RubyLLM registry 和测试队列，没有调用 provider。
+- RuboCop 与 Zeitwerk 检查通过；`git diff --check` 通过。独立完整回归仍需执行。
+
+## 2026-09-20 — 补齐嵌套 Rails credentials key 忽略规则
+
+### 变化
+
+- Git 现在同时忽略 `config/*.key` 和 `config/credentials/*.key`，与 Docker build context 的密钥排除规则一致。
+- 实现地图同步说明：M5 合成状态的浏览器检查已完成，真实 Agent/provider 行为仍待验证。
+
+### 验证边界
+
+- `git check-ignore --no-index` 命中嵌套 production key 路径；根目录 Specs 与生成的 Vite manifest 仍被忽略。
+- `git diff --check` 通过（排除 owner 尚未审阅的加密 credentials 工作区文件）；没有读取密钥或发起 provider 请求。
+
+## 2026-09-20 — M7 评测任务队列拒绝处理
+
+### 变化
+
+- Evaluation individual case 与 provider Batch submission 都检查 Active Job 是否实际接受了任务。
+- Individual case 入队失败时保留 queued 状态和脱敏错误，保持可重试；后续被接受或 worker 开始处理后清除该错误。
+- Provider Batch submission job 在尚未开始时被拒绝，则把本地 execution、case Run 与 Attempt 关闭为 failed；不误记为可能已触达 provider 的 `submission_unknown`。
+- Resume 页面按实际接受数显示结果，不把被拒绝的重排任务算作已排队。
+
+### 验证边界
+
+- M5/M7 相关定向回归：28 runs、361 assertions、0 failures/errors/skips。
+- Rails 全量测试：247 runs、2,029 assertions、0 failures、0 errors、2 skips；RuboCop 检查 235 个文件无 offense，Zeitwerk eager load 通过。
+- 队列拒绝使用假 Active Job 返回值；没有调用 provider，不能证明真实 provider Batch 兼容性。
+
+## 2026-09-20 — M5 合成结果、审批与取消界面复核
+
+### 变化
+
+- Chat 顶部操作按钮在窄屏自动换行；390px 浏览器视口下 Chat 与 Run 页面均无文档级横向溢出。
+- Agent Run 状态在审批已经决定、continuation outbox 仍待 worker 处理时显示 `Continuation queued`，避免把“等 worker”误读成“还等人审批”。
+- 在隔离 test DB 中通过浏览器检查合成成功报告和 citation、待审批卡片、拒绝后的排队状态，以及取消 Run 后的 expired approval/cancelled tool 状态。
+
+### 验证边界
+
+- `AgentRunFlowTest`：3 runs、93 assertions、0 failures/errors；覆盖审批拒绝后的排队状态和取消 POST 的终态闭合。
+- 浏览器使用 Rails test adapter，没有执行 Run worker 或调用 provider。已取消记录由临时测试数据预置；取消 endpoint 的 POST 由集成测试真实提交，浏览器自动化未提交 JavaScript 确认框。
+- live provider dogfood 仍未完成；M5 保持 `PARTIAL`。本条只证明这些合成状态的界面呈现。
+
+## 2026-09-20 — M5 队列调度与 Agent outbox 就绪状态
+
+### 变化
+
+- 移除 Runtime 面板静态显示的 `healthy`，改为 `Web responding` 与独立的 `Background jobs` 状态。
+- Solid Queue 模式检查近五分钟内带 Agent dispatcher recurring task 的 Scheduler、Dispatcher，以及处理 `maintenance` 队列的 Worker；同时显示到期 Agent outbox 项目数。
+- 明确标识 Rails test adapter 不执行后台工作；队列 DB 查询失败时展示不可用状态而不泄露底层异常。
+- README、实现地图、系统指南、架构与运维说明补充状态含义和证据边界。
+
+### 验证边界
+
+- 定向测试：12 runs、108 assertions、0 failures/errors；覆盖 test adapter、全就绪和缺失调度/dispatcher/maintenance worker。
+- 使用 Rails test 环境只读查询真实 Solid Queue 表时，状态为 `needs_attention`，三个必需进程均未见近期心跳，due Agent deliveries 为 0；没有修改队列记录或调用 provider。
+- RuboCop 检查 4 个 Ruby 文件无 offense，`git diff --check` 通过。此信号反映进程心跳与 outbox 本地状态，不证明真实 provider 或生产环境恢复行为。
+
+## 2026-09-20 — M5 Agent 创建与排队页面窄屏浏览器验收
+
+### 变化
+
+- 在隔离的 Rails test 环境中手动创建 Project、保存 revision 1 的 Agent 定义，并排入一个 Agent Run。
+- 以 390px 浏览器视口检查 Agent 页面与 Run inspector；文档宽度等于视口内容宽度，没有横向溢出。
+- README、路线图和系统指南记录本次浏览器范围及验证边界。
+
+### 验证边界
+
+- 使用 `/private/tmp` 下的临时 SQLite 主库和 Rails test ActiveJob adapter。Run 显示为 `Queued`；worker 未执行，也没有调用 provider。
+- 此记录验证页面创建与排队交互，不覆盖实际 Run 输出、引用、审批/取消显示、生产 Solid Queue 调度或真实 provider 兼容性。M5 仍为 `PARTIAL`。
+
+## 2026-09-20 — M6 video 提交证据与 M8 导出脱敏
+
+### 变化
+
+- RubyLLM 2.0.0 的 video-job 提交通知现在把字符串 provider job ID 保存为 `submitted` 生命周期事件，Run 时间线可用于排障识别已提交任务。
+- Run reproduction export 对该 ID 脱敏；非 video-job 通知中的同名字段和非字符串值不会被记录。
+- 更新 M6 当前状态文档：持久化的 job ID 不恢复 RubyLLM 轮询，也不改变中断任务不自动重放的策略。
+
+### 验证边界
+
+- 全量 Rails 测试：238 runs、1,940 assertions、0 failures、0 errors、2 skips；Ruby 风格检查与 `git diff --check` 均通过。
+- 未发起真实 provider 请求；M6 live dogfood、RubyLLM public VideoJob 恢复 API、video usage/cost 规范化仍开放。
+
+## 2026-09-20 — 补齐 M5 hosted approval Agent 续跑验证与 libvips 安装提示
+
+### 变化
+
+- 新增 provider-free Agent Run 流程测试，分别覆盖 MCP hosted approval 的批准和拒绝，从本地 Approval 决定、持久 outbox、`AgentRunJob` continuation 到 RubyLLM 本地生成 `mcp_approval_response`、最终 report Artifact。
+- `bin/setup` 会检查 Ruby 是否能加载 `libvips`；缺少时提示 macOS 与 Debian/Ubuntu 安装命令后继续，不自动安装系统包。README、贡献指南和运维文档说明该 native library 只在使用 Active Storage image variants 时需要。
+- 发布清单增加双平台、有/无 `libvips` 的人工 setup 验收项。
+
+### 验证边界
+
+- 新增 M5 测试：1 run、33 assertions、0 failures/errors；全量 Rails 测试：234 runs、1,922 assertions、0 failures/errors、2 skips。
+- 测试使用合成 RubyLLM MCP ToolCall；没有发起真实 provider 请求。`bin/setup` 尚未在 macOS 与 Debian/Ubuntu 的有/无 `libvips` 环境中人工运行；M5 live dogfood、浏览器视觉验收和 hosted Docker CI 仍未完成。
+
+## 2026-09-20 — M5.5 接入 provider-hosted tool approvals
+
+### 变化
+
+- RubyLLM 持久化的 remote ToolCall 在尚无审批决定和结果时，会进入 Workbench 的待审批生命周期，创建本地 Approval 和 `waiting_for_approval` ToolInvocation。
+- Chat approval card 显示该调用由 provider 执行，并与 local tool 明确区分；审批后复用现有 ChatResponseJob 或 Agent approval outbox。
+- 批准/拒绝由 RubyLLM 2.0 Responses 转为 `mcp_approval_response` 消息并关联回 ToolCall。识别使用已存的 remote/approval/result 字段，不需要加载 provider 客户端，因此配置缺失时仍可查看已保存的 Chat。
+
+### 验证边界
+
+- 定向测试：工具审批集成与 recorder 共 13 runs、148 assertions、0 failures/errors/skips；覆盖 remote 请求展示、Chat 批准、Agent 拒绝/outbox 以及两种 protocol response 关联。
+- 全量 Rails 测试：232 runs、1,882 assertions、0 failures、0 errors、2 skips；RuboCop 检查 232 个文件无 offense；Zeitwerk 与 `git diff --check` 通过。
+- 使用合成 RubyLLM ToolCall，没有调用 provider。尚未证明 live provider 返回的审批请求和真实 continuation；M5 仍为 `PARTIAL`。
+
+## 2026-09-20 — 明确参考应用定位与本地开发边界
+
+### 变化
+
+- README 说明项目的开源参考价值位于 Rails 应用层：把 provider 调用变成可追踪的 Run、Attempt、Approval、Artifact 与恢复路径；同时明确它不是 RubyLLM 的替代框架或托管服务。
+- M5.5 的技术范围收紧为 RubyLLM 2.0 Responses/MCP approval protocol；本地合成记录覆盖不代表其他 provider-hosted tool 协议兼容，也不代表真实 provider 验收。
+- 安全与运维说明指出 provider-hosted 调用由所选 provider 执行，不受本地 Ruby tool registry allowlist 约束。
+- `bin/dev` 中 Rails 显式绑定 `127.0.0.1`；ViteRuby 从 `config/vite.json` 读取 loopback host，并把它传给 Vite server，Procfile 使用受支持的 `bin/vite dev` 命令。
+
+### 验证边界
+
+- 浏览器验收准备发现 CLI 不接受 `--host`，且 ViteRuby plugin 会用 `config/vite.json` 覆盖 `vite.config.ts` 的 host；现由 ViteRuby 配置明确绑定 loopback。隔离启动解析为 `127.0.0.1:3036`，随后因沙箱拒绝监听 socket（`EPERM`）退出，未进入视觉验收。
+- `bin/dev` 在临时副本中尝试安装缺失的 Foreman，但当前环境无法解析 `rubygems.org`；可用 Node.js 为 `24.14.0`，而项目 pin 为 `24.21.0`，因此 clean-checkout setup 仍未验证。本地 provider 未调用。
+- Rails 全量测试为 233 runs、1,889 assertions、0 failures/errors、2 skips；RuboCop 检查 232 个文件无 offense；Zeitwerk、生产资源预编译和 `git diff --check` 通过。视觉验收和 clean-checkout setup 仍开放。
+
+## 2026-09-20 — M5.4 Run 取消时清理待审批工具调用
+
+### 变化
+
+- 取消 Run 时在同一行锁事务中将待处理 Approval 标记为 `expired`，将未完成的 ToolInvocation 标记为 `cancelled`，并保留 finish/error 信息。
+- 新增 `ai.approval.expired` 和 `ai.tool.cancelled` 生命周期事件；取消后的审批决定会被终态 Run 拒绝，不会创建 continuation delivery。
+- 工具记录同步现在与 Run 锁串行化，并跳过终态 Run，防止 chat inspector 重载时从 RubyLLM 的旧 ToolCall 记录复活审批状态。
+- 公开工作流审计修正 Bundler Audit 配置为空注释导致的 YAML 解析失败；配置现在声明空 ignore 列表，不忽略任何 advisory。实现地图和发布 readiness 文案也已对齐当前 Batch 覆盖与外部门槛。
+
+### 验证边界
+
+- M5.4 定向测试：9 runs、85 assertions、0 failures/errors；单进程全量测试：224 runs、1798 assertions、0 failures/errors、2 skips。
+- 浏览器系统测试：1 run、3 assertions，通过；测试 Puma 与 ChromeDriver 仅绑定 loopback，退出后对两个端口的连通检查均失败，未发现遗留监听。
+- `bin/brakeman --no-pager` 完成，0 个安全警告；Brakeman 最新版检查也通过。Ruby advisory 数据库更新到 commit `44784c295391577f25d198a9205eae4ba73ec4da`（1245 条 advisory），`bin/bundler-audit` 未报告漏洞；`npm audit --audit-level=high` 未报告漏洞。
+- 生产资源预编译通过。Docker daemon 不可用，托管 Docker CI 尚未运行；本地 provider 和视觉验收仍未完成。
+
+## 2026-09-20 — M7/M8 provider-free 工作流验证与恢复查询修正
+
+### 变化
+
+- M7 fake Batch 流程测试发现 Store 对账把 JSON `chat_ids` 数组当作 SQL `IN` 集合查询，无法匹配 RubyLLM 的批次记录。现改为按冻结的有序 JSON 数组精确匹配，并用批次流程测试覆盖迟到 Store 记录、顺序刷新、局部取消和逐例 Artifact/Attempt/token 关联。
+- 全量测试发现 evaluation recovery 与 execution join 后，对 `started_at` 的未限定查询有歧义；恢复 job 现在显式使用 `evaluation_case_results.started_at`，避免恢复异常被结构化执行器转成 Run 失败、却留下 running case。
+- M8 增加候选报告 recorder 与请求流测试，覆盖输入校验、append-only Artifact、Attempt/版本证据、文本脱敏、二进制排除、后续导出过滤、Markdown 下载和 Run/Artifact 作用域。
+- README、路线图、实现地图、系统指南和架构说明已同步 M7/M8 本地验证状态；代表性真实 Run 审查和外部 provider 流程仍待完成。
+
+### 验证边界
+
+- M7 fake Batch：5 runs、58 assertions；M8 upstream candidate：6 runs、134 assertions；均无 failures/errors。
+- 单进程全量 Rails 测试：223 runs、1779 assertions、0 failures、0 errors、2 skips。
+- `bin/rubocop --cache false` 检查 229 个文件，无 offense；`bin/rails zeitwerk:check` 和 `git diff --check` 通过。
+- 以上均为本地、provider-free 证据；没有运行真实 provider 请求、手动浏览器视觉验收或托管 CI。Docker daemon 在本机不可用，镜像 build 尚无本地结果。
+
+## 2026-09-20 — M5.3 Agent 报告 Artifact 与开源准备
+
+### 变化
+
+- Agent Run 成功时把最终 assistant 回答保存为 Run-owned `report` Artifact，并与来源 Message、最后一个 Attempt、冻结的 Agent revision 和 citation-set Artifacts 关联；报告写入与 Run 成功状态在同一事务中提交。Run inspector 展示报告并提供引用内链。
+- 报告 recorder 按 Run 行锁序列化并发检查；同一来源 Message 重复记录会复用 Artifact。失败或取消不会生成 Agent 报告。
+- RubyLLM 固定为 `2.0.0`；根目录 `/specs/` 同时从 Git 索引和 Docker build context 排除，当前没有 Specs 文件被跟踪。
+- Docker build context 排除本机 `vendor/bundle`，生产镜像排除 `development` 和 `test` gem 组；CI 加入生产 Docker image build。Docker 示例保持 loopback 绑定并挂载持久化 storage。
+- 安全报告说明不再建议在公开 issue 中索要私密联系渠道；仓库未提供 LICENSE，等待项目所有者选择授权条款。
+
+### 验证边界
+
+- M5 定向测试：24 runs、240 assertions、0 failures、0 errors；M6 媒体与恢复定向测试：15 runs、229 assertions、0 failures、0 errors。
+- 本地加载到的 `ruby_llm` gem 为 `2.0.0`；`git check-ignore` 确认 `/specs/` 文件与 `vendor/bundle` 被忽略。
+- 本机 Docker 客户端无法连接 Docker daemon socket，因此没有本地 image build 结果；新增 CI job 的托管运行仍待发生。
+- 真实 Agent/media provider、浏览器视觉验收、GitHub 私密漏洞报告设置和项目授权选择均未验证或完成。
+
+## 2026-09-20 — M6 队列恢复、M7 批次修正与 M8 upstream 候选报告
+
+### 变化
+
+- 修正 Batch 刷新对 RubyLLM `Chat#id` 的错误依赖。现在依赖公开的提交顺序结果契约，校验冻结 case 数量、连续位置和返回条数后再映射。
+- 将提交前的 chat/provider/payload 检查留在 `preparing` 阶段；在进入 `submitting` 时再次确认所有 case、Run 与 Attempt 仍可提交。
+- stale preparation recovery 先在 execution 行锁内关闭提交入口，再失败未完成 case。对提交结果未知的请求保留 Run/Attempt；周期恢复发现迟到的 RubyLLM 本地批次记录时，会继续处理而不重提。
+- 为永久未知但始终没有本地批次 ID 的情况添加明确的本地关闭操作；操作会先警告远端请求可能仍在处理，关闭只失败本地 Run/Attempt，不取消或重提 provider 请求。
+- 手动关闭未知 Batch 时，子 Run、Attempt 和 case 结果现在在同一 Run 锁定事务中结束；遇到并发状态变化会回滚整个 execution 关闭，不会留下互相矛盾的终态。
+- M6 的 image/video/transcription/speech 失败 Attempt 改为在 Run 锁内和 Run 失败状态一起提交；队列拒绝会立即落为失败，30 分钟未被领取的 queued Run 由恢复 worker 标为 `worker_not_started`，不调用 provider。
+- Run inspector 可把人工分类、预期/实际行为、最小复现、回归测试引用及版本证据保存为 append-only report Artifact，并下载包含脱敏复现 JSON 的 Markdown 草稿。后续导出会排除旧候选报告，避免候选内容递归嵌套；文本脱敏增加 AWS access-key ID 和 key assignment 规则。
+- 项目已固定 RubyLLM `2.0.0`；仓库和 Docker context 均忽略整个 `/specs/` 目录。
+
+### 本轮核查边界
+
+- 68 个受影响 Ruby 文件通过 `ruby -c`；RuboCop 检查 66 个手写 Ruby 文件无 offense（生成的 `db/schema.rb` 和 `db/queue_schema.rb` 只做语法检查）；`git diff --check` 通过。
+- 本轮未运行测试、Rails boot、浏览器验收或 provider 请求；M7 batch 与 M8 candidate 自动化覆盖仍待补，真实 provider 兼容性仍未证明。
+
+## 2026-09-20 — M6 图像生成与音频转录实现切片
+
+### 为什么做
+
+M6 的验收包括 image、speech、transcription 和 video，但仓库只有语音路径。RubyLLM 2.0.0
+提供 image-generation 与 transcription 能力标签以及对应 API，因此继续补上无需引入输入图像编辑边界的两条异步路径。
+
+### 变化
+
+- 新增 capability-gated media catalog；图像按 `image_generation`、转录按 `transcription` 能力筛选，
+  video 按 RubyLLM 的 video 输出类型筛选，不把 image/audio 输出模态误当成其它操作支持。模型缺少
+  provider 配置时，选择项会禁用。
+- 新增异步 Image Run，冻结 prompt/provider/model，后台调用 `RubyLLM.paint(count: 1)`，校验返回为
+  PNG、JPEG、WebP、GIF 或 AVIF 后保存 Active Storage `image` Artifact，记录 MIME、大小、SHA-256、usage 和 cost。
+- 新增音频转录上传和异步 Run。只接受明确列出的常见音频扩展名/MIME，文件限制 25 MB；原始文件保存
+  为输入 `audio` Artifact，后台传递 Active Storage Blob 给 RubyLLM，成功后保存 transcript 文本 Artifact。
+- 新增异步 Video Run。RubyLLM `animate` 在后台提交/轮询并保存视频 Artifact；RubyLLM 2.0.0 没有标准化
+  video usage/cost 字段，因此费用明确显示 unknown。provider job handle 尚未持久化以供恢复。
+- 增加 media provider lifecycle 映射、成本类别、Run Inspector 媒体预览/转录文本、可取消状态与
+  30 分钟 stale-work 失败恢复。恢复不会自动重放可能已被 provider 接收的请求。
+- chat 页在没有 RubyLLM video-output model 时显示 Video unavailable。Specs 已同时从 Git 与 Docker build
+  context 排除，并移除 bundler-audit 的虚构 advisory ignore 项；`.DS_Store` 也从 Git 与 Docker
+  context 排除。
+- Dependabot 开始检查 npm 依赖，CI 增加 high/critical npm audit；Docker 操作说明列出运行时
+  `SECRET_KEY_BASE` 要求。RubyLLM initializer 允许 env-only 部署在没有 `RAILS_MASTER_KEY` 时启动，
+  只有使用加密 credentials 中的 provider keys 才需要提供 master key。
+
+### 验证边界
+
+- 本轮没有调用真实 provider，也没有运行 image/video/transcription 的自动化或浏览器验收；这三条新路径仍需本地验收。
+- RubyLLM 2.0.0 的 API 与模型 capability 来自本机已安装 gem 源码检查；这不证明任何 provider 配置实际可用。
+- M6 仍为 `PARTIAL`：新媒体本地验收、durable video-job resumption、标准 video cost/usage 与真实 provider
+  dogfood 未完成。开源分发 license 仍需项目所有者选择。
+
+## 2026-09-20 — M7 evaluation 与 M8 reproduction export 首片
+
+### 概览
+
+#### 为什么做
+
+M7 需要把离散 prompt 对比推进为可复查的数据集执行，同时保留普通 Run/Attempt 证据；M8 需要一个
+显式、可审阅的单 Run 复现导出，避免把数据库或二进制存储直接打包。
+
+#### 变化
+
+- 添加 Project 级有界 evaluation dataset 与不可变 revision；单模型执行为每个 case 创建普通 Structured
+  Run/Attempt，冻结 dataset/Experiment/model 快照，Expected JSON 不进入 provider prompt。
+- 增加逐 case 精确 JSON 判定、失败可见性、Run/Attempt/cost 链接、aggregate counts 和只重排尚未开始 case 的 Resume。
+- 对 30 分钟 stale case 显示失败且不自动重放；结构化 Attempt、Artifact、Run 终态现在由同一 Run 锁定事务完成，
+  避免 recovery 与迟到 response 产生互相矛盾的成功记录。
+- 增加每 Run reproduction JSON 下载；包括冻结上下文、版本、Attempt、脱敏工具/事件元数据和文本 Artifact，
+  清理敏感字段、常见 credential/token 表达与本机用户路径，跳过二进制内容。
+- Run inspector 显示分享审阅提示；Specs 继续留在外部目录并由 `/specs/` ignore 规则排除。
+
+#### 验证证据
+
+- M7 定向测试覆盖 immutable snapshot、exact match/mismatch、safe resume、stale recovery、晚到结构化响应的
+  fencing、case revision update、Project deletion 和页面提交；使用 fake RubyLLM response。
+- M8 导出测试注入 snapshot、Attempt、tool、event、Artifact 中的 key/token/path sentinel，检查安全 prompt
+  保留、秘密替换、二进制省略和下载响应。
+- M7/M8 定向测试：15 runs、118 assertions、0 failures、0 errors、0 skips；没有发起真实 provider 请求。
+- 全量 Rails 回归：199 runs、1,330 assertions、0 failures、0 errors、2 skips。
+- RuboCop：203 files inspected、0 offenses；Zeitwerk `All is good!`；`git diff --check` clean。
+- `RAILS_ENV=production SECRET_KEY_BASE_DUMMY=1 bin/rails assets:precompile` 完成。
+- Docker build、live provider acceptance、浏览器视觉验收和远端 CI 未在本轮验证。
+
+#### 尚未证明什么
+
+- M7 仍为 `PARTIAL`：只有一个 structured-output model 与精确 JSON evaluator；multi-model、batch、semantic judge
+  和 live provider acceptance 仍未完成。
+- M8 仍为 `PARTIAL`：通用脱敏无法识别所有自定义秘密或个人数据，分享前仍需人工检查；upstream-gap workflow
+  和 deployment readiness 未完成。
+
+## 2026-09-20 — M6 speech 首片与本地发布边界修正
+
+### 为什么做
+
+M6 需要先从一个已有回复的可检查媒体产物开始。审查同时发现完成/取消竞态、worker
+崩溃后长期停留 `running` 的风险，以及音频 usage 不能按普通文本 token 价格计算。
+
+### 变化
+
+- 添加 speech-capability 目录和 assistant 回复入口；异步 Speech Run 冻结原文、来源、
+  provider/model，RubyLLM 返回的音频保存为带 provenance metadata 的 Active Storage Artifact。
+- Run inspector 提供音频播放器与下载；RubyLLM speech instrumentation 关联到对应 Run/Attempt。
+- 用 RubyLLM `audio_tokens` 类别估算语音费用；缺少价格或 usage 时保留 unknown。
+- 音频 Artifact、Attempt 和成功 Run 在 Run 锁内的同一事务里完成，取消先提交时丢弃晚到结果。
+- 加入每分钟 stale-speech 检查：超过 30 分钟仍 running 的任务标为 `worker_interrupted`，保留失败
+  Attempt，并提示新建 Run 重试；不重放可能已被 provider 接收的请求。
+- 单容器 Docker 示例启动 Solid Queue supervisor；CI 增加 Zeitwerk 检查，CONTRIBUTING 的验证说明对齐。
+- `/specs/` 整体加入 `.gitignore`；Specs 留在外部工作目录，公开仓库不分发它。
+
+### 验证证据
+
+- Speech focused tests：17 runs、92 assertions、0 failures、0 errors、0 skips；使用 fake RubyLLM
+  response，没有调用真实 provider。
+- 语音成功/失败、来源快照、播放/下载、LifecycleEvent、取消竞态、30 分钟 recovery 和 audio token
+  费用分类均有本地自动化覆盖。
+- Docker build、真实 provider speech、浏览器视觉验收与远端 CI 尚未验证。
+- `SOLID_QUEUE_IN_PUMA=1` 和 CI Zeitwerk 的配置静态检查待随完整回归复核；公开分发 license 仍需项目
+  所有者选定。
+
+### 尚未证明什么
+
+- M6 仍为 `PARTIAL`：只实现 speech；image、video、transcription 和真实 provider 兼容性仍待完成。
+- 30 分钟是应用恢复边界，不保证 provider 会停止已接受的请求；新的 Run 可能再次产生费用。
+- M5 live provider/Agent browser 验收仍开放，但不阻止继续做本地 M6–M8 切片。
+
+## 2026-09-20 — M5 Solid Queue worker 崩溃与副作用重放演练
+
+### 为什么做
+
+确定性 Job 测试不能证明真实 Solid Queue worker 被杀后会如何恢复，也不能覆盖
+本地工具效果已提交、RubyLLM tool result 尚未写入时的崩溃窗口。
+
+### 变化
+
+- 将测试环境的 Solid Queue 放到独立 SQLite 数据库，避免混淆应用数据与队列进程状态。
+- 新增真实 fork supervisor/dispatcher/worker 的 provider-free 集成演练；worker 在
+  `save_run_note` Artifact 提交后、ToolCall result 持久化前被 SIGKILL，replacement
+  worker 通过 outbox 与过期 Run lease 重放该步骤。
+- 新增 provider-free 并发取消演练：真实 `AgentRunJob` 与 RubyLLM Chat 在 completion
+  边界暂停时由另一线程取消 Run，放行迟到响应后确认它没有写入 assistant transcript。
+- Run 删除现在先移除 Artifact、AgentRunDelivery 和 ToolInvocation，再移除被前几者引用的
+  Attempt，修正 Project 删除时的外键依赖顺序。
+- Docker 单用户示例改为挂载 named volume，文档说明 SQLite、队列状态和上传文件的保留与删除边界。
+
+### 验证证据
+
+- `PARALLEL_WORKERS=1 bin/rails test test/integration/agent_run_worker_replay_test.rb`：
+  1 run、17 assertions、0 failures、0 errors。
+- `PARALLEL_WORKERS=1 bin/rails test test/integration/agent_run_cancellation_race_test.rb`：
+  1 run、13 assertions、0 failures、0 errors。
+- RuboCop：新增集成测试和 Run model 3 个 Ruby 文件无 offenses；`git diff --check` 通过。
+- 测试结束后 `SolidQueue::Process.count` 为 0，supervisor 与 worker 均已退出。
+- 故障重放前后 Artifact id 相同、该 tool-call id 仅有一个 Artifact，Run 最终成功。
+
+### 尚未证明什么
+
+- M5 仍为 `PARTIAL`：真实 provider web search 与多步 Agent dogfood 仍待验证。
+- 本演练使用 provider-free 假 Agent 与本地 `save_run_note`；它证明此工具的已提交 Artifact 重放，不证明外部副作用或已被 provider 接收的请求可撤销。
+- 取消演练用假 completion 暂停真实 RubyLLM Chat/Agent 路径，证明迟到响应被本地 Run lease fencing 拦截；它不证明外部 provider 会停止已接受的请求。
+- Docker named-volume 用法已写入示例，镜像构建仍未在本机或远端 CI 验证。
+
 ## 2026-09-20 — M5 工具副作用重放回归与 provider dogfood 门
 
 ### 为什么做
@@ -816,5 +1480,122 @@ M2 已经能比较结构化输出，但 Chat 还不能把“模型要求执行�
 
 ## 文档校正记录
 
-暂无。发现历史记录与代码证据不一致时，在这里追加日期、错误描述、校正依据和
-受影响文档，而不是无声修改旧条目。
+暂无历史条目校正。新发现与后续验证记录如下；发现历史记录与代码证据不一致时，
+在这里追加日期、错误描述、校正依据和受影响文档，而不是无声修改旧条目。
+
+## 2026-09-20 — M6 image、video 与 transcription 本地验收
+
+### 为什么做
+
+新媒体路径已进入 Rails 请求、Solid Queue、Active Storage 和 Run inspector，但没有自动化覆盖。
+补齐 fake-provider 路径可以验证本地生命周期，也检查 RubyLLM 2.0.0 的实际返回对象契约。
+
+### 变化
+
+- 新增集成测试覆盖 image、video 与 transcription 的排队、provider/model 传递、Artifacts、usage/cost 状态和 Run inspector。
+- 修复 Image Run 对 RubyLLM.paint 返回值的处理；单张结果是 Image 对象，多张结果才可能是数组。
+- 修复 image/transcription jobs 查找 Ai::MediaCatalog 时缺失命名空间的问题。
+
+### 验证边界
+
+- bin/rails test test/integration/media_run_flow_test.rb：4 runs、80 assertions、0 failures、0 errors、0 skips。
+- RuboCop 覆盖新增测试和两个修复 job：3 files inspected、0 offenses。
+- 使用 fake RubyLLM responses；没有调用真实 provider，也没有验证浏览器视觉或 provider 专属 job 恢复。
+- M6 仍为 PARTIAL：真实 provider dogfood、video job handle 恢复和标准 video usage/cost 仍待完成。
+
+## 2026-09-20 — M5 Agent 页面与 Run inspector 本地验收
+
+### 为什么做
+
+Agent 执行和恢复已有 job/service 覆盖，但定义创建、启动 Run 与重新打开 inspector 之间缺少一条请求级集成证据。
+
+### 变化
+
+- 新增请求级集成流程，经过 Agent 列表、定义创建、定义页启动 Run、持久化 delivery 和 fake Agent worker。
+- 验证两步执行的 Attempt 与 lifecycle timeline、冻结的 model/tool/instructions revision，以及 Run reload 后 citation Artifact 与来源链接仍可见。
+- 在 Agent 定义 revision 前进后，确认已经排队的 Run 仍保留原始 revision 和 instructions。
+
+### 验证边界
+
+- bin/rails test test/integration/agent_run_flow_test.rb：1 run、52 assertions、0 failures、0 errors、0 skips。
+- 使用 fake Agent 并由 Active Job test adapter 执行；没有调用真实 provider。
+- RuboCop 覆盖该集成测试：1 file inspected、0 offenses。
+- 这证明 Rails 请求/响应和模板输出；不替代手动浏览器视觉验收。M5 仍待真实 provider dogfood。
+
+## 2026-09-20 — M6 stale media recovery 验收
+
+### 为什么做
+
+图像、转录和视频请求都可能在 provider 已接收任务后中断。恢复策略必须避免自动重放造成重复费用，并继续保留近期运行中的任务。
+
+### 变化与验证
+
+- 新增媒体恢复任务测试，验证超过 30 分钟的 image、transcription 和 video Run 均失败、记录 worker_interrupted 且不自动重排；5 分钟内的 video Run 保持运行。
+- 定向结果：1 run、25 assertions、0 failures、0 errors、0 skips；RuboCop 1 file、0 offenses。
+- 此测试验证本地恢复状态转换，不证明 provider job handle 可恢复；该能力仍待完成。
+
+
+## 2026-09-20 — M7 provider Batch 生命周期切片
+
+### 变化
+
+- 新增按模型 `structured_output` 与 `batch` 双 capability 约束的 provider Batch 提交入口；每个 case 仍保留自己的 Run、Attempt 和 Artifact。
+- 保存提交意图、provider batch ID 与状态；显式刷新时按 RubyLLM 返回的稳定顺序把结果映射回原始 case。
+- 对没有可靠 provider ID 的过期提交标记为 `submission_unknown`，并排除普通 case stale-recovery，避免重复提交；RubyLLM Active Record batch store 中已有精确 chat 映射时可恢复本地关联。
+- M6 文档明确 RubyLLM 2.0.0 没有 public `VideoJob` restore API；应用不依赖内部 RubyLLM API 假装支持可恢复。
+
+### 验证边界
+
+- 本次运行了修改 Ruby 文件的 `ruby -c` 语法检查、13 个文件的 RuboCop、schema 与 recurring YAML 语法检查以及 `git diff --check`；尚未为新 Batch 生命周期补 fake-batch 自动化，也没有运行完整测试套件。
+- 没有调用真实 provider。模型 capability 来自 RubyLLM 2.0.0 的模型注册表；实际 provider 配置、远程结果和计费行为仍待 dogfood。
+- M7 仍为 `PARTIAL`；多模型比较、语义评估和 Batch 自动化证据仍未完成。
+
+## 2026-09-20 — M5.4 审批协议闭合与 M6 媒体存储持久性
+
+### 为什么做
+
+取消等待审批的 Run 后，RubyLLM 持久化的工具调用仍可能没有对应结果，阻断后续对话。Active Storage
+使用 `attach(io:)` 时，字节上传可能延迟到数据库提交之后；provider 请求成功后存储失败会让 Run 与媒体 Artifact
+状态不一致。转录输入也需要先确认原始音频已经保存，再建立依赖它的 Run。
+
+### 变化
+
+- M5.4 按实际待处理调用清理审批，即使取消发生在 Approval 已持久化、Run 尚未进入
+  `waiting_for_approval` 的时间窗内也会保存本地拒绝结果或远程 provider 协议拒绝响应。审批与
+  ToolInvocation 进入终态；待审批取消不会留下影响后续 Chat 的取消标记。
+- M6 在 Run 成功提交前同步上传生成的 image、video、speech 字节；转录 Run 在创建前同步上传输入音频。
+  事务失败时清理未附加 Blob，并每日清理超过 24 小时仍未附加的 Blob。
+- 空白转录统一保存为受支持的空 transcript 表示，并保留 `empty_transcript` 标记。
+
+### 验证边界
+
+- M5.4 与 M6 定向回归：22 runs、268 assertions、0 failures、0 errors、0 skips。
+- 单进程全量 Rails 测试：230 runs、1,843 assertions、0 failures、0 errors、2 skips；本次变更涉及的 2 个 Ruby 文件通过 RuboCop，无 offenses。
+- `bin/rails zeitwerk:check`、recurring YAML 解析和 `git diff --check` 通过。媒体与远程工具协议路径使用 fake RubyLLM
+  对象，没有调用真实 provider；video provider-job 恢复、浏览器视觉验收和托管 Docker CI 仍待完成。
+## 2026-09-21 — M7 evaluation attachment format precheck
+
+### Why
+
+The attachment allow-list previously trusted the MIME type supplied by a
+multipart upload. A client could label arbitrary bytes as PDF, an image, JSON or
+CSV, and the invalid file would become part of a permanent dataset revision.
+
+### Changes
+
+- Check each raw upload after the existing per-file, per-case and per-revision
+  size/count bounds pass, but before creating the new revision.
+- Use the declared MIME to select a format check, falling back to the filename
+  extension only when MIME is missing or `application/octet-stream`. Check PDF
+  headers, JPEG/PNG signatures, parse JSON and CSV syntax, and require valid
+  UTF-8 text without binary control bytes. Restore the upload IO position after
+  inspection so Active Storage can consume it normally.
+- Keep downloads as `application/octet-stream`. These checks establish basic
+  format consistency; they do not fully decode PDFs/images or detect malware or
+  polyglot files.
+
+### Verification boundary
+
+- No tests or lint were run for this addition. `ruby -c` passed for the validator
+  and dataset model; `git diff --check` passed and no trailing whitespace was
+  found in the changed source/docs. No provider requests were made.

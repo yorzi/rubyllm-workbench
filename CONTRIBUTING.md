@@ -13,12 +13,19 @@ nvm use
 bin/setup --skip-server
 ```
 
+`bin/setup` may print a non-fatal notice if `libvips` is missing. Install it
+manually only if you need Active Storage image variants; see the platform
+commands in the [README](README.md#local-setup). The app can still boot without
+this optional native library.
+
 Do not commit provider credentials, generated databases, uploaded files, or
 machine-specific configuration.
 
 ## Before opening a pull request
 
-Run the relevant tests and checks for the change. The full CI checks are:
+Run the relevant tests and checks for the change. CI runs the Rails tests, system tests,
+Zeitwerk check, RuboCop, security scans, production asset build and Docker image build.
+The matching local commands are:
 
 ```sh
 bin/rails db:test:prepare test
@@ -29,6 +36,7 @@ bin/bundler-audit
 bin/brakeman --no-pager
 npm ci
 RAILS_ENV=production SECRET_KEY_BASE_DUMMY=1 bin/rails assets:precompile
+docker build --tag rubyllm-workbench:local .
 ```
 
 Describe behavior changes, migrations, security implications, and the checks
