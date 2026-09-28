@@ -1,54 +1,68 @@
-# 页面学习层（How this works）
+# In-page learning layer ("How this works")
 
-页面学习层把 Workbench 的功能入口和它的实现证据连起来：使用者仍然在原页面完成
-Model Explorer、Chat、Experiment、工具审批或 Knowledge 操作，同时可以打开一个局部
-说明面板，看到人类说明、执行步骤、版本、允许展示的源码片段、Rails/RubyLLM 官方资料
-和当前能力边界。
+The learning layer connects each feature to the code that implements it. You
+stay on the page (Model Explorer, Chat, Experiments, tool approval, Knowledge,
+Run inspector) and open a panel that shows a plain-language explanation, the
+execution steps, version labels, allowed source excerpts, official Rails and
+RubyLLM references, and the current capability boundary.
 
-## 当前实现
+## Implementation
 
-学习主题是版本控制中的静态注册表，位于 `app/services/learning/topic_registry.rb`：
+Topics live in a version-controlled static registry,
+`app/services/learning/topic_registry.rb`:
 
-- `model_explorer`：RubyLLM catalog、provider 配置状态、能力筛选与可运行性边界；
-- `chat_setup`：Project 如何建立 Chat，以及 provider/model 如何进入第一次 Run；
-- `chat_run`：Rails action 如何进入 durable Run/Attempt，再进入 RubyLLM ChatExecutor；
-- `tool_approval`：代码定义工具如何经过 allowlist、RubyLLM tool call 和 durable approval；
-- `experiment_comparison`：冻结定义、选择结构化模型、每个目标建立独立 Run 并验证 Artifact；
-- `run_inspector`：Run/Attempt 生命周期、usage/cost/diagnostics 和安全的本地事件时间线；
-- `project_boundary`：从 Projects 列表/新建开始，解释 slug 路由、资源归属、Project 级工具策略和 Run 快照；入口接在 Projects 列表与 Project inspector；
-- `knowledge_ingestion`：文本/文件如何经过 extraction、provenance 和 deterministic chunks；
-- `knowledge_search`：已就绪来源如何经过 retrieval 和可选 rerank。
+- `model_explorer`: the RubyLLM catalog, provider configuration state,
+  capability filters and what "runnable" means.
+- `chat_setup`: how a Project creates a Chat and how the provider/model reach
+  the first Run.
+- `chat_run`: how a Rails action becomes a durable Run and Attempt and reaches
+  `Ai::ChatExecutor`.
+- `tool_approval`: how code-defined tools pass the allowlist, a RubyLLM tool
+  call and a durable approval.
+- `experiment_comparison`: frozen definitions, model selection, one Run per
+  target and validated Artifacts.
+- `run_inspector`: the Run/Attempt lifecycle, usage, cost, diagnostics and the
+  local event timeline.
+- `project_boundary`: slug routing, resource ownership, Project tool policy and
+  Run snapshots.
+- `knowledge_ingestion`: extraction, provenance and deterministic chunks.
+- `knowledge_search`: retrieval over ready sources and optional rerank.
 
-页面不让运行时模型生成系统解释，也不提供任意文件浏览器。每个主题只引用显式的
-源码路径、行号和 anchor；`Learning::SourceReader` 只允许仓库内的固定顶层目录、限制
-片段长度，并要求 anchor 仍然存在。源码行号或 anchor 漂移时，注册表测试会失败。
+No model generates these explanations at runtime, and there is no file
+browser. Each topic cites explicit source paths, line ranges and an anchor
+string. `Learning::SourceReader` reads only from fixed top-level directories,
+caps excerpt length at 80 lines, refuses paths that could expose credentials,
+and requires the anchor to still appear in the range. When code moves, the
+registry test fails until the reference is updated.
 
-主要页面入口与解释主题保持一对多而非一按钮一主题：Projects 列表与 Project workspace
-共用 Project boundary 说明；Run Inspector 与 Chat/Knowledge 则按创建、执行、检查、摄入和
-检索等不同阶段分别链接，避免把相邻但不同的生命周期压成一篇笼统说明。
+Page entries map to topics by lifecycle stage rather than one topic per
+button: the Projects list and Project workspace share the Project boundary
+topic, while Chat, Run inspector and Knowledge link separate topics for
+creating, executing, inspecting, ingesting and searching.
 
-## 内容合同
+## Content contract
 
-一个主题至少要说明：
+Each topic explains:
 
-1. 人正在使用的功能和它的 Rails 入口；
-2. 关键应用服务、队列或 RubyLLM 边界的顺序；
-3. 使用者可以在数据库/Inspector 中看到的证据；
-4. 当前实现明确不能宣称的内容；
-5. Rails 与 RubyLLM 的官方背景资料。
+1. the feature the person is using and its Rails entry point;
+2. the order of the key services, jobs and RubyLLM boundaries;
+3. the evidence visible in the database or inspector;
+4. what the implementation explicitly does not claim;
+5. official Rails and RubyLLM background reading.
 
-版本标签来自当前进程和仓库锁定状态：Rails 版本、RubyLLM 版本、应用版本。它们描述
-“这段说明对应哪个实现版本”，不等于部署证明或 provider SLA。
+Version labels come from the running process and the lockfile (Rails, RubyLLM,
+application version). They say which implementation the text describes; they
+are not deployment proof or a provider SLA.
 
-## 维护协议
+## Maintenance
 
-- 代码路径变更时，同一主题迭代必须更新 registry 的源码引用、说明和测试。
-- 新增主题时，先确定稳定的 topic key，再接入实际页面；不要为每个按钮复制一套说明。
-- 同一功能存在多个阶段时，按可验证边界拆题：例如 Knowledge ingestion 负责“如何进入”，
-  Knowledge search 负责“如何被检索”；Experiment comparison 负责“如何比较”，Run Inspector
-  负责“如何检查一次执行”。
-- 页面说明描述当前行为，并与实现文档保持一致。说明不能替代代码、迁移或验证证据。
-- 源码片段不得包含 credentials、原始 prompt、provider secret、未脱敏 tool payload 或
-  任意用户内容。
-- 说明中的“Implemented/Partial/Deferred”必须与 `README.md`、`SYSTEM_GUIDE.md`、
-  `ARCHITECTURE.md` 和 `IMPLEMENTATION_MAP.md` 的当前边界一致。
+- When a code path changes, update the topic's references, text and tests in
+  the same change.
+- Add a topic by choosing a stable key first, then wire it into real pages; do
+  not copy explanations per button.
+- Split multi-stage features at verifiable boundaries (ingestion vs search,
+  comparison vs inspection).
+- Excerpts must never contain credentials, raw prompts, provider secrets,
+  unredacted tool payloads or user content.
+- Status wording must match [SYSTEM_GUIDE.md](SYSTEM_GUIDE.md) and
+  [CAPABILITIES.md](CAPABILITIES.md).

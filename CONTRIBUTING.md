@@ -1,48 +1,72 @@
 # Contributing
 
-RubyLLM Workbench is a local-first reference app. Contributions should keep the
-documented capability boundary and verification evidence aligned with the code.
+Thanks for helping. RubyLLM Workbench is a local-first reference application,
+so the bar is clarity: code a Rails developer can read and copy, behavior
+covered by tests, and documentation that matches what the code does.
+
+## Scope
+
+The v0.1 scope is frozen (see [ROADMAP.md](ROADMAP.md)). Bug fixes,
+documentation, tests and evidence (live checks of existing features) are
+always welcome. For a new feature, open an issue first so we can agree on
+whether it fits a reference app.
 
 ## Local setup
 
-Install Ruby `4.0.2` and Node.js `24.21.0`, then run:
+Install Ruby `4.0.2` and Node.js `24.21.0`, then:
 
 ```sh
-nvm install
-nvm use
+nvm install && nvm use
 bin/setup --skip-server
+bin/rails workbench:demo     # optional synthetic data, no provider keys needed
 ```
 
-`bin/setup` may print a non-fatal notice if `libvips` is missing. Install it
-manually only if you need Active Storage image variants; see the platform
-commands in the [README](README.md#local-setup). The app can still boot without
-this optional native library.
+`bin/setup` prints a non-fatal notice if `libvips` is missing; install it only
+if you need Active Storage image variants.
 
-Do not commit provider credentials, generated databases, uploaded files, or
-machine-specific configuration.
+Never commit provider credentials, `config/credentials.yml.enc` or its key,
+databases, uploads or machine-specific configuration.
 
 ## Before opening a pull request
 
-Run the relevant tests and checks for the change. CI runs the Rails tests, system tests,
-Zeitwerk check, RuboCop, security scans, production asset build and Docker image build.
-The matching local commands are:
+Run the checks CI runs:
 
 ```sh
 bin/rails db:test:prepare test
 bin/rails test:system
 bin/rails zeitwerk:check
-bin/rubocop --cache false
-bin/bundler-audit
+bin/rubocop
 bin/brakeman --no-pager
-npm ci
+bin/bundler-audit
+npm ci && npm audit
 RAILS_ENV=production SECRET_KEY_BASE_DUMMY=1 bin/rails assets:precompile
 docker build --tag rubyllm-workbench:local .
 ```
 
-Describe behavior changes, migrations, security implications, and the checks
-you actually ran. Keep provider calls opt-in and identify any check that needs
-provider credentials or external services.
+Tests must never call a provider; use the fakes and doubles already in
+`test/`. If your change touches provider behavior, also run the opt-in live
+suite (`bin/dogfood`, which needs your own key and may cost a few cents) and
+record the result in [docs/CAPABILITIES.md](docs/CAPABILITIES.md).
 
-Open an issue for a bug or a focused proposal, then submit a pull request with
-the relevant tests and documentation updates. Do not include secret values or
-private user data in issues, logs, screenshots, or test fixtures.
+## Expectations
+
+- **Records stay honest.** Never overwrite a failed Attempt, rewrite a Run's
+  input snapshot, or replay provider work that may already have been accepted.
+- **Docs move with code.** Update the affected guide, diagram and changelog in
+  the same commit. Test counts and live evidence belong only in
+  `docs/CAPABILITIES.md`.
+- **RubyLLM stays the boundary.** No direct provider SDK or HTTP calls. If you
+  need a private RubyLLM API, add it to `Ai::RubyLlmInternals` with a contract
+  test, and prefer an upstream fix.
+- **Experimental features are labelled** in the UI and docs until they have
+  live evidence.
+- **Small, focused commits** with messages that say why.
+
+In the pull request, describe behavior changes, migrations, security
+implications and the checks you actually ran. Keep secrets and private data
+out of issues, logs, screenshots and fixtures.
+
+## Reporting security issues
+
+Please do not open public issues for vulnerabilities; follow
+[SECURITY.md](SECURITY.md).

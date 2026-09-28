@@ -1,4 +1,9 @@
-# Rails / RubyLLM upgrade review — 2026-09-26
+# Rails / RubyLLM upgrade review: 2026-09-26
+
+> Status update, 2026-09-28: the RubyLLM Batch index defect described below was
+> fixed upstream in crmne/ruby_llm#993 (merged 2026-09-26, not yet released).
+> Hosted CI and a live provider run have since passed; current evidence is in
+> [CAPABILITIES.md](CAPABILITIES.md). This review is kept as a dated record.
 
 ## Versions
 
@@ -29,7 +34,7 @@ exported messages backwards and could select the wrong end of long histories.
 reverses them into chronological order. Existing multi-turn and approval
 continuation regressions now pass.
 
-### RubyLLM 2.0.0 Batch index validation — upstream candidate
+### RubyLLM 2.0.0 Batch index validation - upstream candidate
 
 The installed, unmodified gem accepts invalid normalized result indices before
 delivering records. A duplicate overwrites a slot, a negative integer uses Ruby

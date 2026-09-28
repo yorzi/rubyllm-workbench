@@ -1,46 +1,117 @@
 # Capability matrix
 
-Updated: 2026-09-28 · RubyLLM 2.0.0
+Updated: 2026-09-28 · Rails 8.1.4 · RubyLLM 2.0.0
 
-This matrix describes when Workbench offers each operation and what its model
-catalog checks. RubyLLM registry metadata is a selection hint: it does not prove
-that a particular provider account, endpoint, model revision, plan or region will
-accept a request. The last column separates local implementation evidence from
-provider evidence.
+This is the single place where Workbench records **what each operation
+admits** and **what evidence exists for it**. Other documents link here rather
+than repeating test counts or dogfood results.
 
-| Workbench operation | Admission rule | Implementation and evidence boundary |
+Two kinds of evidence are kept apart:
+
+- **Local**: deterministic tests with fake providers. They prove Workbench's
+  own behavior (records, states, recovery, redaction), not provider
+  compatibility.
+- **Live**: a real provider request, recorded with its date, model and cost.
+
+RubyLLM registry metadata is only an admission hint. A model appearing in a
+picker means its registry entry passes the rule below and its provider is
+configured. It does not prove that a provider account, model revision, plan or
+region will accept the request.
+
+## Operations
+
+| Operation | Admission rule | Local evidence | Live evidence (2026-09-28 unless noted) |
+| --- | --- | --- | --- |
+| Chat (streaming) | Any configured chat model in the RubyLLM registry. | Run/Attempt lifecycle, streaming, frozen context, drift rejection, queue rejection, cancellation. | Passed: `nvidia/nemotron-3-super-120b-a12b:free`. |
+| Structured output | Configured model declaring `structured_output`; batch-suffixed models excluded. | Schema validation, JSON Artifacts, comparison executions. | Passed: `nvidia/nemotron-3-super-120b-a12b:free`. A valid exact JSON match does not measure semantic quality. |
+| Local tools with approval | Tool enabled for the Project. Saved Agents with local tools require the exact provider/model registry entry to explicitly declare `function_calling`, checked on save, on enqueue and on every worker restore. | Approval, denial, expiry, cancellation, failed-Run closure, unknown remote outcomes, parallel-call policy. | Passed: `save_run_note` approval and continuation on `nvidia/nemotron-3-super-120b-a12b:free` and `openai/gpt-5-nano`. Parallel tool calls not tested live. |
+| Provider web search | `web_search` is an allowlisted RubyLLM provider tool. There is no reliable Workbench model-level web-search capability gate; the provider may reject the tool or the model may not use it. | Snapshotting, citation Artifacts, usage-only tool accounting. | Passed in an Agent Run on `openai/gpt-5-nano`: search counted, citation stored. Requires the OpenRouter streaming workaround below. |
+| Saved Agents | As for local tools; provider tools are outside the local-tool gate. | Durable outbox, execution lease and generation fencing, crash/replay drill, cancellation race, empty-answer guard, research report. | Passed: two-step Agent (`project_snapshot`, then a searched, cited answer) on `openai/gpt-5-nano`. |
+| Knowledge embeddings | RubyLLM embedding-model registry plus provider configuration. | Chunking, checksums, stale-vector skipping, vector adapters, lexical/semantic/hybrid retrieval, explicit degradation. | Passed: `liquid/lfm-2.5-embedding-350m:free`, 1,024 dimensions. Cross-provider vectors and retrieval quality are not established. |
+| Knowledge rerank | Registry model whose output modality includes `rerank`, plus configuration. | Pre/post rank kept alongside unchanged retrieval evidence. | Passed: `nvidia/llama-nemotron-rerank-vl-1b-v2:free`. A 2026-09-17 run once promoted an off-topic chunk; rerank scores need human review. |
+| Document OCR | Model declares `ocr` and its provider is configured. | Local extraction and provenance Artifacts. | Not tested: no OCR model is available through OpenRouter's registry entries. |
+| Evaluation comparison | 2-5 configured models declaring `structured_output`. | Frozen revision and Experiment snapshot, per-case Runs, outcome metrics, queue rejection, recovery. | Passed: 2 models x 3 cases (`nvidia/nemotron-3-super-120b-a12b:free`, `dots-studio/dots-3-note-preview:free`). |
+| Rubric judge (experimental) | Optional; runs only after a successful case output. | Prompt isolation (expected output, tags and attachments are never sent), separate Run/Attempt/cost, recovery, late-response fencing. | Passed: judgments completed on the comparison above. Uncalibrated; never changes exact-match results. |
+| Human reviews | Completed case outputs; ratings from a fixed allowlist. | Append-only reviews and per-criterion ratings. | Not applicable (no provider). |
+| Case attachments | Up to 5 files per case, 50 per revision, 10 MB each, 50 MB per revision. | Format prechecks (PDF header, JPEG/PNG signatures, JSON, CSV, UTF-8 text), revision ownership, purge on Project deletion. Excluded from every provider prompt. | Not applicable. The checks do not fully decode files or scan for malware; there is no lifetime storage cap. |
+| Provider Batch evaluation | Model declares `structured_output` and `batch`, and the provider reports `batches?`; one provider per execution. | Submission, refresh, ordered reconciliation, malformed-index rejection. | Not tested. No live provider Batch compatibility is claimed. |
+| Speech generation (experimental) | Model declares `speech_generation`; optional provider voice identifier. | Audio Artifacts, storage failure, recovery, cancellation. | Passed: `deepgram/flux-tts:free` with voice `flux-bree-en`. |
+| Audio transcription (experimental) | Model declares `transcription`. | Source-audio and transcript Artifacts, blank-transcript handling. | Passed: `mistralai/voxtral-mini-3b-2507` transcribed the speech output word for word. |
+| Image generation (experimental) | Model declares `image_generation`. | Image Artifacts, storage failure, late-response fencing. | Passed: `black-forest-labs/flux.2-klein-4b`, reported cost $0.014. |
+| Video generation (experimental) | Model type is `video` with video output. | Submission, polling, provider job reference in the timeline. | Not tested. RubyLLM 2.0.0 has no public API to restore a `VideoJob`, so durable resumption is open. |
+| Run reproduction and event export | Explicit per-Run download; no provider request. | Schema v2 budgets (512 KiB, 100,000 characters, latest 100 messages, bounded nesting), redaction, omission reporting. | Not applicable. Redaction is best-effort; review a real Run's export before sharing it. |
+| Upstream gap reports (experimental) | Manual classification of a Run. | Append-only candidates, redacted Markdown issue drafts. | Not applicable. Drafts need a manual privacy review. |
+
+## Live dogfood record
+
+The 2026-09-28 run used `bin/dogfood --paid` (see
+[operations](OPERATIONS.md#live-provider-dogfood)) against OpenRouter. Every
+scenario drives the real controllers, jobs and services and asserts on the
+durable records. Each scenario passed at least once that day; free models
+intermittently answered "No endpoints found" or "Service temporarily
+overloaded", so a single run is not guaranteed green. Total OpenRouter spend
+for the session, including diagnostics, was **$0.33**.
+
+Earlier live checks (2026-09-16/17: chat, structured output, embeddings,
+rerank) predate the stable 2.0.0 pin and are superseded by this record.
+
+### Defects the live run found
+
+All are fixed and covered by tests.
+
+- **Speech Runs could not choose a voice.** Some TTS models have no default
+  voice. Speech Runs now accept an optional, validated voice identifier.
+- **Hosted tool use was invisible for OpenRouter.** OpenRouter reports hosted
+  search only as usage counters. Runs now record `provider_tool_usage`.
+- **Streamed OpenRouter responses lost citations** (RubyLLM 2.0.0 bug).
+  OpenRouter's streaming `build_chunk` override omits `citations:` and
+  `server_tool_use:`. Reproduce with
+  `bundle exec ruby script/diagnostics/ruby_llm_openrouter_stream_citations.rb`.
+  A self-disabling workaround in `lib/ruby_llm_workarounds/` restores both; an
+  upstream fix with specs is prepared.
+- **Attempts never stored a finish reason**, and an Agent whose reasoning
+  model spent its output budget finished "successfully" with an empty report.
+  Attempts now record `finish_reason`, and such a Run fails with the cause.
+
+### Known provider and registry caveats
+
+- RubyLLM 2.0.0's bundled registry lists models OpenRouter no longer serves
+  (for example `nex-agi/*:free`) and understates others (it marks
+  `google/gemma-4-31b-it:free` as lacking structured output). Pickers can
+  therefore offer models that fail at request time.
+- Workbench cost figures come from token pricing. OpenRouter bills hosted
+  search separately, so Runs that search understate their cost.
+- Free models are rate-limited and change availability without notice.
+
+## RubyLLM workarounds
+
+| Workaround | Why | Remove when |
 | --- | --- | --- |
-| Chat and model explorer | RubyLLM chat-model registry; `Ai::ModelCatalog` reports provider configuration. The explorer filters `streaming`, `vision`, `function_calling` and `structured_output`. | Persisted Chat Runs and declared capability badges. An OpenRouter `openrouter/free` Chat Run succeeded on 2026-09-16; this historical single-model run predates the stable 2.0.0 pin and does not verify every registry model. |
-| Structured Experiment and evaluation | Interactive, configured models declaring `structured_output`; batch-suffixed models are excluded from individual selections. | Schema-constrained Runs and local JSON/schema checks. Two OpenRouter free targets produced valid JSON Artifacts on 2026-09-16, before the stable 2.0.0 pin. A valid exact JSON match does not measure semantic quality or guarantee arbitrary schemas. |
-| Evaluation review and optional rubric judge | Optional case rubric with 1–8 bounded criteria; completed human reviews rate every criterion using a fixed allowlist. The opt-in automated judge runs only after a successful output. | Human reviews are append-only; focused checks passed: 18 runs, 237 assertions. The optional judge uses a separate Run/Attempt and cost record; focused prompt-isolation, queue/recovery and late-response checks passed: 24 runs, 259 assertions. It sends case input, generated output and rubric to the selected provider, excluding expected output, tags and attachments. Ratings do not change exact JSON outcomes or provider metrics and are not a calibrated quality score. No provider dogfood has been run. |
-| Evaluation case attachments | Attach files to a case through its project-scoped dataset; adding or removing files creates an immutable revision. | Up to 5 files per case and 50 files per dataset revision; 10 MB each and 50 MB total per revision. The multipart MIME selects the format check; when missing or `application/octet-stream`, filename extension selects the check. Before a new revision is created, uploads are checked for a PDF header, JPEG/PNG signatures, valid JSON, CSV syntax, or UTF-8 text without binary control bytes. These checks establish basic format consistency, not that PDFs/images fully decode or are free of malicious/polyglot content. Prior revisions retain their files; project deletion removes attachment rows and purges blobs. Files and their local metadata are excluded from individual and Batch provider prompts. Focused provider-free coverage passed for the earlier attachment slice: 8 runs, 87 assertions; the added content validator has not been tested in this pass. The storage bound is per revision; there is no lifetime dataset/project storage cap. App limits apply after multipart parsing, so a network deployment also needs ingress request-body and part-count limits. |
-| Saved Agent tools | Local tool keys must be enabled for the Project; when local tools are selected, the exact provider/model pair must appear in the RubyLLM chat registry and explicitly declare `function_calling`. The same gate runs during definition validation, before Run records are created, and before each worker restoration. Provider tools are allowlisted to `web_search` and are outside this local-tool gate. | Deterministic tests cover supported, unsupported and missing registry metadata at each boundary. Registry metadata is only an admission hint; provider/model acceptance and live Agent behavior remain unverified. |
-| Provider web search | `web_search` is an allowlisted RubyLLM provider tool. There is no reliable Workbench model-level web-search capability gate. | Opt-in request snapshots, tool-call handling and citation recording have local coverage. A live integration test is opt-in but has not been run for this slice; the provider may reject the tool or the model may not invoke it. |
-| Knowledge embeddings | RubyLLM embedding-model registry plus provider configuration. | Optional embedding generation and local lexical/semantic/hybrid retrieval. On 2026-09-17 OpenRouter embedded two chunks at 1,024 dimensions; this predates the stable 2.0.0 pin and covers one provider/model only. Cross-provider vectors and retrieval quality are not established. |
-| Knowledge reranking | Registry model whose output modality includes `rerank`, plus provider configuration. | Pre-rerank evidence remains available. A 2026-09-17 OpenRouter run reranked three chunks but promoted an off-topic chunk over a relevant result; this predates the stable pin and is a quality caveat, not a guarantee. Other providers and larger candidate sets remain unverified. |
-| Document OCR | Model declares `ocr` and provider configuration is present. | Local extraction and provenance paths are covered; live OCR dogfood and page-level provenance remain open. |
-| Speech generation | Model declares `speech_generation` and provider configuration is present. | Fake-provider Runs persist downloadable audio Artifacts. Live format, voice, playback, usage/cost and provider compatibility remain unverified. |
-| Image generation | Model declares `image_generation` and provider configuration is present. | Fake-provider Runs persist image Artifacts. No live endpoint, output quality, MIME/size or usage evidence is claimed. |
-| Video generation | Model type is `video` and output modality includes `video`; provider configuration is present. | Fake-provider submission/polling persists video Artifacts and a provider job reference. RubyLLM 2.0.0 has no public API to restore `VideoJob` from that ID; durable resumption and live compatibility remain open. |
-| Audio transcription | Model declares `transcription` and provider configuration is present. | Fake-provider Runs retain source-audio and transcript Artifacts. Live language, format, quality and usage compatibility remain unverified. |
-| Provider Batch evaluation | Configured model declares both `structured_output` and `batch`; the provider class must also report `batches?`; one provider per Batch execution. | Fake Batch coverage exercises submission, refresh and ordered Run/Attempt reconciliation. No live provider Batch compatibility is claimed. |
-| Run reproduction export | Explicit per-Run download; no provider request is made. | Export schema v2 caps formatted JSON at 512 KiB, aggregate text at 100,000 characters, nested values by depth/item/node limits, record sections at 100 items and artifact scanning at 1,000 rows. Chat history sections retain at most the latest 100 messages. JSON reports omitted counts; if the byte cap is exceeded, it returns a small Run summary with an omission reason. Markdown issue drafts are capped at 768 KiB. Redaction remains best-effort and real-Run privacy review is still required. |
+| `Ai::EvaluationBatchResults` rejects duplicate, negative and out-of-range Batch result indices before delivery. | RubyLLM 2.0.0 accepts them. Fixed upstream in crmne/ruby_llm#993 (merged 2026-09-26, unreleased). | A RubyLLM release containing #993 is pinned. |
+| `lib/ruby_llm_workarounds/openrouter_stream_evidence.rb` restores streamed OpenRouter citations and server tool usage. | RubyLLM 2.0.0 drops them. Installs only while a boot-time probe shows the gap. | A contract test fails, signalling the upstream parser maps them. |
 
-The M1/M2 Chat and structured-output runs and the M4 embedding/rerank runs are
-historical evidence from 2026-09-16/17, before RubyLLM 2.0.0 became the project
-pin on 2026-09-20. They do not establish acceptance on the current stable
-dependency. Current outstanding provider checks are listed in [TODO.md](../TODO.md).
+`Ai::RubyLlmInternals` lists every private RubyLLM seam Workbench relies on, and
+`test/services/ai/ruby_llm_internals_test.rb` fails when one moves.
+
+## Verification snapshot
+
+2026-09-28, Rails 8.1.4, RubyLLM 2.0.0:
+
+| Check | Result |
+| --- | --- |
+| Rails suite | 365 runs, 2,932 assertions, 0 failures, 0 errors, 8 skips (the opt-in live dogfood scenarios) |
+| Selenium system tests | 2 runs, 9 assertions |
+| RuboCop, Zeitwerk, Brakeman, bundler-audit, npm audit | Clean |
+| Hosted CI (GitHub Actions) | Green: tests, system tests, lint, security scans, production assets, Docker build |
+
+Re-run with the commands in [operations](OPERATIONS.md#verification).
 
 ## Reading this matrix
 
-- A model appearing in a picker means its registry metadata passes the named
-  selection rule and the required provider configuration is present where the
-  picker requires it. It is not a provider compatibility certification.
-- Workbench tests use deterministic local responses for workflow coverage. They
-  do not count as provider dogfood. Current provider and deployment evidence is
-  tracked in [TODO.md](../TODO.md) and the [operations guide](OPERATIONS.md).
+- Deterministic tests use fake providers. They do not count as live evidence.
 - Capability metadata changes with the RubyLLM registry. This file describes
-  Workbench's selection policy, not a frozen inventory of every provider model.
+  Workbench's admission policy, not a frozen inventory of provider models.
+- A "Passed" live row covers the named model on the named date only.
 
 Implementation sources: [ModelCatalog](../app/services/ai/model_catalog.rb),
 [EmbeddingCatalog](../app/services/ai/knowledge/embedding_catalog.rb),
@@ -48,74 +119,7 @@ Implementation sources: [ModelCatalog](../app/services/ai/model_catalog.rb),
 [OcrCatalog](../app/services/ai/knowledge/ocr_catalog.rb),
 [SpeechCatalog](../app/services/ai/speech_catalog.rb),
 [MediaCatalog](../app/services/ai/media_catalog.rb),
-[AgentDefinition](../app/models/agent_definition.rb),
-[AgentModelEligibility](../app/services/ai/agent_model_eligibility.rb), and
-[AgentRunExecutor](../app/services/ai/agent_run_executor.rb),
+[AgentModelEligibility](../app/services/ai/agent_model_eligibility.rb),
 [ChatTooling](../app/services/ai/chat_tooling.rb),
-[EvaluationExecutor](../app/services/ai/evaluation_executor.rb), and
-[EvaluationBatchSubmissionJob](../app/jobs/evaluation_batch_submission_job.rb).
-
-## 2026-09-26 local regression update
-
-Rails 8.1.4 / RubyLLM 2.0.0: 322 tests, 2,818 assertions, zero failures/errors, two opt-in live-provider skips. Browser tests: 2 tests / 9 assertions. Evaluation Batch collection rejects malformed indices before delivery; reproduction export preserves chronological Run messages. These checks do not establish live media, Agent search, Batch provider or judge compatibility. See [upgrade review](UPGRADE_REVIEW_2026-09-26.md).
-
-## 2026-09-27 — Run event export
-
-Run event download is locally implemented with chronological ordering, related record IDs, redaction, event-count and byte limits. Export budget tests cover nested inputs, escaped bytes, Unicode text, latest messages, bounded Artifact scanning and oversized issue drafts. These are local evidence only; provider-native tracing and historical backfill remain unimplemented.
-
-## 2026-09-28 — live provider dogfood on RubyLLM 2.0.0
-
-First live acceptance on the stable pin, run with `bin/dogfood --paid` (see
-[operations](OPERATIONS.md#live-provider-dogfood)). Every scenario drives the
-real controllers, jobs and services against OpenRouter and asserts on the
-durable records. Each scenario below passed at least once on this date; free
-models intermittently returned "No endpoints found" or "Service temporarily
-overloaded", so single runs are not guaranteed green. Total OpenRouter spend
-for the whole session, including diagnostics: **$0.33**.
-
-| Scenario | Model(s) | Evidence |
-| --- | --- | --- |
-| Streaming Chat | `nvidia/nemotron-3-super-120b-a12b:free` | Assistant reply persisted; time to first output recorded. |
-| Structured output | `nvidia/nemotron-3-super-120b-a12b:free` | Schema-valid JSON Artifact. |
-| Local tool approval and continuation | `nvidia/nemotron-3-super-120b-a12b:free`, `openai/gpt-5-nano` | Run paused for `save_run_note`; approval over HTTP resumed it; report Artifact written. |
-| Agent with hosted web search | `openai/gpt-5-nano` | Two steps (`project_snapshot`, then a searched answer); search usage counted, citation Artifact and research report stored. |
-| Embeddings, semantic search, rerank | `liquid/lfm-2.5-embedding-350m:free`, `nvidia/llama-nemotron-rerank-vl-1b-v2:free` | 3 chunks at 1,024 dimensions; semantic and reranked top hit both relevant. |
-| Evaluation comparison with rubric judge | `nvidia/nemotron-3-super-120b-a12b:free`, `dots-studio/dots-3-note-preview:free` | 2 models x 3 cases, all cases terminal, schema-valid answers, judgments completed. |
-| Speech then transcription round trip | `deepgram/flux-tts:free` (voice `flux-bree-en`), `mistralai/voxtral-mini-3b-2507` | MP3 Artifact; transcript matched the source text word for word. |
-| Image generation | `black-forest-labs/flux.2-klein-4b` | JPEG Artifact, reported cost $0.014. |
-
-Not covered: video generation, OCR (no OpenRouter model in the registry),
-provider Batch (OpenRouter does not advertise it) and parallel tool calls.
-
-### Defects found and fixed by this run
-
-- **Speech Runs could not choose a voice.** Some TTS models (for example
-  `deepgram/flux-tts`) have no default voice and reject the request. Speech Runs
-  now accept an optional, validated voice identifier that is frozen in the
-  Run snapshot.
-- **Hosted tool use was invisible for OpenRouter.** OpenRouter reports hosted
-  search only as usage counters, never as tool-call blocks. Runs now record
-  `provider_tool_usage` counters (for example `web_search_requests`) and the
-  Run inspector shows them.
-- **Streamed OpenRouter responses lost citations (RubyLLM 2.0.0 bug).**
-  OpenRouter's streaming `build_chunk` override omits the `citations:` and
-  `server_tool_use:` fields that the generic parser maps. Reproduce with
-  `bundle exec ruby script/diagnostics/ruby_llm_openrouter_stream_citations.rb`.
-  A self-disabling workaround in `lib/ruby_llm_workarounds/` restores both
-  until upstream fixes it; a test fails once the upstream parser maps them.
-- **Attempts never stored a finish reason**, and an Agent whose reasoning
-  model spent its whole output budget finished "successfully" with an empty
-  report. Attempts now record `finish_reason`, and such a Run fails with the
-  cause.
-- **Registry drift.** RubyLLM 2.0.0's bundled registry lists models OpenRouter
-  no longer serves (`nex-agi/*:free`) and understates others (it marks
-  `google/gemma-4-31b-it:free` as lacking structured output, which the live
-  API offers). Pickers built from the registry can therefore offer models
-  that fail at request time.
-
-### Remaining caveats
-
-- Workbench cost figures come from token pricing. OpenRouter bills hosted
-  search separately and Workbench does not yet record that fee, so Runs that
-  search understate their cost.
-- Free models are rate-limited and change availability without notice.
+[EvaluationExecutor](../app/services/ai/evaluation_executor.rb) and
+[ProviderToolActivity](../app/services/ai/provider_tool_activity.rb).

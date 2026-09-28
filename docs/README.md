@@ -1,91 +1,63 @@
-# RubyLLM Workbench documentation
+# Documentation
 
-This documentation set explains the application's current behavior, evidence,
-limits, and planned growth. The repository can be understood and run without
-files outside this checkout.
+This set explains the workbench's current behavior, evidence, limits and
+planned growth. Everything needed to understand and run it is in this
+checkout.
 
-Updated: 2026-09-27
-
-Latest local verification: [Rails/RubyLLM upgrade review](UPGRADE_REVIEW_2026-09-26.md).
+Updated: 2026-09-28
 
 ## If you have five minutes
 
-1. Read [SYSTEM_GUIDE.md](SYSTEM_GUIDE.md) for the product shape and current
-   capability boundaries.
-2. Check [CAPABILITIES.md](CAPABILITIES.md) for the RubyLLM registry gates and
-   the difference between declared and provider-verified support.
-3. Review [ARCHITECTURE.md](ARCHITECTURE.md) to see how requests, records, and
-   approval continuations connect.
-4. Use [OPERATIONS.md](OPERATIONS.md) for local setup, provider configuration,
-   and evidence interpretation.
-5. Read [CHANGELOG.md](CHANGELOG.md) for the implementation history and the
-   reasons behind recent changes.
+1. [SYSTEM_GUIDE.md](SYSTEM_GUIDE.md): what the application does and how to
+   read its output.
+2. [CAPABILITIES.md](CAPABILITIES.md): what each operation admits and what
+   evidence exists for it, including the latest live provider run.
+3. [ARCHITECTURE.md](ARCHITECTURE.md): how requests, records, jobs and approval
+   continuations connect.
+4. [OPERATIONS.md](OPERATIONS.md): setup, the demo tour, provider
+   configuration, verification and troubleshooting.
+5. [CHANGELOG.md](CHANGELOG.md): what changed and why.
 
 ## What each document covers
 
 | Document | Question it answers |
 | --- | --- |
-| `SYSTEM_GUIDE.md` | What does the application do, and what should a user infer from its output? |
-| `CAPABILITIES.md` | Which model metadata gates each operation, and what remains unverified? |
-| `ARCHITECTURE.md` | How do the app's services, jobs, records, and states connect? |
-| `OPERATIONS.md` | How do I run the application and interpret local or provider evidence? |
+| `SYSTEM_GUIDE.md` | What does the application do, and what can I infer from its output? |
+| `CAPABILITIES.md` | Which gates admit each operation, and what is verified locally or live? |
+| `ARCHITECTURE.md` | How do services, jobs, records and states connect? |
+| `OPERATIONS.md` | How do I run, verify and troubleshoot it? |
 | `LEARNING.md` | How does the in-page, source-anchored explanation layer work? |
-| `CHANGELOG.md` | What changed, why, and what evidence or limitations came with it? |
-| `../IMPLEMENTATION_MAP.md` | Which product flows and code boundaries exist today? |
-| `../TODO.md` | What is implemented, in progress, deferred, or planned? |
+| `CHANGELOG.md` | What changed, and why? |
+| `UPGRADE_REVIEW_2026-09-26.md` | The Rails 8.1.4 upgrade review and the defects it found |
+| `../IMPLEMENTATION_MAP.md` | Where does each capability live in the code? |
+| `../ROADMAP.md` | What comes next, and what is out of scope? |
 
-## How to read implementation status
+## Status labels and evidence
 
-The application code and migrations define runtime behavior. Existing tests and
-recorded manual/provider evidence show which paths have been checked. The
-implementation map and system guide summarize those facts for people; the TODO
-and changelog record planned work and history.
+Status labels describe the code, with a short description of current behavior,
+evidence and limits kept separately:
 
-Status labels describe implementation:
+- **`IMPLEMENTED`**: the path exists and meets its current acceptance.
+- **`PARTIAL`**: some paths work; compatibility or evidence is incomplete.
+- **`PLANNED`**: not implemented.
+- **`DEPRECATED`**: still present but no longer recommended.
+- **`REMOVED`**: the path and its entry point are gone.
 
-- **`IMPLEMENTED`**: the described code path exists and meets its current slice
-  acceptance.
-- **`PARTIAL`**: some paths work, while compatibility or evidence is incomplete.
-- **`PLANNED`**: the capability has not been implemented in the current
-  application.
-- **`DEPRECATED`**: the path may still exist but is no longer recommended.
-- **`REMOVED`**: the path and its user-facing entry point have been removed.
+Evidence is recorded in [CAPABILITIES.md](CAPABILITIES.md) as either **local**
+(deterministic tests with fake providers) or **live** (a real provider
+request, with its date, model and cost). A passing local check, a commit, a
+health endpoint or one live run does not by itself prove deployment, public
+availability, business outcomes or long-term provider compatibility.
 
-Verification evidence is separate from implementation status:
+## Keeping the docs true
 
-- **`LOCAL_VERIFIED`**: the named local test, browser check, or framework check
-  was run.
-- **`OPENROUTER_DOGFOOD`**: a specific local flow was tried with a configured
-  OpenRouter provider. This does not establish production availability or a
-  provider service guarantee.
+For each behavior change, in the same commit:
 
-A successful local check, commit, health endpoint, or provider dogfood run does
-not by itself prove deployment, public availability, business outcomes, or
-long-term provider compatibility.
+1. Update the affected guide, diagram or operations section.
+2. Update [CAPABILITIES.md](CAPABILITIES.md) when admission rules or evidence
+   change. It is the only place for test counts and live results.
+3. Add a [CHANGELOG.md](CHANGELOG.md) entry.
+4. Update [ROADMAP.md](../ROADMAP.md) when scope changes.
 
-## Updating these documents
-
-For a feature change:
-
-1. Check the current implementation map and related code, migrations, and
-   existing tests before changing behavior.
-2. Update the relevant TODO status and acceptance boundary.
-3. Add a changelog entry describing the user-visible change, implementation
-   locations, verification evidence, and remaining limits.
-4. Update architecture, system, or operations documents when a data model,
-   state transition, job, provider boundary, or setup command changes.
-5. Keep claims aligned across README, SYSTEM_GUIDE, ARCHITECTURE,
-   IMPLEMENTATION_MAP, and TODO.
-
-Historical changelog entries preserve what was believed and verified at the
-time. Corrections should be appended with a date instead of silently rewriting
-that history.
-
-## Questions to answer when returning to the project
-
-1. Which milestone slices are implemented and what remains partial?
-2. Which records are created for a chat, experiment, or other execution?
-3. Which provider operations cross the RubyLLM boundary?
-4. Which states require a human decision or a continuation job?
-5. What does the latest provider check prove, and what does it leave unknown?
-6. Which facts are local, provider-specific, deployed, or user-validated?
+`test/docs/human_system_docs_test.rb` keeps the core documents linked and the
+key concepts present.
