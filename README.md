@@ -1,5 +1,8 @@
 # RubyLLM Workbench
 
+[![CI](https://github.com/yorzi/rubyllm-workbench/actions/workflows/ci.yml/badge.svg)](https://github.com/yorzi/rubyllm-workbench/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A local-first Rails reference application for building and inspecting AI
 workflows with [RubyLLM](https://rubyllm.com). It shows how provider calls
 become durable, inspectable records: every chat, structured output, tool call,
@@ -10,6 +13,9 @@ lifecycle timeline.
 It complements RubyLLM's guides with a working application. It is a
 single-user developer workbench, not a hosted product: there are no accounts,
 teams, billing or tenant isolation.
+
+This is an independent project and is not affiliated with the RubyLLM
+maintainers.
 
 ## What you can do
 

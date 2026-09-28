@@ -1,0 +1,23 @@
+name: Proposal
+description: Suggest a change. The v0.1 scope is frozen, so explain how it helps a reference app.
+labels: [proposal]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is hard to learn, inspect or trust today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: The smallest change that would solve it, and which records or pages it touches.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence and alternatives
+      description: Providers or RubyLLM features involved, and why this does not belong in RubyLLM itself.
