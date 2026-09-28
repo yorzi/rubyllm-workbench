@@ -4,7 +4,8 @@
 # This image is for a trusted, single-user installation. The app has no account
 # system or tenant isolation; do not expose it to an untrusted network.
 # docker build -t rubyllm_workbench .
-# docker run --rm -p 127.0.0.1:8080:80 --env-file .env.production --name rubyllm_workbench rubyllm_workbench
+# docker volume create rubyllm_workbench_storage
+# docker run --rm -p 127.0.0.1:8080:80 --mount source=rubyllm_workbench_storage,target=/rails/storage -e SOLID_QUEUE_IN_PUMA=1 --env-file .env.production --name rubyllm_workbench rubyllm_workbench
 
 # For a containerized dev environment, see Dev Containers: https://guides.rubyonrails.org/getting_started_with_devcontainer.html
 
@@ -25,7 +26,7 @@ RUN apt-get update -qq && \
 ENV RAILS_ENV="production" \
     BUNDLE_DEPLOYMENT="1" \
     BUNDLE_PATH="/usr/local/bundle" \
-    BUNDLE_WITHOUT="development" \
+    BUNDLE_WITHOUT="development:test" \
     LD_PRELOAD="/usr/local/lib/libjemalloc.so"
 
 # Use the pinned Node LTS from .nvmrc for Vite/Rails asset compilation.

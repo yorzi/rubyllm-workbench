@@ -1,7 +1,7 @@
 source "https://rubygems.org"
 
 # Bundle edge Rails instead: gem "rails", github: "rails/rails", branch: "main"
-gem "rails", "~> 8.1.3", ">= 8.1.3.1"
+gem "rails", "~> 8.1.4"
 # The modern asset pipeline for Rails [https://github.com/rails/propshaft]
 gem "propshaft"
 # Use sqlite3 as the database for Active Record
@@ -16,6 +16,8 @@ gem "vite_rails"
 gem "turbo-rails"
 # RubyLLM is the sole provider abstraction for AI operations.
 gem "ruby_llm", "2.0.0"
+# CSV attachment validation uses the extracted Ruby standard library.
+gem "csv", "~> 3.3"
 # Build JSON APIs with ease [https://github.com/rails/jbuilder]
 gem "jbuilder"
 

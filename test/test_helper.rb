@@ -4,6 +4,10 @@ require "rails/test_help"
 require_relative "support/workbench_test_helpers"
 require_relative "support/fake_embedding_client"
 
+# An existing partial Active Record model-registry store must not make tests
+# depend on which provider/model a previous test happened to persist first.
+RubyLLM.models.load_from_json
+
 module ActiveSupport
   class TestCase
     # Keep the default parallel test behavior, while allowing constrained

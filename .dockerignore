@@ -3,9 +3,13 @@
 # Ignore git directory.
 /.git/
 /.gitignore
+/specs/
+/public/vite/
+**/.DS_Store
 
 # Ignore bundler config.
 /.bundle
+/vendor/bundle/
 
 # Ignore all environment files.
 /.env*

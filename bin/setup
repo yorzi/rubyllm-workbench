@@ -20,6 +20,19 @@ FileUtils.chdir APP_ROOT do
 
   puts "== Installing dependencies =="
   system("bundle check") || system!("bundle install")
+
+  unless system("bundle", "exec", "ruby", "-e", "require 'vips'", out: File::NULL, err: File::NULL)
+    warn <<~MESSAGE
+
+      Optional native dependency `libvips` was not detected. Rails can still boot,
+      but Active Storage image variants need this library. Install it manually if
+      you use image variants:
+        macOS:       brew install vips
+        Debian/Ubuntu: sudo apt-get install libvips
+      Then rerun `bin/setup`. This script does not install system packages.
+    MESSAGE
+  end
+
   system! "npm ci"
 
   # puts "\n== Copying sample files =="

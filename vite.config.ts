@@ -10,6 +10,7 @@ export default defineConfig({
     RubyPlugin(),
   ],
   server: {
+    host: '127.0.0.1',
     allowedHosts: ['localhost', '127.0.0.1', '.local', '.lvh.me'],
     cors: { origin: devHostOrigin },
   },

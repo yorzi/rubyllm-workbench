@@ -32,10 +32,16 @@ RUBYLLM_CONFIGURATION_ENV = {
   xai_api_key: "XAI_API_KEY"
 }.freeze
 
+RUBYLLM_CREDENTIALS = begin
+  Rails.application.credentials.config
+rescue ActiveSupport::EncryptedFile::MissingKeyError
+  {}
+end.freeze
+
 RubyLLM.configure do |config|
   RUBYLLM_CONFIGURATION_ENV.each do |option, environment_key|
     value = ENV[environment_key]
-    value ||= Rails.application.credentials.dig(option)
+    value ||= RUBYLLM_CREDENTIALS.dig(option)
     config.public_send("#{option}=", value) if value.present?
   end
 end

@@ -16,7 +16,9 @@
 
 # Product specifications live outside this public application repository.
 /specs/
-/rubyllm-workbench
+
+# Operating system metadata.
+.DS_Store
 
 # Ignore all logfiles and tempfiles.
 /log/*
@@ -37,11 +39,13 @@
 !/tmp/storage/.keep
 
 /public/assets
+/public/vite/
 /public/vite-dev
 /public/vite-test
 
 # Ignore key files for decrypting credentials and more.
 /config/*.key
+/config/credentials/*.key
 
 
 /app/assets/builds/*
