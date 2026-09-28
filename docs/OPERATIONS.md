@@ -143,14 +143,23 @@ bin/rails assets:precompile
 PARALLEL_WORKERS=1 bin/rails test
 ```
 
-OpenRouter live structured test 是显式 opt-in：
+## Live provider dogfood
+
+The live suite in `test/live/provider_dogfood_test.rb` is opt-in and skipped by
+default. It needs a configured provider (OpenRouter by default):
 
 ```sh
-OPENROUTER_LIVE_TEST=1 bin/rails test test/integration/openrouter_live_test.rb
+bin/dogfood           # free-model scenarios only
+bin/dogfood --paid    # adds hosted web search, transcription and image (a few cents)
 ```
 
-该命令只表示本次本地 provider dogfood；它可能产生费用、受网络影响，也不应在
-没有用户明确意图时反复运行。
+`bin/dogfood` runs the scenarios serially, prints a Markdown summary table and
+appends one JSON line per scenario to `tmp/dogfood/<timestamp>.jsonl` (model ids,
+Run ids, tokens and cost only). Override models with `DOGFOOD_*_MODEL`
+variables, for example `DOGFOOD_AGENT_MODEL=openai/gpt-5-nano`. Runs happen in the
+test database and are rolled back. The suite sends its prompts to the provider,
+may cost money, and depends on network and provider availability; run it
+deliberately, for example after each RubyLLM upgrade.
 
 ## Evaluation datasets
 
@@ -195,15 +204,6 @@ Artifact 最多扫描 1,000 条，每段 Chat 历史最多保留最近 100 条�
 provider 状态、可能变化的 provider 配置和模型非确定性也无法由该 JSON 固定。分享前请先检查 JSON，
 并按团队的数据保留要求处理原始 Run。针对 Chat context freeze、drift rejection、队列失败、活动 Run 重复提交和审批续跑边界的 provider-free 回归已覆盖；人工分享前复核仍是必要步骤。
 
-OpenRouter Agent hosted-search dogfood 使用独立 opt-in：
-
-```sh
-OPENROUTER_AGENT_LIVE_TEST=1 OPENROUTER_AGENT_TEST_MODEL_ID=google/gemma-4-31b-it:free \
-  PARALLEL_WORKERS=1 bin/rails test test/integration/openrouter_live_test.rb
-```
-
-这项测试会把测试 prompt 和临时 Project 的非敏感摘要交给 OpenRouter，并请求托管网页搜索；
-即便模型标价为零，搜索服务仍可能另计费。只在项目所有者明确授权、且运行环境允许联网时执行。
 
 ## Tool Lab 执行模式
 

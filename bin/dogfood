@@ -1,0 +1,43 @@
+#!/usr/bin/env ruby
+# Runs the opt-in live provider dogfood suite and prints a summary table.
+#
+#   bin/dogfood           free-model scenarios only
+#   bin/dogfood --paid    also run scenarios that cost money (a few cents)
+#
+# Needs a configured provider (OpenRouter by default; see
+# test/live/provider_dogfood_test.rb for model overrides). Results are appended
+# to tmp/dogfood/<timestamp>.jsonl for copying into docs/CAPABILITIES.md.
+require "fileutils"
+require "json"
+require "time"
+
+APP_ROOT = File.expand_path("..", __dir__)
+paid = ARGV.delete("--paid")
+report = File.join(APP_ROOT, "tmp/dogfood", "#{Time.now.utc.strftime('%Y%m%dT%H%M%SZ')}.jsonl")
+FileUtils.mkdir_p(File.dirname(report))
+
+env = {
+  "LIVE_DOGFOOD" => "1",
+  "LIVE_DOGFOOD_PAID" => paid ? "1" : nil,
+  "DOGFOOD_REPORT" => report,
+  "PARALLEL_WORKERS" => "1"
+}
+Dir.chdir(APP_ROOT) do
+  system(env, "bin/rails", "test", "test/live/provider_dogfood_test.rb", *ARGV)
+end
+status = $?.exitstatus
+
+rows = File.exist?(report) ? File.readlines(report).map { |line| JSON.parse(line) } : []
+abort "No dogfood results were recorded." if rows.empty?
+
+puts "\n| Scenario | Result | Models | Runs | Tokens in/out | Cost (reported / estimated) | Notes |"
+puts "| --- | --- | --- | --- | --- | --- | --- |"
+rows.sort_by { |row| row["scenario"] }.each do |row|
+  notes = [ row["failure"], *row["notes"] ].compact.join("; ").gsub("|", "\\|")
+  puts "| #{row['scenario']} | #{row['result']} | #{row['models'].join(', ')} | #{row['run_ids'].join(', ')} | " \
+       "#{row['input_tokens']}/#{row['output_tokens']} | $#{row['reported_cost']} / $#{row['estimated_cost']} | #{notes} |"
+end
+total = rows.sum { |row| [ row["reported_cost"], row["estimated_cost"] ].max.to_f }
+puts "\nRubyLLM #{rows.first['ruby_llm']} · #{rows.count { |row| row['result'] == 'pass' }}/#{rows.size} passed · " \
+     "upper-bound cost $#{total.round(4)} · #{report}"
+exit status

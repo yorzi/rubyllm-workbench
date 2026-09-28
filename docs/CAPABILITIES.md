@@ -1,6 +1,6 @@
 # Capability matrix
 
-Updated: 2026-09-21 · RubyLLM 2.0.0
+Updated: 2026-09-28 · RubyLLM 2.0.0
 
 This matrix describes when Workbench offers each operation and what its model
 catalog checks. RubyLLM registry metadata is a selection hint: it does not prove
@@ -62,3 +62,60 @@ Rails 8.1.4 / RubyLLM 2.0.0: 322 tests, 2,818 assertions, zero failures/errors, 
 ## 2026-09-27 — Run event export
 
 Run event download is locally implemented with chronological ordering, related record IDs, redaction, event-count and byte limits. Export budget tests cover nested inputs, escaped bytes, Unicode text, latest messages, bounded Artifact scanning and oversized issue drafts. These are local evidence only; provider-native tracing and historical backfill remain unimplemented.
+
+## 2026-09-28 — live provider dogfood on RubyLLM 2.0.0
+
+First live acceptance on the stable pin, run with `bin/dogfood --paid` (see
+[operations](OPERATIONS.md#live-provider-dogfood)). Every scenario drives the
+real controllers, jobs and services against OpenRouter and asserts on the
+durable records. Each scenario below passed at least once on this date; free
+models intermittently returned "No endpoints found" or "Service temporarily
+overloaded", so single runs are not guaranteed green. Total OpenRouter spend
+for the whole session, including diagnostics: **$0.33**.
+
+| Scenario | Model(s) | Evidence |
+| --- | --- | --- |
+| Streaming Chat | `nvidia/nemotron-3-super-120b-a12b:free` | Assistant reply persisted; time to first output recorded. |
+| Structured output | `nvidia/nemotron-3-super-120b-a12b:free` | Schema-valid JSON Artifact. |
+| Local tool approval and continuation | `nvidia/nemotron-3-super-120b-a12b:free`, `openai/gpt-5-nano` | Run paused for `save_run_note`; approval over HTTP resumed it; report Artifact written. |
+| Agent with hosted web search | `openai/gpt-5-nano` | Two steps (`project_snapshot`, then a searched answer); search usage counted, citation Artifact and research report stored. |
+| Embeddings, semantic search, rerank | `liquid/lfm-2.5-embedding-350m:free`, `nvidia/llama-nemotron-rerank-vl-1b-v2:free` | 3 chunks at 1,024 dimensions; semantic and reranked top hit both relevant. |
+| Evaluation comparison with rubric judge | `nvidia/nemotron-3-super-120b-a12b:free`, `dots-studio/dots-3-note-preview:free` | 2 models x 3 cases, all cases terminal, schema-valid answers, judgments completed. |
+| Speech then transcription round trip | `deepgram/flux-tts:free` (voice `flux-bree-en`), `mistralai/voxtral-mini-3b-2507` | MP3 Artifact; transcript matched the source text word for word. |
+| Image generation | `black-forest-labs/flux.2-klein-4b` | JPEG Artifact, reported cost $0.014. |
+
+Not covered: video generation, OCR (no OpenRouter model in the registry),
+provider Batch (OpenRouter does not advertise it) and parallel tool calls.
+
+### Defects found and fixed by this run
+
+- **Speech Runs could not choose a voice.** Some TTS models (for example
+  `deepgram/flux-tts`) have no default voice and reject the request. Speech Runs
+  now accept an optional, validated voice identifier that is frozen in the
+  Run snapshot.
+- **Hosted tool use was invisible for OpenRouter.** OpenRouter reports hosted
+  search only as usage counters, never as tool-call blocks. Runs now record
+  `provider_tool_usage` counters (for example `web_search_requests`) and the
+  Run inspector shows them.
+- **Streamed OpenRouter responses lost citations (RubyLLM 2.0.0 bug).**
+  OpenRouter's streaming `build_chunk` override omits the `citations:` and
+  `server_tool_use:` fields that the generic parser maps. Reproduce with
+  `bundle exec ruby script/diagnostics/ruby_llm_openrouter_stream_citations.rb`.
+  A self-disabling workaround in `lib/ruby_llm_workarounds/` restores both
+  until upstream fixes it; a test fails once the upstream parser maps them.
+- **Attempts never stored a finish reason**, and an Agent whose reasoning
+  model spent its whole output budget finished "successfully" with an empty
+  report. Attempts now record `finish_reason`, and such a Run fails with the
+  cause.
+- **Registry drift.** RubyLLM 2.0.0's bundled registry lists models OpenRouter
+  no longer serves (`nex-agi/*:free`) and understates others (it marks
+  `google/gemma-4-31b-it:free` as lacking structured output, which the live
+  API offers). Pickers built from the registry can therefore offer models
+  that fail at request time.
+
+### Remaining caveats
+
+- Workbench cost figures come from token pricing. OpenRouter bills hosted
+  search separately and Workbench does not yet record that fee, so Runs that
+  search understate their cost.
+- Free models are rate-limited and change availability without notice.

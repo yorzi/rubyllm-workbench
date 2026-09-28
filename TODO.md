@@ -674,7 +674,7 @@ test manifest built locally. It passed without provider credentials or network
 requests. This gives local evidence across the M5 lifecycle paths; it does not
 verify real provider search, citations, tool behavior, or hosted CI. M5 remains
 `PARTIAL`; the opt-in live acceptance in
-`test/integration/openrouter_live_test.rb` is the earliest pending M5 gate.
+`test/live/provider_dogfood_test.rb` (run with `bin/dogfood --paid`) is the M5 live gate; it passed on 2026-09-28.
 The 12 files were `test/integration/agent_run_flow_test.rb`,
 `test/integration/agent_run_cancellation_race_test.rb`,
 `test/integration/agent_run_worker_replay_test.rb`,
