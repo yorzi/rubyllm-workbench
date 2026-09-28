@@ -1,4 +1,7 @@
 class Run < ApplicationRecord
+  include AgentExecutionLease
+  include ToolApprovalClosure
+
   STATUSES = %w[queued running waiting_for_approval succeeded failed cancelled].freeze
   ACTIVE_STATUSES = %w[queued running waiting_for_approval].freeze
   AGENT_EXECUTION_LEASE_DURATION = 5.minutes
@@ -72,22 +75,6 @@ class Run < ApplicationRecord
 
   def terminal?
     succeeded? || failed? || cancelled?
-  end
-
-  def agent_continuation_queued?
-    return false unless operation == "agent" && waiting_for_approval?
-
-    pending_tool_call_ids = Array(result_summary["pending_tool_call_ids"]).filter_map do |value|
-      Integer(value.to_s, exception: false)
-    end.uniq
-    return false if pending_tool_call_ids.empty?
-    return false unless agent_run_deliveries.where(intent: "approval").exists?
-
-    invocations = tool_invocations.where(id: pending_tool_call_ids).includes(:approval).index_by(&:id)
-    pending_tool_call_ids.all? do |invocation_id|
-      invocation = invocations[invocation_id]
-      invocation && %w[approved denied].include?(invocation.status) && invocation.approval&.status == invocation.status
-    end
   end
 
   def stream_key
@@ -207,10 +194,7 @@ class Run < ApplicationRecord
     with_lock do
       reload
       return self if terminal?
-      unless agent_execution_token.nil? || owns_active_agent_execution_lease?(
-        agent_execution_token,
-        generation: agent_execution_generation
-      )
+      if foreign_agent_execution?(agent_execution_token, agent_execution_generation)
         accepted = false
         next
       end
@@ -233,10 +217,7 @@ class Run < ApplicationRecord
     with_lock do
       reload
       return self if terminal?
-      unless agent_execution_token.nil? || owns_active_agent_execution_lease?(
-        agent_execution_token,
-        generation: agent_execution_generation
-      )
+      if foreign_agent_execution?(agent_execution_token, agent_execution_generation)
         accepted = false
         next
       end
@@ -265,10 +246,7 @@ class Run < ApplicationRecord
     with_lock do
       reload
       return self if terminal?
-      unless agent_execution_token.nil? || owns_active_agent_execution_lease?(
-        agent_execution_token,
-        generation: agent_execution_generation
-      )
+      if foreign_agent_execution?(agent_execution_token, agent_execution_generation)
         accepted = false
         next
       end
@@ -321,111 +299,6 @@ class Run < ApplicationRecord
     self
   end
 
-  # Acquire one durable execution lease for a worker. Continuation resumes use
-  # a fresh token, while duplicate deliveries cannot pass the same live claim.
-  def claim_agent_execution!(token:, intent: "execute", approval_invocation_id: nil, expected_generation: nil,
-                             lease_duration: AGENT_EXECUTION_LEASE_DURATION)
-    claimed = false
-    with_lock do
-      reload
-      return false if terminal?
-
-      approval_invocation = tool_invocations.find_by(id: approval_invocation_id) if approval_invocation_id
-      approval_decided = approval_invocation && %w[approved denied].include?(approval_invocation.status) &&
-        approval_invocation.approval&.status == approval_invocation.status
-      permitted_state = case intent.to_s
-      when "execute"
-        (queued? || running?) && (expected_generation.nil? || expected_generation.to_i == agent_execution_generation.to_i)
-      when "approval"
-        if waiting_for_approval?
-          pending_invocation_ids = Array(result_summary["pending_tool_call_ids"]).map(&:to_i)
-          all_approvals_decided = pending_invocation_ids.any? && pending_invocation_ids.all? do |invocation_id|
-            invocation = tool_invocations.find_by(id: invocation_id)
-            invocation && %w[approved denied].include?(invocation.status) &&
-              invocation.approval&.status == invocation.status
-          end
-          approval_decided && all_approvals_decided &&
-            expected_generation.to_i == agent_execution_generation.to_i &&
-            pending_invocation_ids.include?(approval_invocation.id)
-        else
-          pending_invocation_ids = Array(result_summary["pending_tool_call_ids"]).map(&:to_i)
-          all_approvals_decided = pending_invocation_ids.any? && pending_invocation_ids.all? do |invocation_id|
-            invocation = tool_invocations.find_by(id: invocation_id)
-            invocation && %w[approved denied].include?(invocation.status) &&
-              invocation.approval&.status == invocation.status
-          end
-          running? && approval_decided && all_approvals_decided &&
-            expected_generation.to_i == agent_execution_generation.to_i &&
-            pending_invocation_ids.include?(approval_invocation.id)
-        end
-      else
-        false
-      end
-      return false unless permitted_state
-
-      now = Time.current
-      lease_active = agent_execution_token.present? && agent_execution_expires_at&.future?
-      return false if lease_active
-
-      was_waiting_for_approval = waiting_for_approval?
-      first_start = started_at.nil?
-
-      update!(
-        agent_execution_token: token,
-        agent_execution_expires_at: now + lease_duration,
-        agent_execution_generation: agent_execution_generation.to_i + 1,
-        status: :running,
-        started_at: started_at || now,
-        finished_at: nil
-      )
-      if first_start
-        record_lifecycle_event("ai.run.started", attempt_id: current_attempt_id)
-      elsif was_waiting_for_approval
-        record_lifecycle_event("ai.run.resumed", attempt_id: current_attempt_id)
-      end
-      claimed = true
-    end
-    claimed
-  end
-
-  def renew_agent_execution_lease!(token:, generation:, lease_duration: AGENT_EXECUTION_LEASE_DURATION)
-    renewed = false
-    with_lock do
-      reload
-      return false if terminal?
-      return false unless owns_active_agent_execution_lease?(token, generation:)
-
-      # Lease heartbeats are control metadata; do not broadcast the Run status
-      # or touch updated_at on every renewal.
-      update_column(:agent_execution_expires_at, Time.current + lease_duration)
-      renewed = true
-    end
-    renewed
-  end
-
-  def release_agent_execution_lease!(token:, generation:)
-    with_lock do
-      reload
-      return false unless agent_execution_token == token && agent_execution_generation == generation
-
-      update!(agent_execution_token: nil, agent_execution_expires_at: nil)
-    end
-    true
-  end
-
-  def owns_active_agent_execution_lease?(token, generation: nil)
-    agent_execution_token == token &&
-      (generation.nil? || agent_execution_generation == generation) &&
-      agent_execution_expires_at&.future?
-  end
-
-  # Caller must hold this Run's row lock when the lease protects a side effect.
-  def assert_agent_execution_lease!(token:, generation:)
-    return self if owns_active_agent_execution_lease?(token, generation:)
-
-    raise Ai::ExecutionContext::ExecutionLeaseLost, "the worker no longer owns this Run"
-  end
-
   def inspector_path
     Rails.application.routes.url_helpers.run_path(self)
   end
@@ -441,231 +314,6 @@ class Run < ApplicationRecord
 
   def record_created_event
     record_lifecycle_event("ai.run.created")
-  end
-
-  def cancel_active_tool_invocations!(now)
-    tool_invocations
-      .where(status: %w[requested waiting_for_approval approved running])
-      .includes(:approval)
-      .order(:id)
-      .each do |invocation|
-        approval = invocation.approval
-        if invocation.status.in?(%w[requested waiting_for_approval approved])
-          chat.deny(invocation.tool_call_id)
-        end
-
-        if approval&.pending?
-          approval.update!(
-            status: :expired,
-            decided_at: now,
-            decision_note: "Run cancelled before approval was decided."
-          )
-          Ai::LifecycleEventRecorder.emit(
-            "ai.approval.expired",
-            run_id: id,
-            project_id: project_id,
-            attempt_id: invocation.attempt_id,
-            tool_invocation_id: invocation.id,
-            approval_id: approval.id,
-            status: approval.status,
-            actor: "system",
-            event_key: "approval:#{approval.id}:expired"
-          )
-        end
-
-        cancellation_message = if invocation.status == "running"
-          "Run cancelled while the tool action was in progress; its outcome may be unknown."
-        else
-          "Run cancelled before the tool action started."
-        end
-        invocation.update!(
-          status: :cancelled,
-          finished_at: now,
-          duration_ms: invocation.started_at ? ((now - invocation.started_at) * 1_000).round : nil,
-          error_class: "RunCancellation",
-          error_code: invocation.remote? && invocation.status == "running" ? "remote_tool_outcome_unknown" : "run_cancelled",
-          error_message: cancellation_message
-        )
-        Ai::LifecycleEventRecorder.emit(
-          "ai.tool.cancelled",
-          run_id: id,
-          project_id: project_id,
-          attempt_id: invocation.attempt_id,
-          tool_invocation_id: invocation.id,
-          tool_call_id: invocation.tool_call_id,
-          tool_key: invocation.tool_key,
-          status: invocation.status,
-          error_code: invocation.error_code,
-          event_key: "tool:#{invocation.id}:cancelled"
-        )
-      end
-  end
-
-  def pending_tool_approval_invocations
-    tool_invocations
-      .where(status: %w[requested waiting_for_approval approved])
-      .includes(:approval, :tool_definition)
-      .select do |invocation|
-        invocation.remote? || invocation.approval.present? || invocation.tool_definition&.approval_required?
-      end
-  end
-
-  def finalize_failed_tool_approvals!(error)
-    invocations = tool_invocations.includes(:approval, :tool_definition).order(:id).to_a
-    return if invocations.empty?
-
-    tool_calls = RubyLLM::ActiveRecord::ToolCall.where(
-      message_type: Message.polymorphic_name,
-      message_id: chat.messages.select(:id),
-      tool_call_id: invocations.map(&:tool_call_id)
-    ).includes(:result).index_by(&:tool_call_id)
-
-    now = Time.current
-    invocations.each do |invocation|
-      approval = invocation.approval
-      tool_call = tool_calls[invocation.tool_call_id]
-      next unless failed_approval_call?(invocation, approval, tool_call)
-
-      if approved_remote_tool_outcome_unknown?(invocation, approval, tool_call)
-        mark_remote_tool_outcome_unknown!(invocation, error, now)
-        next
-      end
-
-      finalize_failed_tool_call!(invocation, tool_call)
-      expire_failed_approval!(invocation, approval, now) if approval&.pending?
-      unless invocation.status.in?(%w[succeeded failed denied cancelled])
-        mark_failed_tool_invocation!(invocation, error, now)
-      end
-    end
-  end
-
-  def failed_approval_call?(invocation, approval, tool_call)
-    return true if approval&.pending?
-    return false unless tool_call && tool_call.result.nil?
-    return true if invocation.remote?
-
-    approval_required = approval.present? || invocation.tool_definition&.approval_required?
-    approval_required && (
-      approval&.approved? || approval&.denied? ||
-        invocation.status.in?(%w[requested waiting_for_approval approved])
-    )
-  end
-
-  def approved_remote_tool_outcome_unknown?(invocation, approval, tool_call)
-    invocation.remote? && tool_call && tool_call.result.nil? && (
-      approval&.approved? || tool_call.approval == "approved" || invocation.approved?
-    )
-  end
-
-  def mark_remote_tool_outcome_unknown!(invocation, error, now)
-    message = "Remote tool call was approved, but its provider result was not persisted before the Run failed. The external outcome is unknown; this chat cannot safely resume it."
-    invocation.update!(
-      status: :failed,
-      finished_at: now,
-      duration_ms: invocation.started_at ? ((now - invocation.started_at) * 1_000).round : nil,
-      error_class: error.class.name,
-      error_code: "remote_tool_outcome_unknown",
-      error_message: message
-    )
-    Ai::LifecycleEventRecorder.emit(
-      "ai.tool.completed",
-      run_id: id,
-      project_id: project_id,
-      attempt_id: invocation.attempt_id,
-      tool_invocation_id: invocation.id,
-      tool_call_id: invocation.tool_call_id,
-      tool_key: invocation.tool_key,
-      status: invocation.status,
-      error_class: invocation.error_class,
-      error_code: invocation.error_code,
-      event_key: "tool:#{invocation.id}:completed:remote_outcome_unknown"
-    )
-  end
-
-  def finalize_failed_tool_call!(invocation, tool_call)
-    return unless tool_call
-
-    chat.deny(invocation.tool_call_id) unless tool_call.approval == "denied"
-    return if tool_call.result
-
-    if invocation.remote?
-      llm_chat = chat.to_llm
-      response = llm_chat.provider.tool_approval_response(
-        tool_call.to_llm,
-        approved: false,
-        model: llm_chat.model
-      )
-      chat.add_message(response)
-    else
-      chat.add_message(
-        role: :tool,
-        content: { error: "The Run failed before this tool call was executed." }.to_json,
-        tool_call_id: invocation.tool_call_id
-      )
-    end
-  rescue StandardError => error
-    Rails.logger.warn("Run ##{id} failed approval cleanup for tool call #{invocation.tool_call_id}: #{error.class}")
-  end
-
-  def expire_failed_approval!(invocation, approval, now)
-    approval.update!(
-      status: :expired,
-      decided_at: now,
-      decision_note: "Run failed before approval was decided."
-    )
-    Ai::LifecycleEventRecorder.emit(
-      "ai.approval.expired",
-      run_id: id,
-      project_id: project_id,
-      attempt_id: invocation.attempt_id,
-      tool_invocation_id: invocation.id,
-      approval_id: approval.id,
-      status: approval.status,
-      actor: "system",
-      event_key: "approval:#{approval.id}:expired"
-    )
-  end
-
-  def mark_failed_tool_invocation!(invocation, error, now)
-    invocation.update!(
-      status: :failed,
-      finished_at: now,
-      duration_ms: invocation.started_at ? ((now - invocation.started_at) * 1_000).round : nil,
-      error_class: error.class.name,
-      error_code: Ai::ErrorClassifier.code(error),
-      error_message: Ai::ErrorText.safe(error.message).to_s.truncate(2_000)
-    )
-    Ai::LifecycleEventRecorder.emit(
-      "ai.tool.completed",
-      run_id: id,
-      project_id: project_id,
-      attempt_id: invocation.attempt_id,
-      tool_invocation_id: invocation.id,
-      tool_call_id: invocation.tool_call_id,
-      tool_key: invocation.tool_key,
-      status: invocation.status,
-      error_class: invocation.error_class,
-      error_code: invocation.error_code,
-      event_key: "tool:#{invocation.id}:completed:failed"
-    )
-  end
-
-  def resolve_pending_tool_approvals!(pending_invocations)
-    pending_invocations.each do |invocation|
-      chat.deny(invocation.tool_call_id)
-      next if invocation.remote?
-
-      chat.add_message(
-        role: :tool,
-        content: { error: "The Run was cancelled before this tool call started." }.to_json,
-        tool_call_id: invocation.tool_call_id
-      )
-    end
-
-    return unless pending_invocations.any?(&:remote?)
-
-    Ai::ChatTooling.new(chat:, project:, run: self).configure
-    chat.run_tools
   end
 
   def record_lifecycle_event(event_name, **payload)

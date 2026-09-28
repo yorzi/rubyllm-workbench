@@ -235,8 +235,8 @@ module Learning
             ),
             code_references: list(
               reference("app/controllers/runs_controller.rb", "Inspector action", "Loads the bounded evidence graph and synchronizes tool records.", 25, 33, "def show"),
-              reference("app/models/run.rb", "Run state and metrics", "Defines associations, status transitions, token totals, and cost status.", 1, 63, "class Run"),
-              reference("app/models/run.rb", "Run lifecycle", "Persists start, approval, success, and failure transitions.", 65, 115, "def terminal?"),
+              reference("app/models/run.rb", "Run state and metrics", "Defines associations, status transitions, token totals, and cost status.", 1, 74, "class Run"),
+              reference("app/models/run.rb", "Run lifecycle", "Starts and claims queued executions under a row lock; approval, success, failure and cancellation follow the same pattern.", 76, 114, "def terminal?"),
               reference("app/services/ai/attempt_recorder.rb", "Attempt recorder", "Captures streaming timing, usage, cost, and terminal state.", 24, 79, "def start!"),
               reference("app/services/ai/lifecycle_event_recorder.rb", "Lifecycle event boundary", "Validates events, whitelists payloads, and deduplicates persistence.", 28, 94, "def emit"),
               reference("app/views/runs/show.html.erb", "Inspector presentation", "Renders metrics, Attempts, lifecycle events, tools, snapshots, and results.", 37, 92, "Run metrics")
