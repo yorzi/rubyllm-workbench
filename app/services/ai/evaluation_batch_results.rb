@@ -1,8 +1,10 @@
 module Ai
   class EvaluationBatchResults
-    # Upstream candidate: RubyLLM 2.0.0 accepts duplicate, negative and
-    # out-of-range normalized indices. Validate before Batch delivers ANY result
-    # to a Chat/store. A check on batch.messages is already too late.
+    # RubyLLM 2.0.0 accepts duplicate, negative and out-of-range normalized
+    # indices. Fixed upstream in crmne/ruby_llm#993 (merged 2026-09-26, not yet
+    # released); remove this module once a release containing it is pinned.
+    # Validate before Batch delivers ANY result to a Chat/store. A check on
+    # batch.messages is already too late.
     # Keep this private-API workaround isolated to evaluation batch collection;
     # it is listed in Ai::RubyLlmInternals.
     module IndexValidation

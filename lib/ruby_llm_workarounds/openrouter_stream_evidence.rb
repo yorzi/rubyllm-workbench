@@ -6,8 +6,9 @@
 # `bundle exec ruby script/diagnostics/ruby_llm_openrouter_stream_citations.rb`.
 #
 # The patch installs itself only while a probe shows the upstream parser still
-# drops the evidence, so an upstream fix makes it a no-op. Remove this file and
-# its require once the fixed RubyLLM release is pinned.
+# drops the evidence, so an upstream fix makes it a no-op. An upstream fix with
+# specs is prepared but not yet filed. Remove this file and its require once a
+# RubyLLM release containing the fix is pinned.
 module RubyLLMWorkarounds
   module OpenRouterStreamEvidence
     PROBE_EVENT = {
