@@ -47,6 +47,11 @@
 /config/*.key
 /config/credentials/*.key
 
+# Credentials are per installation: each user creates their own with
+# `bin/rails credentials:edit` or uses environment variables.
+/config/credentials.yml.enc
+/config/credentials/*.yml.enc
+
 
 /app/assets/builds/*
 !/app/assets/builds/.keep
