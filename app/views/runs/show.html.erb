@@ -85,7 +85,7 @@
     <section id="upstream-candidates" class="mt-8 rounded-xl border border-line bg-panel p-5" aria-labelledby="upstream-candidates-heading">
       <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
         <div>
-          <h2 id="upstream-candidates-heading" class="text-sm font-semibold text-ink">Upstream gap report</h2>
+          <h2 id="upstream-candidates-heading" class="text-sm font-semibold text-ink">Upstream gap report<%= render "shared/experimental_badge", reason: "Experimental: drafts are generated locally and always need a manual privacy review before sharing." %></h2>
           <p class="mt-1 max-w-3xl text-xs leading-5 text-muted">Record a reviewed hypothesis from this Run. Each report is saved as a new Artifact. The Markdown draft includes a redacted reproduction export and still needs human review before sharing.</p>
         </div>
       </div>

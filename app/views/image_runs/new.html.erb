@@ -4,7 +4,7 @@
   <div class="mx-auto max-w-3xl px-5 py-8 sm:px-8 lg:px-10">
     <%= render "shared/flash" %>
     <%= link_to "← #{@chat.display_title.presence || 'Chat'}", project_chat_path(@project, @chat), class: "text-xs font-medium text-accent hover:underline" %>
-    <h1 class="mt-4 text-2xl font-semibold tracking-tight text-ink">Generate an image</h1>
+    <h1 class="mt-4 text-2xl font-semibold tracking-tight text-ink">Generate an image<%= render "shared/experimental_badge" %></h1>
     <p class="mt-2 text-sm leading-6 text-muted">The prompt is sent to the selected provider. Generation runs in Solid Queue and the image is saved as a Run Artifact.</p>
 
     <% if @error.present? %>

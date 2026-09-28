@@ -42,7 +42,7 @@
             <%= form.select :model_references, options_for_select(@models.map { |entry| ["#{entry.provider_name} · #{entry.name}", "#{entry.provider}|#{entry.id}"] }), {}, multiple: true, size: 5, required: true, class: "mt-2 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm" %>
           </div>
           <div>
-            <%= form.label :judge_model_reference, "Optional rubric judge", class: "block text-[10px] font-semibold uppercase tracking-[0.14em] text-muted" %>
+            <%= form.label :judge_model_reference, class: "block text-[10px] font-semibold uppercase tracking-[0.14em] text-muted" do %>Optional rubric judge<%= render "shared/experimental_badge", reason: "Experimental: an uncalibrated model assessment; it never changes exact-match results." %><% end %>
             <%= form.select :judge_model_reference, options_for_select([["Disabled", ""]] + @judge_models.map { |entry| ["#{entry.provider_name} · #{entry.name}", "#{entry.provider}|#{entry.id}"] }), {}, class: "mt-2 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm" %>
           </div>
           <%= form.submit "Queue comparison", class: "inline-flex cursor-pointer items-center justify-center rounded-lg bg-accent px-4 py-2.5 text-xs font-medium text-white shadow-sm hover:bg-indigo-700" %>
@@ -63,7 +63,7 @@
                 <%= form.select :model_reference, options_for_select(@batch_models.map { |entry| ["#{entry.provider_name} · #{entry.name}", "#{entry.provider}|#{entry.id}"] }), {}, required: true, class: "mt-2 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm" %>
               </div>
               <div>
-                <%= form.label :judge_model_reference, "Optional rubric judge", class: "block text-[10px] font-semibold uppercase tracking-[0.14em] text-muted" %>
+                <%= form.label :judge_model_reference, class: "block text-[10px] font-semibold uppercase tracking-[0.14em] text-muted" do %>Optional rubric judge<%= render "shared/experimental_badge", reason: "Experimental: an uncalibrated model assessment; it never changes exact-match results." %><% end %>
                 <%= form.select :judge_model_reference, options_for_select([["Disabled", ""]] + @judge_models.map { |entry| ["#{entry.provider_name} · #{entry.name}", "#{entry.provider}|#{entry.id}"] }), {}, class: "mt-2 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm" %>
               </div>
               <%= form.submit "Submit provider batch", class: "inline-flex cursor-pointer items-center justify-center rounded-lg border border-accent px-4 py-2.5 text-xs font-medium text-accent hover:bg-indigo-50" %>

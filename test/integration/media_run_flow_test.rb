@@ -39,6 +39,7 @@ class MediaRunFlowTest < ActionDispatch::IntegrationTest
     get new_project_chat_image_run_path(@project, @chat)
     assert_response :success
     assert_select "form[action=?]", project_chat_image_runs_path(@project, @chat)
+    assert_select "h1 .experimental-badge", text: "Experimental"
 
     run = nil
     with_provider_configuration(@image_model.provider) do
