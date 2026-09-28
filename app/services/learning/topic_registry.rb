@@ -143,7 +143,7 @@ module Learning
             boundaries: list(
               "The app owns the snapshot and audit records; the provider still owns model behavior and provider-specific compatibility.",
               "RubyLLM 2.0.0 is the current project target. Provider web search is opt-in; the model registry does not establish support for every model/protocol.",
-              "The M5.1 provider-search path has not yet been locally verified or dogfooded against a live provider.",
+              "Provider web search passed a live OpenRouter check on 2026-09-28 (docs/CAPABILITIES.md). OpenRouter reports hosted search as usage counters and citations, not tool-call blocks.",
               "The learning layer explains the path without rendering prompts, credentials, raw provider payloads, or arbitrary source files."
             )
           ),
@@ -332,7 +332,7 @@ module Learning
               note("KnowledgeChunk", "A deterministic searchable window with source identity and character offsets.")
             ),
             boundaries: list(
-              "Current OCR is capability-gated and needs real provider dogfood before it can support broad claims about document fidelity.",
+              "Current OCR is capability-gated and has no live provider evidence yet, so it supports no broad claims about document fidelity.",
               "Provider file-reference lifecycle, remote URL fetching, and page-level chunk provenance are not silently implied by this local path.",
               "A ready chunk is indexed evidence; it is not an LLM-generated summary or a citation guarantee."
             )
@@ -371,7 +371,7 @@ module Learning
             ),
             boundaries: list(
               "Current retrieval is SQLite-bounded and explicit about semantic/hybrid degradation; it is not a claim of universal provider RAG quality.",
-              "Provider file references, real OCR dogfood, page-level provenance, and remote URL fetching are outside this topic's implemented path.",
+              "Provider file references, live OCR evidence, page-level provenance, and remote URL fetching are outside this topic's implemented path.",
               "Search evidence is not an LLM answer, citation guarantee, production deployment result, or business outcome."
             )
           )

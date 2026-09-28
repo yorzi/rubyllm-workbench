@@ -64,6 +64,13 @@ module Workbench
       chat
     end
 
+    # Synthetic Runs start and finish instantly; spread their timestamps so the
+    # inspector shows plausible duration and first-output figures.
+    def settle(run, seconds: 2.4)
+      finished = run.reload.finished_at || Time.current
+      run.update_columns(started_at: finished - seconds, time_to_first_output_ms: 420)
+    end
+
     def new_run(chat, operation:, input:, experiment: nil)
       chat.runs.create!(
         project: @project,
@@ -96,6 +103,7 @@ module Workbench
       reply = chat.messages.create!(role: "assistant", content: "Each call becomes a Run with one or more Attempts that keep the model, token usage, cost and timing. Tool calls, approvals and generated Artifacts are stored alongside it so the call can be inspected later.")
       attempt_for(run)
       run.succeed!("finish_reason" => "stop", "message_id" => reply.id, "partial_output" => reply.content)
+      settle(run)
     end
 
     def structured_run
@@ -114,6 +122,7 @@ module Workbench
       output = { "summary" => "Solid Queue keeps jobs in the database.", "confidence" => 0.9 }
       run.artifacts.create!(attempt:, kind: "json", name: "Structured output", content_json: output, content_text: JSON.pretty_generate(output))
       run.succeed!("schema_validation" => "valid")
+      settle(run, seconds: 1.9)
     end
 
     def approved_tool_run
@@ -136,6 +145,7 @@ module Workbench
       reply = chat.messages.create!(role: "assistant", content: "Saved the note after your approval.")
       attempt_for(run, sequence: 2, input_tokens: 180, output_tokens: 12)
       run.succeed!("finish_reason" => "stop", "message_id" => reply.id)
+      settle(run, seconds: 31.2)
     end
 
     def agent_run
@@ -155,7 +165,14 @@ module Workbench
       })
       run.start!
       chat.messages.create!(role: "user", content: prompt)
-      attempt_for(run, sequence: 1, finish_reason: "tool_calls")
+      first = attempt_for(run, sequence: 1, finish_reason: "tool_calls")
+      now = Time.current
+      run.tool_invocations.create!(
+        attempt: first, tool_key: "project_snapshot", tool_call_id: "demo-agent-call-1", status: :succeeded,
+        tool_definition: @project.tool_definitions.find_by(key: "project_snapshot"), arguments_json: {},
+        result_json: { "project" => { "name" => @project.name, "slug" => @project.slug } },
+        started_at: now - 1.second, finished_at: now, duration_ms: 8
+      )
       final = attempt_for(run, sequence: 2, input_tokens: 4_600, output_tokens: 310)
       answer = chat.messages.create!(role: "assistant", content: "RubyLLM generates speech with RubyLLM.speak, documented on its Text to Speech guide.")
       citations = [ { "url" => "https://rubyllm.com/", "title" => "RubyLLM documentation" } ]
@@ -172,6 +189,7 @@ module Workbench
         report = Ai::AgentResearchReportRecorder.call(run:, message: answer)
         { "research_report_artifact_id" => report.id }
       end
+      settle(run, seconds: 9.6)
     end
 
     def failed_run
@@ -183,6 +201,7 @@ module Workbench
       attempt_for(run, input_tokens: 0, output_tokens: 0, status: :failed, finish_reason: nil)
         .update!(error_class: "RubyLLM::RateLimitError", error_code: "rate_limited", error_message: "Rate limit reached (synthetic demo error).")
       run.fail!(RubyLLM::RateLimitError.new("Rate limit reached (synthetic demo error)."))
+      run.update_columns(started_at: run.reload.finished_at - 0.6)
     end
 
     def knowledge_collection

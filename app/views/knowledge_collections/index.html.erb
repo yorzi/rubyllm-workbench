@@ -4,8 +4,8 @@
     <p class="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Knowledge workspace</p>
     <%= render "shared/learning_link", topic: "knowledge_ingestion" %>
     <div class="mt-5 rounded-xl border border-line bg-panel p-4 text-xs leading-5">
-      <p class="font-medium text-ink">M4 foundation · local evidence</p>
-      <p class="mt-2 text-muted">This slice stores text and file sources in SQLite, records deterministic offsets and provenance, and exposes lexical, semantic, hybrid, and optional rerank evidence.</p>
+      <p class="font-medium text-ink">Local, inspectable evidence</p>
+      <p class="mt-2 text-muted">Knowledge stores text and file sources in SQLite, records deterministic offsets and provenance, and exposes lexical, semantic, hybrid, and optional rerank evidence.</p>
       <dl class="mt-4 divide-y divide-line border-t border-line text-xs">
         <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Collections</dt><dd class="font-mono text-ink"><%= @collections.size %></dd></div>
         <div class="flex justify-between gap-3 py-3"><dt class="text-muted">Project</dt><dd class="max-w-[9rem] truncate text-right text-ink"><%= @project.name %></dd></div>
@@ -13,7 +13,7 @@
     </div>
     <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-800">
       <p class="font-medium">Boundary</p>
-      <p class="mt-1">Remote URL fetch, provider file references, real OCR dogfood, and page-level provenance remain outside this local path.</p>
+      <p class="mt-1">Remote URL fetch, provider file references and page-level provenance are not implemented.</p>
     </div>
   </div>
 <% end %>

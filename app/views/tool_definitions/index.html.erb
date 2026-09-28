@@ -1,7 +1,7 @@
 <% content_for :title, "Tools · #{@project.name}" %>
 <% content_for :inspector do %>
   <div class="sticky top-0">
-    <div class="flex items-center justify-between gap-3"><p class="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Tool Lab</p><span class="rounded-full bg-slate-100 px-2 py-1 font-mono text-[10px] text-muted">M3</span></div>
+    <div class="flex items-center justify-between gap-3"><p class="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Tool Lab</p></div>
     <%= render "shared/learning_link", topic: "tool_approval" %>
     <div class="mt-5 rounded-xl border border-line bg-panel p-4"><p class="text-xs leading-5 text-muted">Tools are Ruby-defined registry entries. Enabling one adds it to the next chat Run snapshot; browser input cannot upload or execute Ruby.</p><dl class="mt-4 divide-y divide-line border-t border-line text-xs"><div class="flex justify-between gap-3 py-3"><dt class="text-muted">Project</dt><dd class="max-w-[10rem] truncate text-right text-ink"><%= @project.name %></dd></div><div class="flex justify-between gap-3 py-3"><dt class="text-muted">Registered</dt><dd class="font-mono text-ink"><%= @tool_definitions.size %></dd></div><div class="flex justify-between gap-3 py-3"><dt class="text-muted">Enabled</dt><dd class="font-mono text-ink"><%= @tool_definitions.count(&:enabled?) %></dd></div></dl></div>
   </div>
