@@ -573,13 +573,9 @@ class AgentRunJob < ApplicationJob
   end
 
   def fence_usage_persistence!
-    ruby_llm_chat = @run.chat.to_llm
-    recorder = ruby_llm_chat.instance_variable_get(:@usage_recorder)
-    return unless recorder
-
     token = @lease_token
     generation = @lease_generation
-    ruby_llm_chat.usage_recorder = lambda do |entry|
+    Ai::RubyLlmInternals.wrap_usage_recorder(@run.chat.to_llm) do |entry, recorder|
       @run.with_lock do
         @run.reload
         @run.assert_agent_execution_lease!(token:, generation:)
