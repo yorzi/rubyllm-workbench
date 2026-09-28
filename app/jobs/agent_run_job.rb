@@ -3,8 +3,6 @@ class AgentRunJob < ApplicationJob
 
   queue_as :default
   self.enqueue_after_transaction_commit = false
-  LEASE_HEARTBEAT_INTERVAL = 15.seconds
-  LEASE_SAFETY_MARGIN = 5.seconds
   MAX_AGENT_STEPS = 40
 
   ExecutionLeaseLost = Ai::ExecutionContext::ExecutionLeaseLost
@@ -115,8 +113,12 @@ class AgentRunJob < ApplicationJob
     @expected_generation = @lease_generation
     @job_arguments[3] = @lease_generation
     self.arguments = @job_arguments.dup
-    @lease_expires_at = @run.agent_execution_expires_at
-    start_lease_heartbeat
+    @lease_heartbeat = Ai::AgentLeaseHeartbeat.new(
+      run_id: @run.id,
+      token: @lease_token,
+      generation: @lease_generation,
+      expires_at: @run.agent_execution_expires_at
+    ).start
   end
 
   def restore_agent
@@ -495,55 +497,15 @@ class AgentRunJob < ApplicationJob
     )
   end
 
-  def start_lease_heartbeat
-    @lease_heartbeat_mutex = Mutex.new
-    @lease_heartbeat_condition = ConditionVariable.new
-    @lease_heartbeat_stopped = false
-    run_id = @run.id
-    token = @lease_token
-    generation = @lease_generation
-
-    @lease_heartbeat_thread = Thread.new do
-      loop do
-        stopped = @lease_heartbeat_mutex.synchronize do
-          @lease_heartbeat_condition.wait(@lease_heartbeat_mutex, LEASE_HEARTBEAT_INTERVAL)
-          @lease_heartbeat_stopped
-        end
-        break if stopped
-
-        begin
-          renewed = ActiveRecord::Base.connection_pool.with_connection do
-            Run.find(run_id).renew_agent_execution_lease!(token:, generation:)
-          end
-          unless renewed
-            @lease_lost = true
-            break
-          end
-
-          @lease_expires_at = Time.current + Run::AGENT_EXECUTION_LEASE_DURATION
-        rescue StandardError => error
-          if transient_lease_error?(error) && Time.current < @lease_expires_at - LEASE_SAFETY_MARGIN
-            Rails.logger.warn("Agent Run ##{run_id} lease heartbeat will retry: #{error.class}: #{error.message}")
-            next
-          end
-
-          @lease_lost = true
-          Rails.logger.error("Agent Run ##{run_id} lease heartbeat failed: #{error.class}: #{error.message}")
-          break
-        end
-      end
-    end
-  end
-
   def ensure_agent_lease!
-    raise ExecutionLeaseLost, "the worker no longer owns this Run" if @lease_lost
+    raise ExecutionLeaseLost, "the worker no longer owns this Run" if @lease_heartbeat&.lost?
 
     renewed = ActiveRecord::Base.connection_pool.with_connection do
       Run.find(@run.id).renew_agent_execution_lease!(token: @lease_token, generation: @lease_generation)
     end
     raise ExecutionLeaseLost, "the worker no longer owns this Run" unless renewed
 
-    @lease_expires_at = Time.current + Run::AGENT_EXECUTION_LEASE_DURATION
+    @lease_heartbeat&.renewed!
   rescue StandardError => error
     raise unless transient_lease_error?(error)
 
@@ -585,14 +547,7 @@ class AgentRunJob < ApplicationJob
   end
 
   def stop_lease_heartbeat
-    return unless @lease_heartbeat_thread
-
-    @lease_heartbeat_mutex.synchronize do
-      @lease_heartbeat_stopped = true
-      @lease_heartbeat_condition.broadcast
-    end
-    @lease_heartbeat_thread.join
-    @lease_heartbeat_thread = nil
+    @lease_heartbeat&.stop
   end
 
   def release_execution_lease
@@ -617,7 +572,7 @@ class AgentRunJob < ApplicationJob
     run_at = if @lease_release_succeeded || current&.agent_execution_token.blank?
       Time.current + 1.second
     else
-      [ current&.agent_execution_expires_at || @lease_expires_at || Time.current, Time.current ].max + 1.second
+      [ current&.agent_execution_expires_at || @lease_heartbeat&.expires_at || Time.current, Time.current ].max + 1.second
     end
     arguments = @claimed ? [ @run.id, "execute" ] : @job_arguments
     AgentRunDelivery.record!(
@@ -633,25 +588,7 @@ class AgentRunJob < ApplicationJob
   end
 
   def transient_lease_error?(error)
-    transient_names = %w[
-      ActiveRecord::ConnectionNotEstablished
-      ActiveRecord::ConnectionTimeoutError
-      ActiveRecord::ConnectionFailed
-      ActiveRecord::Deadlocked
-      ActiveRecord::LockWaitTimeout
-      SQLite3::BusyException
-      SQLite3::LockedException
-      PG::ConnectionBad
-      PG::UnableToSend
-      Mysql2::Error::TimeoutError
-    ]
-    current = error
-    while current
-      return true if transient_names.include?(current.class.name)
-
-      current = current.cause
-    end
-    false
+    Ai::TransientDatabaseError.match?(error)
   end
 
   def fail_run(error)
