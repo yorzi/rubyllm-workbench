@@ -89,8 +89,22 @@ class Ai::ChatExecutorTest < ActiveSupport::TestCase
     assert_equal 5, attempt.output_tokens
     assert_equal "Hello world", messages.last.content
     assert_equal "Hello world", @run.result_summary["partial_output"]
+    assert_equal "stop", attempt.reload.finish_reason
     assert_operator @run.time_to_first_output_ms, :>=, 0
     assert_operator attempt.duration_ms, :>=, 0
+  end
+
+  test "records usage-only provider tool counters in the Run summary" do
+    model = RubyLLM.models.find(@chat.model_id, provider: @chat.provider)
+    tokens = RubyLLM::Tokens.new(input: 12, output: 5, server_tool_use: { "web_search_requests" => 2 })
+    response = Response.new(tokens, model.cost_for(tokens), :stop, "response-search")
+
+    Ai::ChatExecutor.new(@run.id, run: @run, chat: FakeChat.new(@chat, response)).call
+
+    @run.reload
+    assert @run.succeeded?
+    assert_equal({ "web_search_requests" => 2 }, @run.result_summary["provider_tool_usage"])
+    assert_nil @run.result_summary["provider_tool_calls"]
   end
 
   test "preserves partial output and failed Attempt when streaming raises" do

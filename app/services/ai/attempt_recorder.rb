@@ -88,6 +88,7 @@ module Ai
       else
         update_from_response!(response, status: :succeeded)
       end
+      record_finish_reason!(response)
       @attempt
     end
 
@@ -205,6 +206,11 @@ module Ai
       @attempt.assign_attributes(token_attributes(response.tokens)) if response.respond_to?(:tokens)
       @attempt.assign_attributes(Ai::CostNormalizer.for(response, model: model))
       @attempt.save!
+    end
+
+    def record_finish_reason!(response)
+      reason = response.finish_reason if response.respond_to?(:finish_reason)
+      @attempt.reload.update!(finish_reason: reason.to_s.truncate(40)) if reason.present?
     end
 
     def model_for(usage)

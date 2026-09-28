@@ -55,6 +55,26 @@ class AgentRunJobTest < ActiveSupport::TestCase
     end
   end
 
+  class EmptyAnswerAgent < DeterministicAgent
+    def complete?
+      @chat.messages.where(role: "assistant").exists?
+    end
+
+    def step
+      @chat.messages.create!(role: "assistant", content: "")
+      RubyLLM::Message.new(role: :assistant, content: "", finish_reason: :length)
+    end
+  end
+
+  class EmptyAnswerAgentRunJob < AgentRunJob
+    private
+
+    def restore_agent
+      @agent = EmptyAnswerAgent.new(@run.chat)
+      @tool_recorder = AgentToolRecorderStub.new
+    end
+  end
+
   class DeterministicRecoveryAgent
     def initialize(chat)
       @chat = chat
@@ -447,6 +467,26 @@ class AgentRunJobTest < ActiveSupport::TestCase
     events = run.lifecycle_events.where(name: "ai.agent.step").order(:created_at, :id)
     assert_equal [ "started", "completed", "started", "completed" ],
       events.map { |event| event.payload_json.fetch("step_status") }
+  end
+
+  test "fails instead of storing an empty report when the model exhausts its output budget" do
+    snapshot = {
+      "prompt" => "research something", "tools" => [], "tool_options" => {}, "provider_tools" => [],
+      "agent_definition" => {
+        "id" => 7, "name" => "Budgeted", "revision" => 1, "provider" => @chat.provider.to_s, "model_id" => @chat.model_id.to_s,
+        "instructions" => "Answer.", "tool_keys" => [], "provider_tools" => [], "options" => { "max_output_tokens" => 16 }
+      }
+    }
+    run = @chat.runs.create!(project: @project, operation: "agent", status: :queued, requested_by: "test", input_snapshot_json: snapshot)
+    delivery = AgentRunDelivery.record!(run:, intent: "execute", expected_generation: 0)
+
+    perform_enqueued_jobs { EmptyAnswerAgentRunJob.perform_later(*delivery.job_arguments) }
+
+    run.reload
+    assert run.failed?, "#{run.status}: #{run.result_summary.inspect}"
+    assert_includes run.error_summary, "finished without a final answer (finish reason: length)"
+    assert_not run.artifacts.where(kind: "report").exists?
+    assert_equal "length", run.attempts.order(:sequence).last.finish_reason
   end
 
   test "reconciles a blank assistant placeholder after reclaiming an expired Run lease" do

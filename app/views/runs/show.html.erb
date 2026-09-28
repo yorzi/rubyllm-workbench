@@ -316,9 +316,18 @@
     <% end %>
 
     <% provider_tool_calls = Array(@run.result_summary["provider_tool_calls"]) %>
-    <% if provider_tool_calls.any? %>
+    <% provider_tool_usage = @run.result_summary["provider_tool_usage"].to_h %>
+    <% if provider_tool_calls.any? || provider_tool_usage.any? %>
       <section class="mt-8 rounded-xl border border-line bg-panel p-5" aria-label="Provider tool activity">
         <h2 class="text-sm font-semibold text-ink">Provider tool activity</h2>
+        <% if provider_tool_usage.any? %>
+          <dl id="provider-tool-usage" class="mt-3 flex flex-wrap gap-2 text-xs">
+            <% provider_tool_usage.each do |counter, count| %>
+              <div class="rounded-md bg-canvas px-2 py-1"><dt class="inline text-muted"><%= counter.to_s.tr("_", " ") %></dt> <dd class="inline font-mono text-ink"><%= count %></dd></div>
+            <% end %>
+          </dl>
+          <p class="mt-2 text-xs leading-5 text-muted">Provider-reported usage counters. Some providers run hosted tools without returning individual call records.</p>
+        <% end %>
         <%= render "messages/provider_tool_activity", calls: provider_tool_calls %>
       </section>
     <% end %>

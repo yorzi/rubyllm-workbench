@@ -98,29 +98,14 @@ module Ai
       summary["source_message_id"] = source_message_id if source_message_id
       summary["citation_artifact_id"] = citation_artifact.id if citation_artifact
       summary["citation_count"] = citation_artifact.metadata_json["citation_count"] if citation_artifact
-      provider_tool_calls = provider_tool_call_records(response)
+      provider_tool_calls = Ai::ProviderToolActivity.calls(response)
       if provider_tool_calls.any?
         summary["provider_tool_calls"] = provider_tool_calls
         summary["provider_tool_step_count"] = provider_tool_calls.size
       end
+      provider_tool_usage = Ai::ProviderToolActivity.usage(response)
+      summary["provider_tool_usage"] = provider_tool_usage if provider_tool_usage.any?
       summary
-    end
-
-    def provider_tool_call_records(response)
-      return [] unless response.respond_to?(:server_tool_calls)
-
-      Array(response.server_tool_calls).filter_map do |call|
-        data = call.respond_to?(:to_h) ? call.to_h : call
-        next unless data.is_a?(Hash)
-
-        record = {
-          "type" => data[:type] || data["type"],
-          "name" => data[:name] || data["name"],
-          "id" => data[:id] || data["id"],
-          "input" => Ai::ToolPayloadSanitizer.call(data[:input] || data["input"])
-        }.compact
-        record if record.any?
-      end
     end
   end
 end

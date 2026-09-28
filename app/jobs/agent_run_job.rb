@@ -11,6 +11,7 @@ class AgentRunJob < ApplicationJob
   class LeaseCheckUnavailable < StandardError; end
   class InterruptedStepError < StandardError; end
   class StepLimitError < StandardError; end
+  class EmptyAnswerError < StandardError; end
 
   def perform(run_id, execution_intent = "execute", approval_invocation_id = nil, expected_generation = nil)
     @job_arguments = [ run_id, execution_intent, approval_invocation_id, expected_generation ]
@@ -204,6 +205,8 @@ class AgentRunJob < ApplicationJob
       continuation_step.checkpoint!
     end
 
+    ensure_final_answer!
+
     completed = @run.succeed!(
       completed_summary,
       agent_execution_token: @lease_token,
@@ -380,6 +383,16 @@ class AgentRunJob < ApplicationJob
     end
   end
 
+  # A reasoning model can spend its whole output budget before writing any
+  # text. Succeeding would store an empty report, so fail with the cause.
+  def ensure_final_answer!
+    return if latest_assistant_message&.content.present?
+
+    reason = @run.attempts.order(sequence: :desc, id: :desc).pick(:finish_reason)
+    detail = reason.present? ? " (finish reason: #{reason})" : ""
+    raise EmptyAnswerError, "The model finished without a final answer#{detail}. Raise the Agent's max output tokens or retry."
+  end
+
   def complete_assistant_response?(message)
     message.content.present? || message.tool_call? || message.server_tool_calls.any? ||
       message.citations.any? || message.attachments.attached?
@@ -401,10 +414,14 @@ class AgentRunJob < ApplicationJob
       summary["citation_count"] = citation_artifact.metadata_json["citation_count"]
     end
 
-    provider_calls = provider_tool_call_records(response)
+    provider_calls = Ai::ProviderToolActivity.calls(response)
     if provider_calls.any?
       summary["provider_tool_calls"] = (Array(summary["provider_tool_calls"]) + provider_calls).last(100)
       summary["provider_tool_step_count"] = Array(summary["provider_tool_calls"]).size
+    end
+    provider_usage = Ai::ProviderToolActivity.usage(response)
+    if provider_usage.any?
+      summary["provider_tool_usage"] = Ai::ProviderToolActivity.merge_usage(summary["provider_tool_usage"], provider_usage)
     end
     summary["partial_output"] = @attempt_recorder.partial_output if @attempt_recorder.partial_output.present?
     @run.update!(result_summary_json: summary) unless @run.reload.terminal?
@@ -437,23 +454,6 @@ class AgentRunJob < ApplicationJob
 
   def latest_assistant_message
     @run.chat.messages.where(role: "assistant").reorder(id: :desc).first
-  end
-
-  def provider_tool_call_records(response)
-    return [] unless response.respond_to?(:server_tool_calls)
-
-    Array(response.server_tool_calls).filter_map do |call|
-      data = call.respond_to?(:to_h) ? call.to_h : call
-      next unless data.is_a?(Hash)
-
-      record = {
-        "type" => data[:type] || data["type"],
-        "name" => data[:name] || data["name"],
-        "id" => data[:id] || data["id"],
-        "input" => Ai::ToolPayloadSanitizer.call(data[:input] || data["input"])
-      }.compact
-      record if record.any?
-    end
   end
 
   def agent_snapshot
