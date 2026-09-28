@@ -11,7 +11,8 @@ class SpeechRunsController < ApplicationController
   def create
     run = Ai::SpeechRunExecutor.enqueue(
       message: @message,
-      model_reference: speech_run_params.fetch(:model_reference)
+      model_reference: speech_run_params.fetch(:model_reference),
+      voice: speech_run_params[:voice]
     )
     redirect_to run_path(run), notice: "Speech Run ##{run.id} queued.", status: :see_other
   rescue ArgumentError, ActiveRecord::RecordInvalid => error
@@ -40,6 +41,6 @@ class SpeechRunsController < ApplicationController
   end
 
   def speech_run_params
-    params.expect(speech_run: [ :model_reference ])
+    params.expect(speech_run: [ :model_reference, :voice ])
   end
 end

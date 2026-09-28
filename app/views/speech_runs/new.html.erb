@@ -35,10 +35,15 @@
             end %>
             <%= form.select :model_reference, options_for_select(model_options, configured_models.first && "#{configured_models.first.provider}|#{configured_models.first.id}"), {}, disabled: configured_models.empty?, class: "mt-2 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-accent focus:ring-4 focus:ring-accent/20 disabled:opacity-60" %>
           </div>
+          <div>
+            <%= form.label :voice, "Voice (optional)", class: "block text-[10px] font-semibold uppercase tracking-[0.14em] text-muted" %>
+            <%= form.text_field :voice, maxlength: 80, placeholder: "Provider default", autocomplete: "off", spellcheck: false, disabled: configured_models.empty?, class: "mt-2 w-full rounded-lg border border-line bg-white px-3 py-2.5 font-mono text-sm text-ink outline-none focus:border-accent focus:ring-4 focus:ring-accent/20 disabled:opacity-60" %>
+            <p class="mt-1 text-xs leading-5 text-muted">Some providers have no default voice and reject a request without one. Use the provider's voice identifier.</p>
+          </div>
           <% if configured_models.empty? %>
             <p class="text-xs leading-5 text-muted">Speech generation is disabled until a speech-capable provider is configured.</p>
           <% else %>
-            <p class="text-xs leading-5 text-muted">The selected model's default voice and output format will be used. The Run freezes the source reply and model before it is queued.</p>
+            <p class="text-xs leading-5 text-muted">Without a voice, the model's default voice is used; the provider's default output format is always used. The Run freezes the source reply and model before it is queued.</p>
           <% end %>
           <div class="flex flex-wrap gap-2">
             <%= form.submit "Queue speech Run", disabled: configured_models.empty?, class: "cursor-pointer rounded-lg bg-accent px-4 py-2.5 text-xs font-medium text-white enabled:hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50" %>

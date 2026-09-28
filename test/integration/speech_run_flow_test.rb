@@ -91,6 +91,37 @@ class SpeechRunFlowTest < ActionDispatch::IntegrationTest
     assert_select "#lifecycle-events-heading"
   end
 
+  test "an explicit voice is frozen in the Run and sent to the provider" do
+    with_provider_configuration(@speech_model.provider) do
+      post project_chat_message_speech_run_path(@project, @chat, @message),
+        params: { speech_run: { model_reference: "#{@speech_model.provider}|#{@speech_model.id}", voice: " aura-2-thalia-en " } }
+    end
+    run = @chat.runs.order(:id).last
+    assert_equal "aura-2-thalia-en", run.input_snapshot.dig("speech", "voice")
+
+    fake_response = SpeechResponse.new("fake-mp3-data".b, @speech_model.id, "aura-2-thalia-en", "mp3", "audio/mpeg", RubyLLM::Tokens.new(input: 1, output: 1), nil)
+    calls = []
+    speaker = ->(text, **options) { calls << options; fake_response }
+    with_provider_configuration(@speech_model.provider) do
+      with_speech_client(speaker) { SpeechRunJob.perform_now(run.id) }
+    end
+
+    assert run.reload.succeeded?
+    assert_equal "aura-2-thalia-en", calls.first.fetch(:voice)
+  end
+
+  test "an invalid voice identifier re-renders the form without creating a Run" do
+    with_provider_configuration(@speech_model.provider) do
+      assert_no_difference -> { @chat.runs.count } do
+        post project_chat_message_speech_run_path(@project, @chat, @message),
+          params: { speech_run: { model_reference: "#{@speech_model.provider}|#{@speech_model.id}", voice: "bad voice; rm -rf" } }
+      end
+    end
+
+    assert_response :unprocessable_entity
+    assert_includes response.body, "Voice must be a provider voice identifier"
+  end
+
   test "provider failure remains visible on the Run and Attempt" do
     run = with_provider_configuration(@speech_model.provider) do
       Ai::SpeechRunExecutor.enqueue(

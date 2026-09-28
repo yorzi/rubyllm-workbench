@@ -1,17 +1,24 @@
 module Ai
   class SpeechRunExecutor
-    def self.enqueue(message:, model_reference:, requested_by: "local_user")
-      new(message:, model_reference:, requested_by:).enqueue
+    # Provider voice identifiers such as "alloy", "aura-2-thalia-en" or a
+    # cloned-voice id. Some providers have no default and reject a request
+    # without one.
+    VOICE_FORMAT = /\A[A-Za-z0-9][A-Za-z0-9._:\-]{0,79}\z/
+
+    def self.enqueue(message:, model_reference:, voice: nil, requested_by: "local_user")
+      new(message:, model_reference:, voice:, requested_by:).enqueue
     end
 
-    def initialize(message:, model_reference:, requested_by:)
+    def initialize(message:, model_reference:, voice:, requested_by:)
       @message = message
       @model_reference = model_reference.to_s
+      @voice = voice.to_s.strip.presence
       @requested_by = requested_by
     end
 
     def enqueue
       validate_message!
+      raise ArgumentError, "Voice must be a provider voice identifier (letters, digits, . _ : -; up to 80 characters)." if @voice && !@voice.match?(VOICE_FORMAT)
       provider, model_id = @model_reference.split("|", 2)
       raise ArgumentError, "Choose a speech model." if provider.blank? || model_id.blank?
 
@@ -43,7 +50,7 @@ module Ai
           "text" => @message.content,
           "provider" => provider,
           "model_id" => model_id,
-          "voice" => nil,
+          "voice" => @voice,
           "format" => nil
         }
       }
