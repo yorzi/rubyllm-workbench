@@ -146,6 +146,19 @@ class Ai::EvaluationMetricsTest < ActiveSupport::TestCase
     assert_nil metrics.latency_p95_ms
   end
 
+  test "keeps ledger totals apart from reported and estimated costs" do
+    create_case(@execution, key: "recorded", run_status: :succeeded, attempt_status: :succeeded,
+      result_summary: { "schema_validation" => "valid" }, cost_status: "recorded", recorded_cost: 0.03)
+
+    metrics = Ai::EvaluationMetrics.call(@execution)
+
+    assert_equal({ "USD" => 0.03.to_d }, metrics.recorded_cost_totals)
+    assert_equal({ "USD" => 0.001.to_d }, metrics.reported_cost_totals)
+    assert_equal({ "USD" => 0.002.to_d }, metrics.estimated_cost_totals)
+    assert_equal 3, metrics.known_cost_attempt_count
+    assert_equal 2, metrics.unknown_cost_attempt_count
+  end
+
   private
 
   def create_execution(revision, case_count, mode: :individual)
@@ -160,7 +173,7 @@ class Ai::EvaluationMetricsTest < ActiveSupport::TestCase
     )
   end
 
-  def create_case(execution, key:, run_status:, attempt_status:, result_summary: {}, error_code: nil, duration_ms: nil, input_tokens: nil, output_tokens: nil, cost_status: "unknown", reported_cost: nil, estimated_cost: nil)
+  def create_case(execution, key:, run_status:, attempt_status:, result_summary: {}, error_code: nil, duration_ms: nil, input_tokens: nil, output_tokens: nil, cost_status: "unknown", reported_cost: nil, recorded_cost: nil, estimated_cost: nil)
     chat = create_chat(@project)
     now = Time.current
     started_at = attempt_status == :queued ? nil : now - 1.second
@@ -188,6 +201,7 @@ class Ai::EvaluationMetricsTest < ActiveSupport::TestCase
       error_code:,
       cost_status:,
       reported_cost:,
+      recorded_cost:,
       estimated_cost:,
       currency: "USD"
     )

@@ -1,73 +1,120 @@
 # Roadmap
 
-Where RubyLLM Workbench is going next. Current behavior is described in
-[docs/SYSTEM_GUIDE.md](docs/SYSTEM_GUIDE.md) and its evidence in
-[docs/CAPABILITIES.md](docs/CAPABILITIES.md). The milestone gate records that
-used to live here are preserved in git history (`TODO.md` at commit `e9c9faf`).
+Updated: 2026-10-08 · Rails 8.1.4 · RubyLLM 2.1.0
 
-Updated: 2026-09-28
+The objective is a readable, reproducible Rails reference application that
+demonstrates deep RubyLLM integration. Strengthen evidence visitors can inspect
+before adding more independent labs. Current behavior is in
+[SYSTEM_GUIDE.md](docs/SYSTEM_GUIDE.md), verification in
+[CAPABILITIES.md](docs/CAPABILITIES.md), and the visitor route in
+[SHOWCASE.md](docs/SHOWCASE.md).
 
-## Where things stand
+## Current coverage
 
-| Milestone | Scope | Status |
+| Area | Implementation | Remaining gap |
 | --- | --- | --- |
-| M0 | Rails baseline, Projects, provider configuration status | `IMPLEMENTED` |
-| M1 | Model explorer, streaming Chat, Run/Attempt records, Run history | `IMPLEMENTED` |
-| M2 | Structured Experiments compared across models | `IMPLEMENTED` |
-| M3 | Tools, approvals, lifecycle timeline, parallel-call policy | `IMPLEMENTED` (parallel calls: no live evidence) |
-| M4 | Knowledge: ingestion, embeddings, retrieval, rerank, file sources | `IMPLEMENTED` (OCR: no live evidence) |
-| M5 | Provider web search and durable saved Agents | `IMPLEMENTED` |
-| M6 | Speech, image, video and transcription | `PARTIAL`, experimental |
-| M7 | Evaluation datasets, comparisons, reviews, rubric judge, Batch | `IMPLEMENTED` (Batch: no live evidence) |
-| M8 | Reproduction and event export, upstream gap reports | `IMPLEMENTED`; gap reports experimental |
+| Projects, model discovery, persisted streaming Chat | Implemented | Availability feedback when registry models stop being served. |
+| Structured Experiments, tools, approvals | Implemented | Live parallel calls on a supporting provider. |
+| Durable saved Agents | Implemented | Measured concurrency and a current-version live recovery walkthrough. |
+| Knowledge extraction, embeddings, retrieval, rerank | Implemented | Quality dataset, scale measurements, grounded answers and live OCR. |
+| Speech, transcription, image, video | Partial; experimental | Video resumption, video-job ledger attribution and live video. |
+| Evaluation datasets, comparisons, reviews, judge, Batch | Implemented locally; judge experimental | Live Batch, judge calibration and native Evaluation/Judge integration. |
+| Exports, lifecycle evidence, upstream drafts | Implemented; drafts experimental | Native OpenTelemetry export and an inspectable trace example. |
+| Source-anchored learning | Implemented, including Agent/evaluation/retrieval maps | Extend explanations alongside each new native integration. |
+| Public read-only demo | Planned | The full app currently allows writes and provider calls. |
 
-Scope is frozen for v0.1: no new milestone slices until the release gates
-below are closed.
+The old milestone gate records remain in git history (`TODO.md` at `e9c9faf`).
+Both RubyLLM 2.0 production patches were removed after verifying released 2.1
+fixes. Keep the remaining Agent usage-recorder seam isolated and tested.
 
-## v0.1 release gates
+## P0 — release the reference app and make the demo safe
 
-- [x] Hosted CI green on `main` (tests, system tests, lint, security scans,
-      production assets, Docker build).
-- [x] First live provider acceptance on the stable RubyLLM pin (2026-09-28).
-- [x] Private RubyLLM seams isolated and covered by contract tests.
-- [x] Demo tour for exploring without provider keys.
-- [x] English documentation set.
-- [ ] Owner: add the license and publish the private vulnerability reporting
-      path.
-- [ ] Owner: make the repository public and tag `v0.1.0`.
-- [ ] Manually verify a clean `bin/setup` on Debian/Ubuntu with and without
-      libvips (macOS verified).
+Complete this before expanding the feature set. Follow
+[RELEASING.md](docs/RELEASING.md).
 
-## Next
+The next implementation slice is the isolated read-only synthetic demo.
+Its route guards, provider/job isolation and mobile tour must pass before
+hosting. Current-version live checks and Linux/container checks are release
+acceptance tasks alongside that work.
 
-- **Upstream.** File the prepared RubyLLM fix for streamed OpenRouter
-  citations; drop both RubyLLM workarounds once released fixes are pinned
-  (see [CAPABILITIES.md](docs/CAPABILITIES.md#rubyllm-workarounds)).
-- **Hosted tool cost.** Record provider-reported cost (OpenRouter's `cost`
-  includes search fees) so Runs that search stop understating cost.
-- **Registry drift.** Surface models that fail with "No endpoints found" so
-  pickers stop offering them, and report metadata gaps to models.dev.
-- **Evidence breadth.** Live checks for video, OCR, provider Batch and
-  parallel tool calls with a provider that supports each.
-- **Durable video.** Resume a video job after a worker restart once RubyLLM
-  exposes a public way to restore it.
+- [x] Pin RubyLLM 2.1.0, apply its Rails migration, verify Rails is already at
+      the latest stable 8.1.4, and remove obsolete patches.
+- [x] Preserve ledger costs and exclude encrypted credentials from Docker.
+- [x] Add a ten-minute tour, skills-to-code map and source-linked diagrams.
+- [x] MIT license, contribution/security guides, issue/PR templates, blank
+      environment example and opt-in provider tests exist.
+- [ ] Run live acceptance on 2.1 with explicit provider/model selection and a
+      cost budget. Retain 2.0 evidence as history.
+- [ ] Verify hosted CI for the candidate commit, fresh Debian/Ubuntu setup
+      with and without libvips, and the runtime container.
+- [ ] Confirm private vulnerability reporting and review git history and
+      synthetic screenshots. Publish/tag `v0.1.0` with owner authorization.
+- [ ] Implement a read-only demo with an isolated synthetic database and no
+      provider credentials. Use an explicit route allowlist; permit only local
+      lexical search and synthetic evidence downloads. Reject mutation,
+      direct uploads, semantic/rerank GET calls and job submission. Tests must
+      prove crafted requests cannot call a provider, enqueue work or change
+      records. Verify desktop and 390px browsing.
+- [ ] Publish that demo with TLS and host checks and verify external access.
+      Authenticate any deployment of the full workbench.
 
-## Later
+Completion: an unfamiliar Rails developer can install from a clean checkout,
+complete the tour without a key, and inspect source/tests behind every claim.
+Public access must not create a model-spending or upload endpoint.
 
-- Provider file references with lifecycle and expiry for OCR and reuse.
-- Page-level provenance for OCR chunks.
-- Cross-provider embedding compatibility and a measured corpus/query-scale
-  record before making the sqlite-vector adapter the default; package its
-  binary per platform.
-- Rerank breadth: more providers, `top_n` on larger candidate sets, persisted
-  rerank records for cost and latency comparison.
-- Provider-native tracing or metrics export; the local lifecycle catalog is
-  intentionally application-level.
-- A lifetime storage budget for evaluation attachments.
+## P1 — one integrated case study with measured quality
+
+Next, strengthen the existing Knowledge → Agent → Evaluation path. Suggested
+case: answering questions about a small, redistributable Rails application
+from source excerpts, with citations and refusal when evidence is absent.
+
+1. Version a corpus and labelled query set with relevant chunk IDs, missing-
+   answer cases and misleading retrieved instructions. Measure recall@k and
+   reciprocal rank for lexical, semantic, hybrid and reranked retrieval on
+   the same corpus/model/chunk revision. Record sample count, latency, cost
+   and machine. Keep source text separate from tool authority.
+2. Add a bounded grounded-answer workflow that freezes source IDs, checksums,
+   offsets, retrieval options and embedding model into a Run. Validate returned
+   citations against the snapshot. Test empty evidence, stale sources,
+   unsupported claims and cancellation. Citation validity alone is not truth.
+3. Integrate `RubyLLM::Evaluation` and `RubyLLM::Judge` 2.1 on that case set.
+   Keep native evaluation distinct from the immutable application ledger and
+   avoid duplicate calls. Compare exact matching with a human-calibrated
+   qualitative rubric; publish disagreements and failures.
+4. Attribute one-shot embedding, rerank and media usage to an application
+   owner. Preserve reported/estimated provenance before serialization when
+   public callbacks permit it; never infer it from a ledger total. Reconcile
+   retries and hosted-tool fees without counting a request twice.
+
+Completion: a reproducible case study with commands, corpus licence, frozen
+inputs, measured outcomes and a useful failure analysis. Live calls require
+deliberate authorization and a bounded budget.
+
+## P2 — RubyLLM 2.1 production integration
+
+Take one slice at a time after the case study.
+
+| Slice | Implementation | Acceptance |
+| --- | --- | --- |
+| MCP client | Code-registered read-only server, fixed endpoint/tool allowlist, progress/timeout/disconnect states. Distinguish elicitation/task pauses from approval. | Deterministic server fixtures, filtering and restart tests, one intentional live read. No arbitrary endpoint or write tool; add encrypted credentials only when needed. |
+| Native tracing | Opt-in `RubyLLM::OpenTelemetry` with an in-memory exporter; correlate spans to Run/Attempt IDs. | No prompts, responses, arguments or secrets in spans; separate retries, tool/provider/queue time; export one synthetic trace. |
+| Streaming and connections | Split SSE frames, terminal errors, disconnects, no retry after output; measure a public persistent Faraday adapter under bounded concurrency. | Provider-free transport regressions and measured connection/query/allocation counts with machine and versions. Do not borrow upstream benchmark results. |
+| Files and prompt caching | Provider-upload reuse/expiry and explicit cache boundaries on supporting providers; keep originals and checksums. | Cross-process reuse, missing-upload recovery, model switching, cache reads/writes and TTL costs, each with a source-linked explanation. |
+
+## Later, driven by evidence
+
+- Complete live video, OCR, Batch and parallel-tool acceptance on supporting
+  providers. Remove experimental labels only for verified scope.
+- Obtain a public video-job restoration API before promising durable video.
+- Add page-level OCR provenance and measured SQLite corpus/concurrency limits.
+  Package the optional vector extension only after measuring it.
+- Expand browser tests for approval/denial, interrupted jobs, degradation and
+  exports as each case-study flow is implemented.
+- Add lifetime storage budgets before remote workbench use with persistent
+  users.
 
 ## Out of scope
 
-- Accounts, teams, billing or multi-tenant isolation.
-- Running code uploaded through the browser.
-- Provider-stored conversation state; conversation history stays local, as in
-  RubyLLM itself.
+Accounts, teams, billing, arbitrary browser-uploaded code, a plugin marketplace
+and multi-tenant SaaS are separate projects. Keep SQLite until measured
+workload constraints justify another store.

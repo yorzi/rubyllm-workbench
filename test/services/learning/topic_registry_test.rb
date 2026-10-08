@@ -11,6 +11,8 @@ class LearningTopicRegistryTest < ActiveSupport::TestCase
     project_boundary
     knowledge_ingestion
     knowledge_search
+    agent_execution
+    evaluation_workflow
   ].freeze
 
   test "registry exposes the learning topics in a stable order" do

@@ -31,6 +31,7 @@ module DogfoodReport
         input_tokens: attempts.sum { |attempt| attempt.input_tokens.to_i },
         output_tokens: attempts.sum { |attempt| attempt.output_tokens.to_i },
         reported_cost: attempts.filter_map(&:reported_cost).sum.to_f.round(6),
+        recorded_cost: attempts.filter_map(&:recorded_cost).sum.to_f.round(6),
         estimated_cost: attempts.filter_map(&:estimated_cost).sum.to_f.round(6),
         notes: @dogfood_notes,
         ruby_llm: Gem.loaded_specs.fetch("ruby_llm").version.to_s,

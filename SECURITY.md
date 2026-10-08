@@ -24,9 +24,13 @@ Things to know before exposing it:
 
 ## Reporting a vulnerability
 
-Please report vulnerabilities privately through GitHub: open the repository's
-**Security** tab and choose **Report a vulnerability**. Do not open a public
-issue, and do not include credentials or other people's data in the report.
+When GitHub private vulnerability reporting is enabled, open the repository's
+**Security** tab and choose **Report a vulnerability**. This channel was not
+confirmed during the 2026-10-08 review: the repository is private and its
+reporting API returned 404. Before a public release, the maintainer must verify
+that channel from an outside account or publish a verified private contact.
+Do not open a public vulnerability issue or include credentials or other
+people's data in a report.
 
 Include the affected commit or release, your environment, reproduction steps
 and the impact. This is a volunteer-maintained project without a formal

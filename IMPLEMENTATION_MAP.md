@@ -5,15 +5,16 @@ Where each capability lives in the code. Behavior is explained in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), and evidence in
 [docs/CAPABILITIES.md](docs/CAPABILITIES.md).
 
-Updated: 2026-09-28
+Updated: 2026-10-08
 
 ## Shape
 
 `Project -> Chat / Experiment / Agent / Knowledge / Evaluation -> Run + Attempt + evidence records -> inspectors and exports`
 
-Every provider operation goes through RubyLLM. Every execution a person starts
-becomes a `Run` with at least one `Attempt`, and everything it produces
-(messages, tool calls, approvals, Artifacts, lifecycle events) hangs off it.
+Every provider operation goes through RubyLLM. Chat, Agent, evaluation and
+media executions become Runs/Attempts with linked evidence. Knowledge
+ingestion, embeddings, retrieval and rerank use their own source/chunk/vector
+records; those operations do not create Runs.
 
 ## Execution core
 
@@ -27,7 +28,7 @@ becomes a `Run` with at least one `Attempt`, and everything it produces
 | Lifecycle events | `app/models/lifecycle_event.rb`, `app/services/ai/lifecycle_event_recorder.rb` |
 | RubyLLM instrumentation adapter | `app/services/ai/ruby_llm_instrumentation.rb`, `Ai::ExecutionContext` |
 | Private RubyLLM seams (listed, contract-tested) | `app/services/ai/ruby_llm_internals.rb` |
-| Temporary upstream workarounds | `lib/ruby_llm_workarounds/`, `app/services/ai/evaluation_batch_results.rb` |
+| Batch submitted-chat manifest check (public API) | `app/services/ai/evaluation_batch_results.rb` |
 | Background-job readiness | `app/services/ai/queue_readiness.rb` |
 
 ## Chat, tools and approvals

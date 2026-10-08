@@ -34,7 +34,7 @@
           <% if configured_models.empty? %>
             <p class="text-xs leading-5 text-muted">Video generation is disabled until a video-capable provider is configured.</p>
           <% else %>
-            <p class="text-xs leading-5 text-muted">The selected model's default video settings are used. RubyLLM 2.0.0 does not expose normalized video usage or cost, so the Attempt will show cost as unknown unless that API changes.</p>
+            <p class="text-xs leading-5 text-muted">The selected model's default video settings are used. This worker does not yet link RubyLLM's video-job usage ledger to the Attempt, so video cost is shown as unknown.</p>
           <% end %>
           <div class="flex flex-wrap gap-2">
             <%= form.submit "Queue video Run", disabled: configured_models.empty?, class: "cursor-pointer rounded-lg bg-accent px-4 py-2.5 text-xs font-medium text-white enabled:hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50" %>

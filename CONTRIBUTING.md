@@ -32,8 +32,9 @@ databases, uploads or machine-specific configuration.
 Run the checks CI runs:
 
 ```sh
+bin/vite build --mode=test
 bin/rails db:test:prepare test
-bin/rails test:system
+CI=1 bin/rails test:system
 bin/rails zeitwerk:check
 bin/rubocop
 bin/brakeman --no-pager
@@ -43,10 +44,11 @@ RAILS_ENV=production SECRET_KEY_BASE_DUMMY=1 bin/rails assets:precompile
 docker build --tag rubyllm-workbench:local .
 ```
 
+Build test assets once (`bin/vite build --mode=test`) before parallel tests.
 Tests must never call a provider; use the fakes and doubles already in
 `test/`. If your change touches provider behavior, also run the opt-in live
 suite (`bin/dogfood`, which needs your own key and may cost a few cents) and
-record the result in [docs/CAPABILITIES.md](docs/CAPABILITIES.md).
+  record the result in [docs/CAPABILITIES.md](docs/CAPABILITIES.md).
 
 ## Expectations
 

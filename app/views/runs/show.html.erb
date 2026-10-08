@@ -43,6 +43,10 @@
       </div>
     </div>
 
+    <% if @run.app_version == "demo" && @run.input_snapshot["demo_note"].present? %>
+      <p class="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800"><%= @run.input_snapshot["demo_note"] %> The values below are illustrative.</p>
+    <% end %>
+
     <section class="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Run metrics">
       <div class="rounded-xl border border-line bg-panel p-4"><p class="text-[10px] uppercase tracking-[0.14em] text-muted">Duration</p><p class="mt-2 font-mono text-lg font-semibold text-ink"><%= format_duration(@run.duration_ms) %></p></div>
       <div class="rounded-xl border border-line bg-panel p-4"><p class="text-[10px] uppercase tracking-[0.14em] text-muted">First output</p><p class="mt-2 font-mono text-lg font-semibold text-ink"><%= format_duration(@run.time_to_first_output_ms) %></p></div>

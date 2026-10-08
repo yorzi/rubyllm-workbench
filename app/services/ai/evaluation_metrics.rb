@@ -25,6 +25,7 @@ module Ai
       :output_tokens_sample_count,
       :output_tokens_attempt_count,
       :reported_cost_totals,
+      :recorded_cost_totals,
       :estimated_cost_totals,
       :known_cost_attempt_count,
       :unknown_cost_attempt_count,
@@ -58,10 +59,10 @@ module Ai
       input_samples = provider_attempts.filter_map(&:input_tokens)
       output_samples = provider_attempts.filter_map(&:output_tokens)
       reported_cost_totals = cost_totals(provider_attempts, "reported")
+      recorded_cost_totals = cost_totals(provider_attempts, "recorded")
       estimated_cost_totals = cost_totals(provider_attempts, "estimated")
       known_cost_attempt_count = provider_attempts.count do |attempt|
-        %w[reported estimated].include?(attempt.cost_status.to_s) &&
-          (attempt.reported_cost.present? || attempt.estimated_cost.present?)
+        %w[reported recorded estimated].include?(attempt.cost_status.to_s) && attempt.cost.present?
       end
 
       Metrics.new(
@@ -87,6 +88,7 @@ module Ai
         output_tokens_sample_count: output_samples.size,
         output_tokens_attempt_count: provider_attempts.size,
         reported_cost_totals:,
+        recorded_cost_totals:,
         estimated_cost_totals:,
         known_cost_attempt_count:,
         unknown_cost_attempt_count: provider_attempts.size - known_cost_attempt_count,
@@ -106,7 +108,7 @@ module Ai
 
         Array(case_result.run&.attempts).select do |attempt|
           attempt.started_at.present? || !attempt.queued? || attempt.tokens.any? ||
-            attempt.reported_cost.present? || attempt.estimated_cost.present?
+            attempt.cost.present?
         end
       end
     end
@@ -124,7 +126,7 @@ module Ai
     end
 
     def cost_totals(attempts, status)
-      field = status == "reported" ? :reported_cost : :estimated_cost
+      field = { "reported" => :reported_cost, "recorded" => :recorded_cost, "estimated" => :estimated_cost }.fetch(status)
       attempts.each_with_object(Hash.new { |totals, currency| totals[currency] = 0.to_d }) do |attempt, totals|
         next unless attempt.cost_status.to_s == status
 

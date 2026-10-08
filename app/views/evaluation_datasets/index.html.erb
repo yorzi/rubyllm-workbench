@@ -6,6 +6,7 @@
     <div class="mt-3 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
       <div>
         <h1 class="text-3xl font-semibold tracking-tight text-ink">Evaluation datasets</h1>
+        <%= render "shared/learning_link", topic: "evaluation_workflow", return_to: project_evaluation_datasets_path(@project) %>
         <p class="mt-2 max-w-2xl text-sm leading-6 text-muted">Keep versioned input/expected-output cases and run them through a saved structured Experiment.</p>
       </div>
       <%= link_to "New dataset", new_project_evaluation_dataset_path(@project), class: "inline-flex items-center justify-center rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700" %>

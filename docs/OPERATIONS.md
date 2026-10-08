@@ -4,12 +4,12 @@ How to run the workbench locally, verify it, and interpret what you see. It
 never stores provider secrets, and it does not present local success as a
 deployment or business result.
 
-Updated: 2026-09-28
+Updated: 2026-10-08
 
 ## Prerequisites
 
 - Ruby `4.0.2`, Node.js `24.21.0` (see `.ruby-version` and `.nvmrc`)
-- Rails `8.1.4`, RubyLLM `2.0.0`, SQLite, Tailwind, Vite, Hotwire, Solid Queue
+- Rails `8.1.4`, RubyLLM `2.1.0`, SQLite, Tailwind, Vite, Hotwire, Solid Queue
 - Optional: the native `libvips` library, needed only for Active Storage image
   variants
 
@@ -59,9 +59,14 @@ Workbench reads provider settings only through RubyLLM's configuration, from
 environment variables first and then encrypted Rails credentials:
 
 ```sh
-# .env or your shell profile; never on a command line
-OPENROUTER_API_KEY=...
+# Create a local file for Foreman, then edit it locally.
+cp .env.example .env
 ```
+
+`bin/dev` loads `.env` through Foreman. `bin/rails`, `bin/dogfood` and other
+standalone commands do not load it; use encrypted credentials or a securely
+prepared process environment for those commands. Blank example keys leave
+providers unconfigured.
 
 Credentials files are local to each installation and are not part of the
 repository. Create your own with `bin/rails credentials:edit` if you prefer
@@ -85,18 +90,28 @@ or commits, and never print a decrypted credentials file.
 Run the cheap, deterministic checks first:
 
 ```sh
+bin/vite build --mode=test              # build once before parallel tests
 bin/rails test                          # PARALLEL_WORKERS=1 for a single process
-bin/rails test:system                   # Selenium; binds 127.0.0.1
+CI=1 bin/rails test:system              # Selenium; built assets, binds 127.0.0.1
 bin/rails zeitwerk:check
 bin/rubocop
 bin/brakeman --no-pager
 bin/bundler-audit
+npm audit --audit-level=high
 RAILS_ENV=production SECRET_KEY_BASE_DUMMY=1 bin/rails assets:precompile
 ```
 
 If the environment cannot start parallel test workers, `PARALLEL_WORKERS=1
 bin/rails test` runs the suite in one process. CI runs all of the above plus a
 Docker image build on every push to `main`.
+
+For the browser suite, `CI=1` makes Vite serve the built test assets rather
+than probing for a development server. The tests wait for Turbo before
+clicking interactive controls.
+
+If you previously precompiled production assets in this checkout, run
+`bin/rails assets:clobber` before testing or developing. Propshaft otherwise
+continues to resolve the old production manifest, including outdated CSS.
 
 ## Live provider dogfood
 
@@ -119,13 +134,15 @@ result in [CAPABILITIES.md](CAPABILITIES.md).
 
 ## Upgrading RubyLLM
 
-1. Bump the gem and run the full suite. `test/services/ai/ruby_llm_internals_test.rb`
-   and `test/lib/openrouter_stream_evidence_test.rb` fail when a private seam
-   Workbench depends on moves or an upstream fix lands.
-2. Remove any workaround listed in
+1. Read the release's upgrade guide, back up persistent data, update the gem
+   conservatively and review the lockfile. Schema changes need the framework
+   generator and a committed migration; see [RELEASING.md](RELEASING.md).
+2. Run the full suite, especially `test/services/ai/ruby_llm_internals_test.rb`,
+   Batch workflow and native streaming evidence regressions. Remove a patch in
    [CAPABILITIES.md](CAPABILITIES.md#rubyllm-workarounds) that the release
-   fixes.
-3. Run `bin/dogfood --paid` and update the capability matrix.
+   fixes. Both 2.0 patches are removed on the current 2.1 pin.
+3. Intentionally run `bin/dogfood --paid` with an agreed provider and budget,
+   then update the matrix. Historical live evidence does not certify an upgrade.
 
 ## Docker
 
@@ -246,8 +263,9 @@ submitted.
   is stored as an `image` Artifact with MIME type, size and SHA-256.
 - **Video**: RubyLLM `animate` submits and polls inside the worker, so the
   browser never waits. The provider job ID is recorded in the Run timeline
-  (redacted from exports). RubyLLM 2.0.0 cannot restore a video job, and video
-  has no normalized usage, so its cost is unknown.
+  (redacted from exports). The app cannot restore a video job yet. RubyLLM 2.1
+  has video-job accounting, but this worker does not link it to its Attempt,
+  so Workbench's video cost remains unknown.
 - **Transcription**: FLAC, M4A, MP3, MP4, MPEG, OGG, WAV or WebM up to 25 MB.
   The upload becomes an `audio` input Artifact; the transcript is a text
   Artifact.
@@ -281,7 +299,7 @@ ready state does not prove a provider is reachable.
 2. **Operation**: `chat`, `structured`, `agent`, `speech`, `image`, `video` or
    `transcription`.
 3. **Attempts**: retries, the provider/model that ran, usage, cost provenance
-   (reported, estimated, unknown) and finish reason.
+   (reported, recorded, estimated, unknown) and finish reason.
 4. **Lifecycle events**: the local order of state changes, first output, tools,
    approvals and Artifacts.
 5. **Tools and provider tool activity**: calls, redacted arguments, results,
@@ -292,6 +310,12 @@ ready state does not prove a provider is reachable.
 
 A succeeded Run can still carry an unknown cost, and a failed Run is valuable
 evidence. Do not read only the badge.
+
+`recorded` preserves a RubyLLM usage-ledger total calculated at request time.
+The serialized row does not retain whether it was provider-reported or
+estimated. Workbench keeps that amount rather than repricing it with current
+registry metadata or calling it a provider invoice. Earlier Attempts are not
+backfilled. A total with unknown-cost Attempts is a known subtotal.
 
 ## Troubleshooting
 

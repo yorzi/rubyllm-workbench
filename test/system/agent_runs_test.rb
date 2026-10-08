@@ -22,6 +22,7 @@ class AgentRunsTest < ApplicationSystemTestCase
     confirmation = "Cancel this Run? The provider may already have accepted the request."
 
     visit run_path(run)
+    wait_for_turbo
 
     dismiss_confirm(confirmation) do
       click_button "Cancel Run"

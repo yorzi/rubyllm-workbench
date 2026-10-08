@@ -1,5 +1,8 @@
 <% content_for :title, "#{@dataset.name} · #{@project.name}" %>
 <% content_for :inspector do %>
+  <%= render "shared/learning_link", topic: "evaluation_workflow", return_to: project_evaluation_dataset_path(@project, @dataset) %>
+<% end %>
+<% content_for :inspector do %>
   <div class="sticky top-0">
     <p class="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Evaluation dataset</p>
     <div class="mt-4 rounded-xl border border-line bg-panel p-4">

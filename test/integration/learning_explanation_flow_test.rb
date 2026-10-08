@@ -94,6 +94,8 @@ class LearningExplanationFlowTest < ActionDispatch::IntegrationTest
       run_inspector
       project_boundary
       knowledge_ingestion
+      agent_execution
+      evaluation_workflow
     ].each do |topic|
       get learning_topic_path(topic), headers: { "Turbo-Frame" => "learning-panel" }
 
@@ -113,6 +115,23 @@ class LearningExplanationFlowTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "app/models/project.rb"
     assert_includes response.body, "parameterize"
     assert_includes response.body, "nested Rails resources"
+  end
+
+  test "Agent and evaluation pages link source-anchored diagrams" do
+    project = create_project(name: "Learning durable workflows")
+    {
+      project_agent_definitions_path(project) => "agent_execution",
+      project_evaluation_datasets_path(project) => "evaluation_workflow"
+    }.each do |path, topic|
+      get path
+      assert_response :success
+      assert_includes response.body, learning_topic_path(topic, return_to: path)
+
+      get learning_topic_path(topic), headers: { "Turbo-Frame" => "learning-panel" }
+      assert_response :success
+      assert_select "figure[data-learning-flow='#{topic}']"
+      assert_includes response.body, "Execution map"
+    end
   end
 
   test "direct topic URLs remain readable outside a frame" do

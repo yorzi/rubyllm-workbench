@@ -26,6 +26,7 @@
     <div>
       <dt class="font-semibold text-ink">Cost</dt>
       <dd>Reported: <%= format_evaluation_cost_totals(metrics.reported_cost_totals) %></dd>
+      <dd>Recorded: <%= format_evaluation_cost_totals(metrics.recorded_cost_totals) %></dd>
       <dd>Estimated: <%= format_evaluation_cost_totals(metrics.estimated_cost_totals) %></dd>
       <dd><%= metrics.unknown_cost_attempt_count %>/<%= metrics.cost_attempt_count %> provider Attempts have unknown cost.</dd>
     </div>

@@ -1,5 +1,5 @@
 module Ai
-  # Maps RubyLLM 2.0 instrumentation onto the local lifecycle catalog.
+  # Maps RubyLLM instrumentation onto the local lifecycle catalog.
   #
   # Provider instrumentation is consumed through an adapter so the domain model
   # never depends on unstable payload fields. This

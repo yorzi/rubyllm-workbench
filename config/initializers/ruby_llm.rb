@@ -12,6 +12,7 @@ RUBYLLM_CONFIGURATION_ENV = {
   gemini_api_key: "GEMINI_API_KEY",
   gpustack_api_base: "GPUSTACK_API_BASE",
   gpustack_api_key: "GPUSTACK_API_KEY",
+  hetzner_api_key: "HETZNER_API_KEY",
   mistral_api_key: "MISTRAL_API_KEY",
   ollama_api_base: "OLLAMA_API_BASE",
   ollama_api_key: "OLLAMA_API_KEY",
@@ -26,6 +27,7 @@ RUBYLLM_CONFIGURATION_ENV = {
   openrouter_app_url: "OPENROUTER_APP_URL",
   openrouter_app_name: "OPENROUTER_APP_NAME",
   perplexity_api_key: "PERPLEXITY_API_KEY",
+  typesafe_api_key: "TYPESAFE_API_KEY",
   vertexai_project_id: "VERTEXAI_PROJECT_ID",
   vertexai_location: "VERTEXAI_LOCATION",
   vertexai_service_account_key: "VERTEXAI_SERVICE_ACCOUNT_KEY",
@@ -45,7 +47,3 @@ RubyLLM.configure do |config|
     config.public_send("#{option}=", value) if value.present?
   end
 end
-
-# Temporary, self-disabling fix for a RubyLLM 2.0.0 OpenRouter streaming gap.
-require Rails.root.join("lib/ruby_llm_workarounds/openrouter_stream_evidence").to_s
-RubyLLMWorkarounds::OpenRouterStreamEvidence.install!

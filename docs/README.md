@@ -4,9 +4,12 @@ This set explains the workbench's current behavior, evidence, limits and
 planned growth. Everything needed to understand and run it is in this
 checkout.
 
-Updated: 2026-09-28
+Updated: 2026-10-08
 
 ## If you have five minutes
+
+For a portfolio walkthrough, start with [SHOWCASE.md](SHOWCASE.md), which
+maps the synthetic tour to engineering decisions, source and verification.
 
 1. [SYSTEM_GUIDE.md](SYSTEM_GUIDE.md): what the application does and how to
    read its output.
@@ -27,6 +30,9 @@ Updated: 2026-09-28
 | `ARCHITECTURE.md` | How do services, jobs, records and states connect? |
 | `OPERATIONS.md` | How do I run, verify and troubleshoot it? |
 | `LEARNING.md` | How does the in-page, source-anchored explanation layer work? |
+| `SHOWCASE.md` | What engineering skills can a visitor inspect in ten minutes? |
+| `RELEASING.md` | What still needs verification and authorization before publication? |
+| `UPGRADE_REVIEW_2026-10-08.md` | The RubyLLM 2.1 upgrade and current project audit |
 | `CHANGELOG.md` | What changed, and why? |
 | `UPGRADE_REVIEW_2026-09-26.md` | The Rails 8.1.4 upgrade review and the defects it found |
 | `../IMPLEMENTATION_MAP.md` | Where does each capability live in the code? |

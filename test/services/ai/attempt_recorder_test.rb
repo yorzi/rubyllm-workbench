@@ -37,6 +37,28 @@ class Ai::AttemptRecorderTest < ActiveSupport::TestCase
     assert_equal "stop", @run.result_summary["finish_reason"]
   end
 
+  test "copies a persisted usage total into the Attempt and Run without changing its provenance" do
+    recorder = Ai::AttemptRecorder.new(@run, attempt: @attempt, clock: monotonic_clock)
+    recorder.start!
+    usage = @chat.ruby_llm_usages.create!(
+      operation: "chat", status: "succeeded", provider: @chat.provider, model: @chat.model_id,
+      input_tokens: 12, output_tokens: 7, total_cost: 0.0201,
+      server_tool_use: { "web_search_requests" => 2 }
+    )
+    response = Response.new(RubyLLM::Tokens.new(input: 12, output: 7), nil, :stop, "ledger-response")
+
+    recorder.succeed!(response)
+
+    assert_equal "recorded", @attempt.reload.cost_status
+    assert_equal BigDecimal("0.0201"), @attempt.recorded_cost
+    assert_equal [ usage.id ], @attempt.ruby_llm_usage_ids_json
+    assert_nil @attempt.reported_cost
+    assert_nil @attempt.estimated_cost
+    assert_equal BigDecimal("0.0201"), @run.reload.total_cost
+    assert_equal "recorded", @run.cost_status
+    assert_equal({ "web_search_requests" => 2 }, usage.reload.tokens.server_tool_use)
+  end
+
   private
 
   def monotonic_clock

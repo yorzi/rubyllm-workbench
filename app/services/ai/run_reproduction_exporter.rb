@@ -221,6 +221,7 @@ module Ai
         "cost" => {
           "status" => safe_text(attempt.cost_status),
           "reported" => decimal(attempt.reported_cost),
+          "recorded" => decimal(attempt.recorded_cost),
           "estimated" => decimal(attempt.estimated_cost),
           "currency" => safe_value(attempt.currency)
         },

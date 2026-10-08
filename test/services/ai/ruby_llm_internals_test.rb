@@ -29,12 +29,4 @@ class Ai::RubyLlmInternalsTest < ActiveSupport::TestCase
 
     assert_not Ai::RubyLlmInternals.wrap_usage_recorder(llm_chat) { flunk "must not wrap" }
   end
-
-  test "Batch still sizes results through the private hook EvaluationBatchResults overrides" do
-    assert_includes RubyLLM::Batch.private_instance_methods, :result_slot_count
-    file, line = RubyLLM::Batch.instance_method(:collect_results).source_location
-    source = File.readlines(file)[(line - 1), 12].join
-
-    assert_includes source, "result_slot_count(results)", "RubyLLM::Batch#collect_results no longer calls result_slot_count"
-  end
 end

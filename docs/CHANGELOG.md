@@ -6,7 +6,40 @@ before the public-release cleanup are preserved in git history (see this file
 at commit `8bd33c8`), together with the milestone gate records formerly in
 `TODO.md` (commit `e9c9faf`).
 
-## Unreleased: public release preparation (2026-09-28)
+## Unreleased: RubyLLM 2.1 and showcase review (2026-10-08)
+
+### Changed
+
+- Upgrade RubyLLM to an exact 2.1.0 pin and add its Rails schema migration;
+  Rails 8.1.4 remains the latest stable version. Add environment mappings for
+  Hetzner and TypeSafe without enabling either provider.
+- Remove the released OpenRouter streaming and Batch index patches. Batch
+  collection now uses public APIs and requires the frozen chat manifest.
+- Preserve serialized usage totals as `recorded_cost` with distinct provenance
+  in Runs, evaluation metrics, exports and live-report output. Avoid repricing
+  historical requests from current metadata.
+
+### Added
+
+- Source-anchored Agent and evaluation learning panels with compact execution
+  maps, plus a Knowledge retrieval map and a mobile browser regression.
+- Ten-minute showcase guide and a skills-to-code/test map, an updated P0–P2
+  development plan, dated upgrade review and public-release checklist.
+- Blank `.env.example`, with explicit Foreman versus standalone Rails loading
+  instructions. Historical 2.0 live evidence remains labelled separately.
+
+### Fixed
+
+- Docker now excludes installation-local encrypted Rails credentials as well
+  as their keys and environment files.
+- Correct copy that implied Knowledge retrieval created Runs.
+- Mobile navigation collapses above the feature; learning links reveal the
+  explanation below it. Synthetic Run labels appear before the metrics.
+- Update vulnerable `source-map-js` 1.2.1 to 1.2.2 and Brakeman to 8.1.0.
+- Live reports sum known cost categories and do not label the subtotal an
+  upper bound when some costs are unknown.
+
+## Earlier unreleased work: public release preparation (2026-09-28)
 
 ### Added
 

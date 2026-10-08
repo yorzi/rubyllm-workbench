@@ -3,7 +3,7 @@ require "test_helper"
 # Keeps the public documentation linked, in English, and aligned with the
 # concepts and evidence boundaries the application actually implements.
 class HumanSystemDocsTest < ActiveSupport::TestCase
-  DOCS = %w[README.md CAPABILITIES.md SYSTEM_GUIDE.md ARCHITECTURE.md OPERATIONS.md LEARNING.md CHANGELOG.md].freeze
+  DOCS = %w[README.md CAPABILITIES.md SYSTEM_GUIDE.md ARCHITECTURE.md OPERATIONS.md LEARNING.md SHOWCASE.md RELEASING.md CHANGELOG.md].freeze
   ROOT_DOCS = %w[README.md ROADMAP.md IMPLEMENTATION_MAP.md CONTRIBUTING.md SECURITY.md LICENSE].freeze
 
   test "the entry points link every core document" do
@@ -26,7 +26,7 @@ class HumanSystemDocsTest < ActiveSupport::TestCase
 
   test "capability matrix distinguishes registry gates from provider evidence" do
     assert_mentions "docs/CAPABILITIES.md",
-      "RubyLLM 2.0.0",
+      "RubyLLM 2.1.0",
       "explicitly declare `function_calling`",
       "registry metadata is only an admission hint",
       "no reliable Workbench model-level web-search capability gate",

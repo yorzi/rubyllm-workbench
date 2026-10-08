@@ -3,6 +3,7 @@ require "application_system_test_case"
 class ProjectsTest < ApplicationSystemTestCase
   test "creates a Project from the local workbench" do
     visit root_path
+    wait_for_turbo
 
     assert_selector "h1", text: "Projects"
     fill_in "Name", with: "Browser smoke project"

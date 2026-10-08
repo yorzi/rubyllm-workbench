@@ -142,7 +142,7 @@ module Learning
             ),
             boundaries: list(
               "The app owns the snapshot and audit records; the provider still owns model behavior and provider-specific compatibility.",
-              "RubyLLM 2.0.0 is the current project target. Provider web search is opt-in; the model registry does not establish support for every model/protocol.",
+              "RubyLLM 2.1.0 is the current project target. Provider web search is opt-in; the model registry does not establish support for every model/protocol.",
               "Provider web search passed a live OpenRouter check on 2026-09-28 (docs/CAPABILITIES.md). OpenRouter reports hosted search as usage counters and citations, not tool-call blocks.",
               "The learning layer explains the path without rendering prompts, credentials, raw provider payloads, or arbitrary source files."
             )
@@ -231,7 +231,7 @@ module Learning
               step("2. Run owns the lifecycle state", "A Run moves through queued, running, waiting for approval, and terminal states. Transitions record local lifecycle events and keep the result summary durable."),
               step("3. Attempt measures one provider request", "AttemptRecorder starts or continues an Attempt, captures time to first output, streamed partial output, token usage, duration, provider/model identity, and normalized cost."),
               step("4. Events are safe and deduplicated", "LifecycleEventRecorder accepts a fixed event catalog, whitelists payload keys, derives an event key, and ignores duplicate inserts instead of creating an unbounded trace."),
-              step("5. The page presents evidence with uncertainty", "The inspector shows reported, estimated, or unknown cost, diagnostics, structured Artifacts, tool records, input snapshots, and lifecycle events without implying provider-native tracing.")
+              step("5. The page presents evidence with uncertainty", "The inspector shows reported, recorded, estimated, or unknown cost, diagnostics, structured Artifacts, tool records, input snapshots, and lifecycle events without implying provider-native tracing.")
             ),
             code_references: list(
               reference("app/controllers/runs_controller.rb", "Inspector action", "Loads the bounded evidence graph and synchronizes tool records.", 25, 33, "def show"),
@@ -254,7 +254,7 @@ module Learning
             ),
             boundaries: list(
               "Local lifecycle events are an application audit timeline and an adapter view of RubyLLM notifications, not provider-native distributed tracing.",
-              "Cost can be reported, estimated, or unknown; the page does not turn an estimate into an invoice.",
+              "Cost can be reported, recorded, estimated, or unknown. Recorded preserves a RubyLLM ledger total whose original pricing provenance was not saved; it is not an invoice.",
               "A completed local Run proves what this application persisted, not deployment health, provider SLA, or business impact."
             )
           ),
@@ -374,8 +374,82 @@ module Learning
               "Provider file references, live OCR evidence, page-level provenance, and remote URL fetching are outside this topic's implemented path.",
               "Search evidence is not an LLM answer, citation guarantee, production deployment result, or business outcome."
             )
-          )
+          ),
+          agent_execution_topic,
+          evaluation_workflow_topic
         ].freeze
+      end
+
+      def agent_execution_topic
+        Topic.new(
+          key: "agent_execution",
+          title: "How durable Agents work",
+          kicker: "Snapshot → outbox → lease → RubyLLM steps",
+          summary: "RubyLLM owns the Agent conversation and tool loop. Rails owns durable delivery, execution leases, approval decisions and recovery. These responsibilities meet at the Run's frozen contract.",
+          steps: list(
+            step("1. Freeze the definition", "AgentRunExecutor validates the provider and tool allowlist, then creates the dedicated Chat, Run, first Attempt and outbox delivery in one database transaction."),
+            step("2. Deliver and claim", "The dispatcher delivers due outbox rows to Solid Queue. A worker claims an expiring token and increments the generation under a Run lock; duplicate deliveries cannot share the live lease."),
+            step("3. Restore and advance", "AgentRunJob rebuilds the RubyLLM Agent and callbacks from the snapshot, uses ActiveJob::Continuable for persisted steps, and renews its lease while waiting for the provider."),
+            step("4. Pause or stop explicitly", "Approvals persist the pending tool decision and release work until a human acts. Cancellation and generation checks stop late local writes. Recovery inspects saved steps instead of blindly submitting the task again."),
+            step("5. Inspect the outcome", "Attempts retain each request, finish reason and cost. Tool invocations, citations and the final report link to the Run; an empty final answer is a failure.")
+          ),
+          code_references: list(
+            reference("app/services/ai/agent_run_executor.rb", "Atomic launch", "Freezes the inputs and commits an outbox delivery with the Run.", 13, 54, "AgentRunDelivery.record!"),
+            reference("app/models/agent_run_delivery.rb", "Transactional outbox", "Defines durable delivery intent and deduplication.", 1, 65, "class AgentRunDelivery"),
+            reference("app/models/run/agent_execution_lease.rb", "Lease fencing", "Claims and renews a token and generation under a Run lock.", 1, 55, "def claim_agent_execution!"),
+            reference("app/jobs/agent_run_job.rb", "Continuable execution", "Restores the Agent and advances durable job steps.", 1, 36, "include ActiveJob::Continuable"),
+            reference("test/integration/agent_run_worker_replay_test.rb", "Replay regression", "Exercises worker recovery against persisted execution state.", 1, 60, "class AgentRunWorkerReplayTest")
+          ),
+          external_references: list(
+            external("RubyLLM Agents", "https://rubyllm.com/agents/", "Agent definitions, tools and step semantics"),
+            external("Rails job continuations", "https://guides.rubyonrails.org/active_job_basics.html#job-continuations", "Persisted progress across worker interruptions")
+          ),
+          evidence: list(
+            note("Run and outbox", "The frozen Agent revision, delivery intent, generation and execution state."),
+            note("Attempts and Artifacts", "Request history, tool decisions, citation set and linked final report.")
+          ),
+          boundaries: list(
+            "Lease fencing protects local writes; it cannot revoke a provider request or guarantee exactly-once external execution.",
+            "Synthetic replay tests prove application recovery behavior. They do not establish provider reliability or a production concurrency limit."
+          )
+        )
+      end
+
+      def evaluation_workflow_topic
+        Topic.new(
+          key: "evaluation_workflow",
+          title: "How evaluations work",
+          kicker: "Frozen cases → model Runs → independent outcomes",
+          summary: "Workbench's evaluation ledger separates transport success, schema validity, exact JSON agreement and qualitative review. RubyLLM handles model calls; Rails preserves the cases, snapshots, outcomes and recovery decisions.",
+          steps: list(
+            step("1. Freeze the inputs", "Editing a dataset creates an immutable revision. EvaluationExecutor copies the dataset, Experiment and selected model targets into a comparison so later edits do not change its meaning."),
+            step("2. Materialize each request", "Each model and case receives its own Chat, Run and Attempt. Only the input enters the generation prompt; expected output, tags and attachments stay local."),
+            step("3. Measure separate outcomes", "EvaluationCaseOutcome records whether a response was received and whether its JSON passed the saved schema. Exact JSON equality is a separate result, not a semantic-quality score."),
+            step("4. Review independently", "Human reviews append ratings. An optional rubric judge sees input, generated output and rubric, and produces its own Run and cost; it cannot overwrite the exact match."),
+            step("5. Recover without guessing", "Only unstarted cases may be requeued. Interrupted provider work fails visibly; uncertain Batch submissions require reconciliation rather than automatic resubmission.")
+          ),
+          code_references: list(
+            reference("app/services/ai/evaluation_executor.rb", "Comparison snapshot", "Freezes the revision and creates executions for selected models.", 45, 93, "def enqueue_comparison"),
+            reference("app/models/evaluation_dataset_revision.rb", "Immutable revision", "Defines the stored case contract and validation limits.", 1, 65, "class EvaluationDatasetRevision"),
+            reference("app/services/ai/evaluation_case_outcome.rb", "Outcome separation", "Derives transport and schema outcomes from persisted evidence.", 1, 39, "Outcome = Data.define"),
+            reference("app/services/ai/evaluation_metrics.rb", "Measured metrics", "Separates outcome denominators, known costs and latency sample sizes.", 40, 95, "known_cost_attempt_count"),
+            reference("app/jobs/evaluation_batch_refresh_job.rb", "Batch reconciliation", "Collects only against the frozen case count and leaves failures visible.", 1, 31, "EvaluationBatchResults.call")
+          ),
+          external_references: list(
+            external("RubyLLM structured output", "https://rubyllm.com/structured-output/", "Schemas constrain output format"),
+            external("RubyLLM Evaluations", "https://rubyllm.com/next/evaluations/", "Native evaluation definitions; comparison with Workbench is planned"),
+            external("Rails Active Record transactions", "https://api.rubyonrails.org/classes/ActiveRecord/Transactions/ClassMethods.html", "Atomic snapshots and persistent boundaries")
+          ),
+          evidence: list(
+            note("Revision and comparison", "Frozen cases, prompt revision and exact provider/model targets."),
+            note("Case result", "Transport outcome, schema outcome, exact match, independent reviews and a link to the Run.")
+          ),
+          boundaries: list(
+            "Exact matching measures JSON agreement. An uncalibrated judge and a tiny dataset do not establish model quality.",
+            "Batch processing time is not comparable to individual request latency. P95 requires at least 20 samples.",
+            "This UI uses Workbench's evaluator. It does not yet integrate RubyLLM::Evaluation or RubyLLM::Judge from 2.1."
+          )
+        )
       end
 
       def list(*items)

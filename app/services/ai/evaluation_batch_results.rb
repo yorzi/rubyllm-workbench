@@ -1,34 +1,15 @@
 module Ai
   class EvaluationBatchResults
-    # RubyLLM 2.0.0 accepts duplicate, negative and out-of-range normalized
-    # indices. Fixed upstream in crmne/ruby_llm#993 (merged 2026-09-26, not yet
-    # released); remove this module once a release containing it is pinned.
-    # Validate before Batch delivers ANY result to a Chat/store. A check on
-    # batch.messages is already too late.
-    # Keep this private-API workaround isolated to evaluation batch collection;
-    # it is listed in Ai::RubyLlmInternals.
-    module IndexValidation
-      attr_accessor :workbench_expected_result_count
-
-      private
-
-      def result_slot_count(results)
-        seen = {}
-        results.each do |index, _result, _failure_status|
-          unless index.is_a?(Integer) && index >= 0 && index < workbench_expected_result_count
-            raise RubyLLM::Error, "Provider batch returned an invalid evaluation result index."
-          end
-          raise RubyLLM::Error, "Provider batch returned a duplicate evaluation result index." if seen[index]
-
-          seen[index] = true
-        end
-        workbench_expected_result_count
-      end
-    end
-
+    # RubyLLM 2.1 validates result indices before delivery. Require the public
+    # submitted-chat manifest so RubyLLM knows the frozen count even when the
+    # provider omits it. Fail before collecting if the local manifest is lost;
+    # never patch private Batch methods or guess a count from returned rows.
     def self.call(batch, expected_count:)
-      batch.extend(IndexValidation)
-      batch.workbench_expected_result_count = expected_count
+      chats = batch.chats
+      unless chats.is_a?(Array) && chats.size == expected_count && chats.none?(&:nil?)
+        raise RubyLLM::Error, "Provider batch chat manifest does not match the frozen evaluation case count."
+      end
+
       batch.messages
     end
   end

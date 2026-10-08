@@ -23,7 +23,7 @@ class Attempt < ApplicationRecord
   end
 
   def cost
-    reported_cost || estimated_cost
+    reported_cost || recorded_cost || estimated_cost
   end
 
   def start!

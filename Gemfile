@@ -15,7 +15,7 @@ gem "vite_rails"
 # Use Turbo for Rails-native navigation and streaming updates.
 gem "turbo-rails"
 # RubyLLM is the sole provider abstraction for AI operations.
-gem "ruby_llm", "2.0.0"
+gem "ruby_llm", "2.1.0"
 # CSV attachment validation uses the extracted Ruby standard library.
 gem "csv", "~> 3.3"
 # Build JSON APIs with ease [https://github.com/rails/jbuilder]

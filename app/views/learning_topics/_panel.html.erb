@@ -2,7 +2,7 @@
   <turbo-frame id="learning-panel">
 <% end %>
 
-<article class="space-y-5" data-learning-topic="<%= topic.key %>">
+<article class="space-y-5" data-learning-topic="<%= topic.key %>" tabindex="-1">
   <div class="flex items-start justify-between gap-3">
     <div class="min-w-0">
       <%= link_to return_to, data: { turbo_frame: "learning-panel" }, class: "text-[11px] font-medium text-accent hover:underline" do %>
@@ -15,6 +15,7 @@
   </div>
 
   <p class="text-xs leading-5 text-muted"><%= topic.summary %></p>
+  <%= render "learning_topics/flow", topic: topic %>
 
   <section class="rounded-xl border border-line bg-canvas p-3" aria-labelledby="learning-version-heading">
     <div class="flex items-center justify-between gap-3">

@@ -13,6 +13,7 @@
 
 # Ignore all environment files.
 /.env*
+!/.env.example
 
 # Product specifications live outside this public application repository.
 /specs/

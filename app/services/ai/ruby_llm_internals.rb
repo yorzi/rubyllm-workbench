@@ -6,11 +6,6 @@ module Ai
   # 1. RubyLLM::Chat#usage_recorder= (:nodoc:) and the @usage_recorder that
   #    RubyLLM's ActiveRecord layer installs. Agent Runs wrap it so every
   #    ruby_llm_usages write is fenced by the Run's execution lease.
-  # 2. RubyLLM::Batch#result_slot_count (private). Ai::EvaluationBatchResults
-  #    overrides it to reject malformed result indices before delivery.
-  # 3. RubyLLM::Providers::OpenRouter::Streaming#build_chunk (private).
-  #    lib/ruby_llm_workarounds/openrouter_stream_evidence.rb restores the
-  #    citations and server tool usage it drops.
   module RubyLlmInternals
     module_function
 

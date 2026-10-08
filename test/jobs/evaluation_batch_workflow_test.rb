@@ -6,6 +6,8 @@ class EvaluationBatchWorkflowTest < ActiveSupport::TestCase
   class FakeRefreshedBatch
     attr_reader :id, :status, :raw_status, :messages, :statuses
 
+    def chats = messages.map { Object.new }
+
     def initialize(id:, status:, raw_status:, messages:, statuses:, complete:)
       @id = id
       @status = status
@@ -203,7 +205,7 @@ class EvaluationBatchWorkflowTest < ActiveSupport::TestCase
     def provider.batch_status(*) = :succeeded
     def provider.batch_results(*) = [ [ 0, Object.new, nil ], [ 0, nil, :failed ] ]
     batch = RubyLLM::Batch.new(
-      provider:, id: @execution.provider_batch_id, raw_status: "completed",
+      provider:, chats: @case_results.map { Object.new }, id: @execution.provider_batch_id, raw_status: "completed",
       completed: true, request_count: @cases.size
     )
     batch.define_singleton_method(:refresh) { self }
@@ -212,7 +214,7 @@ class EvaluationBatchWorkflowTest < ActiveSupport::TestCase
       EvaluationBatchRefreshJob.perform_now(@execution.id)
     end
 
-    assert_includes @execution.reload.provider_batch_error, "duplicate evaluation result index"
+    assert_includes @execution.reload.provider_batch_error, "Duplicate batch result index"
     assert_empty batch.statuses
     @case_results.each do |result|
       assert result.reload.running?

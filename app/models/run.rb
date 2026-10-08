@@ -60,7 +60,7 @@ class Run < ApplicationRecord
     values = attempts.filter_map do |attempt|
       next if attempt.cost_status == "unknown"
 
-      attempt.reported_cost || attempt.estimated_cost
+      attempt.cost
     end
     values.sum if values.any?
   end
@@ -69,6 +69,7 @@ class Run < ApplicationRecord
     return "unknown" if attempts.empty?
     return "unknown" if attempts.any? { |attempt| attempt.cost_status == "unknown" }
     return "estimated" if attempts.any? { |attempt| attempt.cost_status == "estimated" }
+    return "recorded" if attempts.any? { |attempt| attempt.cost_status == "recorded" }
 
     "reported"
   end

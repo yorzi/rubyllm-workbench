@@ -25,6 +25,7 @@
       <div>
         <div class="flex flex-wrap items-center gap-2">
           <h1 class="text-3xl font-semibold tracking-tight text-ink"><%= @agent_definition.name %></h1>
+          <%= render "shared/learning_link", topic: "agent_execution", return_to: project_agent_definition_path(@project, @agent_definition) %>
           <span class="rounded-full bg-slate-100 px-2 py-1 font-mono text-[10px] text-muted">revision <%= @agent_definition.revision %></span>
         </div>
         <p class="mt-2 break-all font-mono text-sm text-muted"><%= @agent_definition.provider %> / <%= @agent_definition.model_id %></p>

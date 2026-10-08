@@ -2,7 +2,7 @@
 <% active = local_assigns.fetch(:active, nil) %>
 
 <div class="min-h-screen lg:grid lg:grid-cols-[15rem_minmax(0,1fr)_minmax(18rem,26rem)]">
-  <aside class="border-b border-line bg-panel px-4 py-5 lg:min-h-screen lg:border-b-0 lg:border-r">
+  <aside class="border-b border-line bg-panel px-4 py-5 lg:min-h-screen lg:border-b-0 lg:border-r" data-controller="navigation">
     <div class="flex items-center justify-between gap-3">
       <%= link_to root_path, class: "flex items-center gap-2 text-sm font-semibold tracking-tight text-ink" do %>
         <span class="grid size-8 place-items-center rounded-lg bg-accent text-xs font-bold text-white">RL</span>
@@ -11,7 +11,9 @@
       <span class="rounded-full bg-slate-100 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted">local</span>
     </div>
 
-    <nav aria-label="Primary" class="mt-8 space-y-1 text-sm">
+    <button type="button" class="mt-4 rounded-lg border border-line px-3 py-2 text-xs font-medium text-muted lg:hidden" aria-controls="workbench-navigation" aria-expanded="false" data-navigation-target="toggle" data-action="navigation#toggle">Navigation</button>
+    <div id="workbench-navigation" class="hidden lg:block" data-navigation-target="menu">
+    <nav aria-label="Primary" class="mt-5 space-y-1 text-sm lg:mt-8">
       <%= link_to root_path, class: "flex items-center justify-between rounded-lg px-3 py-2 #{active == 'projects' ? 'bg-accent-soft font-medium text-accent' : 'text-muted hover:bg-slate-50 hover:text-ink'}" do %>
         <span>Projects</span>
         <span class="font-mono text-[11px]">P</span>
@@ -66,10 +68,11 @@
     <%= link_to root_path(anchor: "new-project"), class: "mt-5 flex items-center justify-center rounded-lg border border-dashed border-line px-3 py-2 text-xs font-medium text-muted hover:border-accent hover:text-accent" do %>
       + New project
     <% end %>
+    </div>
 
     <div class="mt-10 hidden rounded-xl border border-line bg-canvas p-3 text-xs leading-5 text-muted lg:block">
       <p class="font-medium text-ink">Every call leaves evidence</p>
-      <p class="mt-1">Chats, tools, approvals, Agents, knowledge, evaluations and media, each recorded as an inspectable Run.</p>
+      <p class="mt-1">Inspect Run history for chats, Agents, evaluations and media, and source evidence for Knowledge retrieval.</p>
     </div>
   </aside>
 
@@ -78,7 +81,7 @@
   </main>
 
   <aside class="border-t border-line bg-panel px-4 py-5 lg:min-h-screen lg:border-l lg:border-t-0">
-    <turbo-frame id="learning-panel">
+    <turbo-frame id="learning-panel" data-controller="learning-panel" data-action="turbo:frame-load->learning-panel#reveal">
       <%= content_for?(:inspector) ? yield(:inspector) : render("shared/runtime_inspector") %>
     </turbo-frame>
   </aside>

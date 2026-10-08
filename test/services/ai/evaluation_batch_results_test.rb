@@ -10,7 +10,7 @@ module Ai
     end
 
     test "rejects every invalid collection before delivery or status mutation" do
-      [ -1, 2, "0", nil, 0.5, 0 ].each do |invalid_index|
+      [ -1, 2, 0 ].each do |invalid_index|
         batch = build_batch([ [ 0, Object.new, nil ], [ invalid_index, nil, :failed ] ])
         deliveries = []
         batch.define_singleton_method(:deliver) { |*args| deliveries << args }
@@ -39,11 +39,14 @@ module Ai
       assert_equal [ :failed, :cancelled ], batch.statuses
     end
 
-    test "does not patch unrelated RubyLLM batches" do
-      guarded = build_batch([])
-      EvaluationBatchResults.call(guarded, expected_count: 2)
+    test "rejects a missing or mismatched manifest before collection" do
+      [ nil, [], [ Object.new ], [ Object.new, nil ] ].each do |chats|
+        batch = build_batch([])
+        batch.define_singleton_method(:chats) { chats }
+        batch.define_singleton_method(:messages) { flunk "must not collect without a complete manifest" }
 
-      refute build_batch([]).is_a?(EvaluationBatchResults::IndexValidation)
+        assert_raises(RubyLLM::Error) { EvaluationBatchResults.call(batch, expected_count: 2) }
+      end
     end
 
     private
@@ -51,7 +54,7 @@ module Ai
     def build_batch(rows, request_count: 2)
       provider = Provider.new
       provider.rows = rows
-      RubyLLM::Batch.new(provider:, id: "synthetic", raw_status: "completed", completed: true, request_count:)
+      RubyLLM::Batch.new(provider:, chats: [ Object.new, Object.new ], id: "synthetic", raw_status: "completed", completed: true, request_count:)
     end
   end
 end

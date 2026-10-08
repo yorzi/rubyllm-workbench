@@ -1,6 +1,6 @@
 # Capability matrix
 
-Updated: 2026-09-28 · Rails 8.1.4 · RubyLLM 2.0.0
+Updated: 2026-10-08 · Rails 8.1.4 · RubyLLM 2.1.0
 
 This is the single place where Workbench records **what each operation
 admits** and **what evidence exists for it**. Other documents link here rather
@@ -12,6 +12,11 @@ Two kinds of evidence are kept apart:
   own behavior (records, states, recovery, redaction), not provider
   compatibility.
 - **Live**: a real provider request, recorded with its date, model and cost.
+
+The live rows below describe the historical **RubyLLM 2.0.0** run. They have
+not been revalidated on 2.1.0. Current local upgrade evidence is in the
+verification snapshot; new framework APIs do not automatically add Workbench
+features or provider acceptance.
 
 RubyLLM registry metadata is only an admission hint. A model appearing in a
 picker means its registry entry passes the rule below and its provider is
@@ -25,7 +30,7 @@ region will accept the request.
 | Chat (streaming) | Any configured chat model in the RubyLLM registry. | Run/Attempt lifecycle, streaming, frozen context, drift rejection, queue rejection, cancellation. | Passed: `nvidia/nemotron-3-super-120b-a12b:free`. |
 | Structured output | Configured model declaring `structured_output`; batch-suffixed models excluded. | Schema validation, JSON Artifacts, comparison executions. | Passed: `nvidia/nemotron-3-super-120b-a12b:free`. A valid exact JSON match does not measure semantic quality. |
 | Local tools with approval | Tool enabled for the Project. Saved Agents with local tools require the exact provider/model registry entry to explicitly declare `function_calling`, checked on save, on enqueue and on every worker restore. | Approval, denial, expiry, cancellation, failed-Run closure, unknown remote outcomes, parallel-call policy. | Passed: `save_run_note` approval and continuation on `nvidia/nemotron-3-super-120b-a12b:free` and `openai/gpt-5-nano`. Parallel tool calls not tested live. |
-| Provider web search | `web_search` is an allowlisted RubyLLM provider tool. There is no reliable Workbench model-level web-search capability gate; the provider may reject the tool or the model may not use it. | Snapshotting, citation Artifacts, usage-only tool accounting. | Passed in an Agent Run on `openai/gpt-5-nano`: search counted, citation stored. Requires the OpenRouter streaming workaround below. |
+| Provider web search | `web_search` is an allowlisted RubyLLM provider tool. There is no reliable Workbench model-level web-search capability gate; the provider may reject the tool or the model may not use it. | Snapshotting, citations, usage-only tool accounting; native 2.1 streaming regression. | Passed on 2.0 in an Agent Run on `openai/gpt-5-nano`: search counted, citation stored, using the then-required patch. 2.1 live check pending. |
 | Saved Agents | As for local tools; provider tools are outside the local-tool gate. | Durable outbox, execution lease and generation fencing, crash/replay drill, cancellation race, empty-answer guard, research report. | Passed: two-step Agent (`project_snapshot`, then a searched, cited answer) on `openai/gpt-5-nano`. |
 | Knowledge embeddings | RubyLLM embedding-model registry plus provider configuration. | Chunking, checksums, stale-vector skipping, vector adapters, lexical/semantic/hybrid retrieval, explicit degradation. | Passed: `liquid/lfm-2.5-embedding-350m:free`, 1,024 dimensions. Cross-provider vectors and retrieval quality are not established. |
 | Knowledge rerank | Registry model whose output modality includes `rerank`, plus configuration. | Pre/post rank kept alongside unchanged retrieval evidence. | Passed: `nvidia/llama-nemotron-rerank-vl-1b-v2:free`. A 2026-09-17 run once promoted an off-topic chunk; rerank scores need human review. |
@@ -38,11 +43,14 @@ region will accept the request.
 | Speech generation (experimental) | Model declares `speech_generation`; optional provider voice identifier. | Audio Artifacts, storage failure, recovery, cancellation. | Passed: `deepgram/flux-tts:free` with voice `flux-bree-en`. |
 | Audio transcription (experimental) | Model declares `transcription`. | Source-audio and transcript Artifacts, blank-transcript handling. | Passed: `mistralai/voxtral-mini-3b-2507` transcribed the speech output word for word. |
 | Image generation (experimental) | Model declares `image_generation`. | Image Artifacts, storage failure, late-response fencing. | Passed: `black-forest-labs/flux.2-klein-4b`, reported cost $0.014. |
-| Video generation (experimental) | Model type is `video` with video output. | Submission, polling, provider job reference in the timeline. | Not tested. RubyLLM 2.0.0 has no public API to restore a `VideoJob`, so durable resumption is open. |
+| Video generation (experimental) | Model type is `video` with video output. | Submission, polling, provider job reference in the timeline. | Not tested. Workbench cannot durably restore a VideoJob or link its 2.1 job-ledger cost to the Attempt yet. |
 | Run reproduction and event export | Explicit per-Run download; no provider request. | Schema v2 budgets (512 KiB, 100,000 characters, latest 100 messages, bounded nesting), redaction, omission reporting. | Not applicable. Redaction is best-effort; review a real Run's export before sharing it. |
 | Upstream gap reports (experimental) | Manual classification of a Run. | Append-only candidates, redacted Markdown issue drafts. | Not applicable. Drafts need a manual privacy review. |
 
 ## Live dogfood record
+
+Historical record: Rails 8.1.4, RubyLLM 2.0.0. No live provider request was
+made during the 2026-10-08 upgrade review.
 
 The 2026-09-28 run used `bin/dogfood --paid` (see
 [operations](OPERATIONS.md#live-provider-dogfood)) against OpenRouter. Every
@@ -67,8 +75,8 @@ All are fixed and covered by tests.
   OpenRouter's streaming `build_chunk` override omits `citations:` and
   `server_tool_use:`. Reproduce with
   `bundle exec ruby script/diagnostics/ruby_llm_openrouter_stream_citations.rb`.
-  A self-disabling workaround in `lib/ruby_llm_workarounds/` restores both; an
-  upstream fix with specs is prepared.
+  A self-disabling workaround restored both in that run. RubyLLM 2.1 fixes
+  the parser; Workbench removed the patch and retains a native regression.
 - **Attempts never stored a finish reason**, and an Agent whose reasoning
   model spent its output budget finished "successfully" with an empty report.
   Attempts now record `finish_reason`, and such a Run fails with the cause.
@@ -79,21 +87,51 @@ All are fixed and covered by tests.
   (for example `nex-agi/*:free`) and understates others (it marks
   `google/gemma-4-31b-it:free` as lacking structured output). Pickers can
   therefore offer models that fail at request time.
-- Workbench cost figures come from token pricing. OpenRouter bills hosted
-  search separately, so Runs that search understate their cost.
+- The old run repriced persisted usage from token metadata, so search costs
+  could be understated. New Runs preserve the request-time ledger total as
+  `recorded`, including fees when RubyLLM retained them. The ledger does not
+  preserve original reported/estimated provenance; missing fees and unknown
+  costs cannot be invented, and old Attempts are not backfilled.
 - Free models are rate-limited and change availability without notice.
 
 ## RubyLLM workarounds
 
-| Workaround | Why | Remove when |
+Both production patches were removed on the 2.1.0 pin after provider-free
+verification of the released fixes.
+
+| Removed patch | Current implementation | Regression |
 | --- | --- | --- |
-| `Ai::EvaluationBatchResults` rejects duplicate, negative and out-of-range Batch result indices before delivery. | RubyLLM 2.0.0 accepts them. Fixed upstream in crmne/ruby_llm#993 (merged 2026-09-26, unreleased). | A RubyLLM release containing #993 is pinned. |
-| `lib/ruby_llm_workarounds/openrouter_stream_evidence.rb` restores streamed OpenRouter citations and server tool usage. | RubyLLM 2.0.0 drops them. Installs only while a boot-time probe shows the gap. | A contract test fails, signalling the upstream parser maps them. |
+| Private Batch index-validation override | RubyLLM validates indices; `Ai::EvaluationBatchResults` checks the public chat manifest against frozen cases before collection. | Batch result/workflow tests and `script/diagnostics/ruby_llm_batch_indices.rb`. |
+| OpenRouter streaming parser prepend | Native RubyLLM 2.1 chunks preserve citations, tool usage and reported cost. | `test/lib/openrouter_stream_evidence_test.rb` and the diagnostic script. |
 
 `Ai::RubyLlmInternals` lists every private RubyLLM seam Workbench relies on, and
 `test/services/ai/ruby_llm_internals_test.rb` fails when one moves.
 
 ## Verification snapshot
+
+2026-10-08, macOS arm64, Ruby 4.0.2, Node 24.21.0, Rails 8.1.4,
+RubyLLM 2.1.0:
+
+| Check | Result |
+| --- | --- |
+| Rails suite | 370 runs, 2,977 assertions, 0 failures, 0 errors, 8 skips (opt-in live dogfood) |
+| Selenium system tests | 3 runs, 29 assertions, 0 failures/errors; project creation, cancellation confirmation, true 390px learning/navigation, desktop synthetic Run |
+| Source/doc/learning regression after UI edits | 26 runs, 266 assertions, 0 failures/errors |
+| RuboCop / Zeitwerk | 293 Ruby files clean / passed |
+| Brakeman / bundler-audit | Brakeman 8.1.0: 0 warnings/errors; refreshed gem advisory database: no vulnerabilities |
+| npm audit | 0 vulnerabilities after `source-map-js` 1.2.2 update |
+| Clean source setup | No keys, local databases, uploads or asset manifests; pinned Node, fresh `npm ci`, existing gem cache, `bin/setup --skip-server`, 5 synthetic Runs and test assets passed |
+| Upgrade from baseline schema | Isolated 2.0 schema upgraded; Chat/Message/Run/Attempt and historical cost retained; new owner-ledger row persisted without a chat |
+| Production assets | Rails/Tailwind/Vite build passed in the credential-free temporary copy |
+| Secret review | No Gitleaks findings in raw 58-commit history or source-only copy; local text conversions disabled; encrypted credentials remain in older commits |
+| Current live / hosted CI / Docker | Not run on 2.1; changed commit not pushed; Docker daemon unavailable locally |
+
+This verifies a macOS setup with libvips available and reused installed gems;
+it does not certify a fresh gem download, Linux/no-libvips installation,
+container runtime, provider compatibility or a public deployment. The previous
+remote green run is on the original commit, not this upgrade.
+
+Historical baseline (before this upgrade):
 
 2026-09-28, Rails 8.1.4, RubyLLM 2.0.0:
 

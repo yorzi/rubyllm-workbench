@@ -38,6 +38,8 @@ class RunReproductionExportTest < ActionDispatch::IntegrationTest
       model_id: chat.model_id,
       status: :failed,
       error_message: "Request failed with sk-openrouter-ERROR-SENTINEL-abcdefghijklmnopqrstuvwxyz",
+      recorded_cost: 0.02,
+      cost_status: "recorded",
       metadata_json: {
         "session_token" => "session-SENTINEL",
         "retry_count" => 2
@@ -84,6 +86,8 @@ class RunReproductionExportTest < ActionDispatch::IntegrationTest
     bundle = JSON.parse(response.body)
     serialized = JSON.generate(bundle)
     assert_equal 2, bundle.fetch("format_version")
+    assert_equal "recorded", bundle.dig("attempts", 0, "cost", "status")
+    assert_equal "0.02", bundle.dig("attempts", 0, "cost", "recorded")
     assert_includes bundle.dig("run", "input_snapshot", "prompt"), "Keep this prompt"
     assert_includes bundle.dig("run", "result_summary", "partial_output"), "Useful partial result"
     assert_equal "https://REDACTED@api.example.test/v1/chat", bundle.dig("run", "input_snapshot", "endpoint")

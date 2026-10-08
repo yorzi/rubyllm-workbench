@@ -4,7 +4,7 @@ These diagrams are a hand-maintained view of the current implementation. They
 are not a generated ERD or a promise about future design; code, migrations and
 tests remain the source of truth.
 
-Updated: 2026-09-28
+Updated: 2026-10-08
 
 ## How to read the diagrams
 
@@ -21,6 +21,8 @@ Updated: 2026-09-28
   explicitly when capability or safety conditions are not met.
 - Status labels: `IMPLEMENTED` exists and is tested; `PARTIAL` exists with
   incomplete evidence; `PLANNED` does not exist yet.
+- The Agent, evaluation and retrieval learning panels offer compact HTML
+  execution maps. This guide retains the detailed sequence/state diagrams.
 
 ## 1. L0: system context
 
@@ -75,7 +77,7 @@ flowchart TD
     KnowledgeServices["Ai::Knowledge::Ingestor, Chunker,\nEmbedder, Knowledge::Retriever, Search,\nVectorStore, Reranker"]
     Events["LifecycleEventRecorder"]
     ProviderEvents["Ai::RubyLlmInstrumentation\n*.ruby_llm adapter"]
-    Internals["Ai::RubyLlmInternals\n+ lib/ruby_llm_workarounds"]
+    Internals["Ai::RubyLlmInternals\nAgent usage-recorder fencing"]
     Records["Records: Project, Chat, Run, Attempt, Artifact,\ntools, Knowledge, Evaluation, LifecycleEvent"]
     RubyLLM["RubyLLM: Chat, Agent, embed, rerank,\nspeak, paint, animate, transcribe"]
 
@@ -129,8 +131,9 @@ Responsibilities in short:
    recorder and `ApprovalService` turn calls and decisions into records.
 4. `CitationSetRecorder` and `ProviderToolActivity` capture provider-hosted
    evidence: citations, discrete server tool calls and usage-only counters.
-5. `Ai::RubyLlmInternals` lists every private RubyLLM seam Workbench uses, and
-   `lib/ruby_llm_workarounds` holds temporary, self-disabling upstream fixes.
+5. `Ai::RubyLlmInternals` isolates the Agent usage-recorder seam. The two
+   temporary RubyLLM 2.0 patches were removed on the 2.1 pin. Batch collection
+   checks its public submitted-chat manifest before the framework delivers.
 
 ## 3. L2: persistence
 
@@ -185,6 +188,7 @@ erDiagram
         integer input_tokens
         integer output_tokens
         decimal reported_cost
+        decimal recorded_cost
         decimal estimated_cost
         string finish_reason
     }

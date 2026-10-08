@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_21_183000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_08_143000) do
 # Could not dump table "_sqliteai_vector" because of following StandardError
 #   Unknown type 'ANY' for column 'value'
 
@@ -130,6 +130,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_21_183000) do
     t.string "model_id"
     t.integer "output_tokens"
     t.string "provider"
+    t.decimal "recorded_cost", precision: 18, scale: 10
     t.decimal "reported_cost"
     t.string "request_id"
     t.json "ruby_llm_usage_ids_json"
@@ -425,6 +426,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_21_183000) do
   end
 
   create_table "messages", force: :cascade do |t|
+    t.string "cache_ttl"
     t.boolean "cache_until_here", default: false, null: false
     t.bigint "chat_id", null: false
     t.json "citations"
@@ -467,6 +469,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_21_183000) do
     t.index ["status"], name: "index_ruby_llm_batches_on_status"
   end
 
+  create_table "ruby_llm_mcp_credentials", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.text "data"
+    t.string "key", null: false
+    t.bigint "owner_id"
+    t.string "owner_type"
+    t.datetime "updated_at", null: false
+    t.index ["key"], name: "index_ruby_llm_mcp_credentials_on_key", unique: true
+    t.index ["owner_type", "owner_id"], name: "index_ruby_llm_mcp_credentials_on_owner"
+  end
+
   create_table "ruby_llm_models", force: :cascade do |t|
     t.json "capabilities", default: []
     t.integer "context_window"
@@ -488,10 +501,23 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_21_183000) do
     t.index ["provider"], name: "index_ruby_llm_models_on_provider"
   end
 
+  create_table "ruby_llm_provider_files", force: :cascade do |t|
+    t.string "account", null: false
+    t.string "blob_key", null: false
+    t.datetime "created_at", null: false
+    t.datetime "expires_at"
+    t.text "file_id", null: false
+    t.string "provider", null: false
+    t.datetime "updated_at", null: false
+    t.index ["blob_key", "provider", "account"], name: "index_ruby_llm_provider_files_uniqueness", unique: true
+  end
+
   create_table "ruby_llm_tool_calls", force: :cascade do |t|
     t.string "approval"
     t.json "arguments", default: {}
     t.datetime "created_at", null: false
+    t.json "mcp_result"
+    t.json "mcp_state"
     t.bigint "message_id", null: false
     t.string "message_type", null: false
     t.string "name", null: false
@@ -512,8 +538,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_21_183000) do
     t.integer "cache_read_tokens"
     t.decimal "cache_write_cost", precision: 16, scale: 10
     t.integer "cache_write_tokens"
-    t.bigint "chat_id", null: false
-    t.string "chat_type", null: false
+    t.bigint "chat_id"
+    t.string "chat_type"
     t.datetime "created_at", null: false
     t.decimal "input_cost", precision: 16, scale: 10
     t.integer "input_tokens"
@@ -523,7 +549,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_21_183000) do
     t.string "operation", null: false
     t.decimal "output_cost", precision: 16, scale: 10
     t.integer "output_tokens"
+    t.bigint "owner_id"
+    t.string "owner_type"
     t.string "provider", null: false
+    t.json "server_tool_use"
     t.string "status", null: false
     t.decimal "thinking_cost", precision: 16, scale: 10
     t.integer "thinking_tokens"
@@ -531,8 +560,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_21_183000) do
     t.datetime "updated_at", null: false
     t.index ["chat_type", "chat_id"], name: "index_ruby_llm_usages_on_chat_type_and_chat_id"
     t.index ["message_type", "message_id"], name: "index_ruby_llm_usages_on_message_type_and_message_id"
+    t.index ["owner_type", "owner_id"], name: "index_ruby_llm_usages_on_owner"
     t.index ["status"], name: "index_ruby_llm_usages_on_status"
-    t.check_constraint "operation IN ('chat', 'embedding', 'moderation', 'image', 'speech', 'transcription', 'ocr', 'rerank')"
+    t.check_constraint "operation IN ('chat', 'embedding', 'moderation', 'image', 'speech', 'transcription', 'ocr', 'rerank', 'judgment', 'video', 'research')"
     t.check_constraint "status IN ('pending', 'succeeded', 'failed', 'cancelled')"
   end
 

@@ -4,7 +4,7 @@ A mental model of RubyLLM Workbench for people returning to it, or reading it
 for the first time. It answers: why the system exists, what it does now, how
 one operation flows, where the data lives, and what it cannot claim yet.
 
-Updated: 2026-09-28
+Updated: 2026-10-08
 
 ## In one sentence
 
@@ -182,7 +182,7 @@ Artifact linked to its citations.
 An EvaluationComparison freezes one dataset revision, one Experiment snapshot
 and 2-5 models. Each model has an EvaluationExecution and each case its own
 Run, compared by exact JSON equality. Metrics keep provider outcomes, schema
-validity, latency, token coverage and reported vs estimated cost apart.
+validity, latency, token coverage and reported, recorded and estimated cost apart.
 Human EvaluationCaseReview records are append-only, and the optional rubric
 judge is a separate, uncalibrated Run. Expected output, tags and attachments
 never reach a provider prompt.

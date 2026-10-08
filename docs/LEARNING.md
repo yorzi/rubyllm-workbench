@@ -1,8 +1,8 @@
 # In-page learning layer ("How this works")
 
 The learning layer connects each feature to the code that implements it. You
-stay on the page (Model Explorer, Chat, Experiments, tool approval, Knowledge,
-Run inspector) and open a panel that shows a plain-language explanation, the
+stay on the page (Model Explorer, Chat, Experiments, Agents, Evaluations,
+tool approval, Knowledge, Run inspector) and open a panel that shows a plain-language explanation, the
 execution steps, version labels, allowed source excerpts, official Rails and
 RubyLLM references, and the current capability boundary.
 
@@ -27,6 +27,18 @@ Topics live in a version-controlled static registry,
   Run snapshots.
 - `knowledge_ingestion`: extraction, provenance and deterministic chunks.
 - `knowledge_search`: retrieval over ready sources and optional rerank.
+- `agent_execution`: transactional launch/outbox, worker lease, continuable
+  steps, approval pauses and external-outcome limits.
+- `evaluation_workflow`: frozen comparisons, transport/schema/exact-match
+  outcomes, independent review and safe recovery.
+
+`Learning::Flow` provides small HTML execution maps for Agent, evaluation
+and retrieval topics. They retain conditional paths, need no JS renderer and
+stay readable in the narrow Turbo panel and on mobile. Detailed sequences
+and state diagrams remain in [ARCHITECTURE.md](ARCHITECTURE.md).
+
+On narrow screens, navigation is expandable and a loaded explanation scrolls
+into view and receives focus. The browser regression checks this at 390px.
 
 No model generates these explanations at runtime, and there is no file
 browser. Each topic cites explicit source paths, line ranges and an anchor
