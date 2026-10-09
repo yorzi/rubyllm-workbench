@@ -25,8 +25,11 @@ and deployment have not happened in this review.
    public history should retain them. Revoke any exposed credential before
    publication. Review exports/screenshots manually; use only synthetic demo
    content.
-5. Confirm GitHub private vulnerability reporting and test it from an outside
-   account. If unavailable, add a verified private contact to SECURITY.md.
+5. Plan a usable private security-report channel. GitHub private vulnerability
+   reporting is available for public repositories; enable it immediately
+   after changing visibility, then test it from an outside account before
+   announcing the release. If unavailable, add a verified private contact to
+   SECURITY.md before publication.
 
 Normal pull-request CI must use fakes and no provider secrets. The container
 excludes environment files, keys, encrypted credentials, local data and uploads.
@@ -41,6 +44,12 @@ gitleaks git --redact --log-opts='--all --no-textconv --no-ext-diff'
 
 A clean scan is evidence of no detected patterns, not proof that every secret
 is absent. Encrypted credentials in old commits are still part of history.
+[Rails permits encrypted credentials in version control when the master key
+is kept safe](https://guides.rubyonrails.org/security.html#custom-credentials).
+Their presence alone does not establish a leak or require a history rewrite.
+Keep the key private; if a key was exposed, rotate the affected secrets before
+publication. Use Git's tracked-source archive for distribution rather than
+zipping a working directory with ignored logs, caches and local data.
 
 ## Upgrade an existing installation
 
@@ -61,7 +70,9 @@ New 2.1 usage-operation rows must not be loaded by an old schema.
 
 1. Publish the reviewed commit and verify remote checks.
 2. Make the repository public, set description/topics, and check README links
-   from a logged-out browser.
+   from a logged-out browser. Immediately enable private vulnerability
+   reporting and verify its form from an outside account; update SECURITY.md
+   with the verified channel before announcing the release.
 3. Tag `v0.1.0`; release notes should link to the showcase route, capability
    evidence, upgrade procedure and experimental scope.
 4. Verify the licence renders and an outside contributor can file an issue,

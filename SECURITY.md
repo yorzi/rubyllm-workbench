@@ -19,16 +19,23 @@ Things to know before exposing it:
   CSV syntax, or UTF-8 text without binary control bytes. These checks do not
   fully decode files, scan for malware or detect polyglots. Set request-body
   and multipart-part limits at your ingress too.
+- Request parameters and query strings filter search questions and review
+  text as well as credentials and prompts. This does not erase older logs,
+  provider error messages or external proxy logs. Keep logs, databases and
+  caches out of public archives.
 - Run exports and upstream issue drafts are redacted on a best-effort basis.
   Review them before sharing.
 
 ## Reporting a vulnerability
 
 When GitHub private vulnerability reporting is enabled, open the repository's
-**Security** tab and choose **Report a vulnerability**. This channel was not
-confirmed during the 2026-10-08 review: the repository is private and its
-reporting API returned 404. Before a public release, the maintainer must verify
-that channel from an outside account or publish a verified private contact.
+**Security** tab and choose **Report a vulnerability**. During the 2026-10-09
+review the repository was still private and the reporting API returned 404.
+[GitHub supports this feature for public repositories](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configure-for-a-repository).
+When making the repository public, the maintainer must immediately enable
+this channel and verify it from an outside account before announcing the
+release. If the channel cannot be enabled, publish a verified private contact
+before publication.
 Do not open a public vulnerability issue or include credentials or other
 people's data in a report.
 

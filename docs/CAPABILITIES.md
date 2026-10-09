@@ -283,6 +283,27 @@ verification of the released fixes.
 
 ## Verification snapshot
 
+2026-10-09 open-source preflight, source baseline `8dbd787`, plus the request
+privacy correction below:
+
+| Check | Result |
+| --- | --- |
+| Tracked source / history secrets | Redacted Gitleaks: tracked Git archive clean (1.88 MB); all-ref raw history clean (64 commits, with textconv/external diff disabled) |
+| Rails key / historical credentials | Exact local master-key bytes absent from all 1,172 reachable blobs; no historical key filename found. An encrypted credentials blob remains in old history; this is not evidence of plaintext exposure or a check of unknown older keys. |
+| Dependency advisories | Fresh Ruby advisory checkout `b6604fa6b54cb6e9a140e3a12d1f1d15b695330c`: no known gem vulnerabilities; live npm audit: 0 vulnerabilities. No dependency was changed. |
+| Licence / documentation / images | Root and original case corpus MIT licences present; 25 tracked Markdown files have no missing local targets; synthetic screenshot reviewed; tracked PNGs have no text/EXIF chunks |
+| Credential-free source exercise | Fresh tracked archive, Ruby 4.0.2, reused installed gems, all external HTTP blocked: database preparation, 9 synthetic Runs, 5-source case import, separate read-only demo snapshot passed. Rack requests rejected Active Storage and Cable; provider configuration empty and jobs/mutations denied. No server, fresh dependency download or frontend build. |
+| Request privacy correction | Search `q`, questions, review/draft text and serialized user-authored inputs now filtered; 3 request-level tests, 29 assertions, 0 failures/errors; focused RuboCop clean. This does not erase existing logs. |
+| Remote / release boundary | GitHub repository private; remote main `83492c6` passed CI on 2026-09-28 and does not cover this candidate. Docker daemon unavailable; current Linux/container/runtime and outside-account acceptance remain pending. |
+
+GitHub private vulnerability reporting returned 404 while the repository was
+private. The feature supports public repositories; enable it immediately
+after changing visibility and verify the form before announcing the release,
+or provide a verified private contact. Source publication requires owner
+authorization; no push, visibility change, tag or deployment occurred here.
+No task-owned service was started. Pattern scans cannot certify every secret
+or ignored local file; distribute tracked source rather than a workspace zip.
+
 2026-10-09 owned retrieval / native Evaluation slice, pinned versions, macOS arm64:
 
 | Check | Result |

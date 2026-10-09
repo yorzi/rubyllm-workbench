@@ -45,10 +45,14 @@ docker build --tag rubyllm-workbench:local .
 ```
 
 Build test assets once (`bin/vite build --mode=test`) before parallel tests.
-Tests must never call a provider; use the fakes and doubles already in
-`test/`. If your change touches provider behavior, also run the opt-in live
-suite (`bin/dogfood`, which needs your own key and may cost a few cents) and
-  record the result in [docs/CAPABILITIES.md](docs/CAPABILITIES.md).
+Ordinary tests must never call a provider; use the fakes and doubles already
+in `test/`. If your change touches provider behavior, use the opt-in live
+suite only with explicit authorization and your own key. `bin/dogfood`
+defaults to bounded, verified-free OpenRouter routes without paid fallback;
+paid routes require separate authorization. Follow
+[docs/AI_USAGE_GUIDE.md](docs/AI_USAGE_GUIDE.md) and record the actual result in
+[docs/CAPABILITIES.md](docs/CAPABILITIES.md). Unsupported or unavailable
+routes may remain manual acceptance tasks.
 
 ## Expectations
 
