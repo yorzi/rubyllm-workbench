@@ -41,6 +41,7 @@
           <% if review.rationale.present? %><p class="mt-2 whitespace-pre-wrap text-[10px] leading-4 text-muted"><%= review.rationale %></p><% end %>
         </article>
       <% end %>
+      <% unless demo_mode? %>
       <%= form_with url: project_evaluation_dataset_execution_case_result_reviews_path(@project, @dataset, case_result.evaluation_execution, case_result), scope: :evaluation_case_review, class: "grid gap-3 border-t border-line pt-3" do |form| %>
         <p class="text-[10px] leading-4 text-muted">This self-reported judgment is separate from exact JSON and provider metrics. Submitting again appends a new review.</p>
         <% rubric.each do |criterion| %>
@@ -64,6 +65,7 @@
           <%= form.text_area :rationale, rows: 3, maxlength: 2_000, class: "mt-1 w-full rounded-md border border-line bg-white px-2 py-2 text-xs" %>
         </div>
         <%= form.submit "Append review", class: "inline-flex cursor-pointer justify-center rounded-md border border-line px-3 py-2 text-[10px] font-medium text-ink hover:border-accent hover:text-accent" %>
+      <% end %>
       <% end %>
     </div>
   </details>

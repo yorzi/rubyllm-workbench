@@ -1,6 +1,6 @@
 # Showcase guide
 
-Updated: 2026-10-08 · Rails 8.1.4 · RubyLLM 2.1.0
+Updated: 2026-10-09 · Rails 8.1.4 · RubyLLM 2.1.0
 
 This project demonstrates how AI work becomes reliable Rails application
 state. Its strongest evidence is the implementation of snapshots, approvals,
@@ -9,8 +9,10 @@ in the navigation. Use this guide to inspect those decisions in ten minutes.
 
 ## Start without an API key
 
-Follow the [quickstart](../README.md#quickstart), run
-`bin/rails workbench:demo`, and open the **Demo tour** Project. Every tour Run
+For a viewer, follow [DEMO.md](DEMO.md). For the editable local workbench,
+follow the [quickstart](../README.md#quickstart), run
+`bin/rails workbench:demo`, and open the **Demo tour** Project. The tour has
+nine Runs and a two-model/two-case synthetic comparison. Every tour Run
 is labelled synthetic. These records demonstrate the interface and data
 relationships; they are not provider responses or performance measurements.
 
@@ -44,6 +46,7 @@ any recording or presentation.
 | Accounting and observability | `Ai::AttemptRecorder`, `Ai::CostNormalizer`, `Ai::RubyLlmInstrumentation` | Recorder, cost and instrumentation service tests | Persisted ledger costs lack original reported/estimated provenance; OpenTelemetry export is planned. |
 | Active Storage lifecycle and upload boundaries | `Ai::MediaBlobStorage`, attachment validator, purge/recovery jobs | `test/integration/media_run_flow_test.rb`, attachment boundary tests | Video recovery and ledger attribution are incomplete; format checks are not a malware scanner. |
 | Hotwire and source-anchored explanations | Turbo views, Stimulus form state, `Learning::TopicRegistry`, `Learning::Flow`, `Learning::SourceReader` | `test/integration/learning_explanation_flow_test.rb`, `test/system/learning_tour_test.rb` | Static, reviewed explanation maps; source drift fails the tests. |
+| Public demonstration boundaries | `Workbench::DemoMode`, `Workbench::DemoGate`, `bin/demo`, request record scopes | `test/integration/read_only_demo_test.rb`, `test/lib/demo_mode_test.rb`, `test/system/read_only_demo_test.rb` | Locally verified; external hosting/TLS/host checks are pending. |
 | Reproducible delivery and open source | Lockfiles, `bin/setup`, Dockerfile, CI, MIT license, contribution and security guides | [Verification snapshot](CAPABILITIES.md#verification-snapshot) | Local checks do not certify the current remote CI, Docker runtime or public deployment. |
 
 An evaluator can follow [IMPLEMENTATION_MAP.md](../IMPLEMENTATION_MAP.md) for
@@ -70,8 +73,8 @@ state diagrams. Each implementation above is available in this checkout.
 
 The recommended first public surface is a **read-only synthetic demo**, with
 no provider credentials, no mutation or upload endpoints, and no semantic or
-rerank provider calls hidden in GET requests. This mode is planned in
-[ROADMAP.md](../ROADMAP.md), and is not implemented in the current app. The
+rerank provider calls hidden in GET requests. This mode is implemented and
+locally verified; see [DEMO.md](DEMO.md) for preparation and boundaries. The
 full workbench belongs on a trusted local installation or behind authenticated
 access. A public repository and a publicly writable model playground have
 different acceptance requirements.

@@ -19,6 +19,12 @@
     </div>
   </dl>
 
+  <% if demo_mode? %>
+    <section aria-label="Demo execution boundary" class="mt-5 rounded-xl border border-line bg-panel p-3 text-xs leading-5">
+      <h2 class="font-medium text-ink">Providers and jobs disabled</h2>
+      <p class="mt-2 text-muted">This demo reads an isolated synthetic SQLite snapshot. It cannot run model calls, queue work or save changes.</p>
+    </section>
+  <% else %>
   <% readiness = queue_readiness %>
   <section aria-label="Background job readiness" class="mt-5 rounded-xl border border-line bg-panel p-3 text-xs leading-5">
     <div class="flex items-center justify-between gap-3">
@@ -47,9 +53,10 @@
       </dl>
     <% end %>
   </section>
+  <% end %>
 
   <div class="mt-5 rounded-xl border border-line bg-canvas p-3 text-xs leading-5 text-muted">
     <p class="font-medium text-ink">Credential boundary</p>
-    <p class="mt-1">Provider keys stay in the environment or Rails credentials. They are never rendered here.</p>
+    <p class="mt-1"><%= demo_mode? ? "Provider credentials are ignored in demo mode. Run your own local checkout to configure providers and try the workflows." : "Provider keys stay in the environment or Rails credentials. They are never rendered here." %></p>
   </div>
 </div>

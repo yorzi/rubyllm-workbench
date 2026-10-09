@@ -1,5 +1,7 @@
 #!/usr/bin/env ruby
 
+abort "Workers are disabled in the read-only demo." if ENV["WORKBENCH_DEMO"] == "1"
+
 require_relative "../config/environment"
 require "solid_queue/cli"
 

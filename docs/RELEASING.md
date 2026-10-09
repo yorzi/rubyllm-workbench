@@ -1,6 +1,6 @@
 # Releasing the reference app
 
-Updated: 2026-10-08
+Updated: 2026-10-09
 
 The repository has an MIT license and contribution/security guides. GitHub
 still reports it as private. This checklist prepares a release; publication
@@ -69,6 +69,8 @@ New 2.1 usage-operation rows must not be loaded by an old schema.
 
 No release tag, visibility change, push or deployment is performed by this
 review. [ROADMAP.md](../ROADMAP.md) defines public demo acceptance.
+The implemented [read-only mode](DEMO.md) has a separate synthetic snapshot;
+hosting/TLS/host checks and external verification remain release tasks.
 
 ## Candidate release-note text
 

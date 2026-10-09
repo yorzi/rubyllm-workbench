@@ -8,7 +8,7 @@
         <span class="grid size-8 place-items-center rounded-lg bg-accent text-xs font-bold text-white">RL</span>
         <span>RubyLLM Workbench</span>
       <% end %>
-      <span class="rounded-full bg-slate-100 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted">local</span>
+      <span class="rounded-full bg-slate-100 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted"><%= demo_mode? ? "demo" : "local" %></span>
     </div>
 
     <button type="button" class="mt-4 rounded-lg border border-line px-3 py-2 text-xs font-medium text-muted lg:hidden" aria-controls="workbench-navigation" aria-expanded="false" data-navigation-target="toggle" data-action="navigation#toggle">Navigation</button>
@@ -65,8 +65,10 @@
       </div>
     </div>
 
-    <%= link_to root_path(anchor: "new-project"), class: "mt-5 flex items-center justify-center rounded-lg border border-dashed border-line px-3 py-2 text-xs font-medium text-muted hover:border-accent hover:text-accent" do %>
-      + New project
+    <% unless demo_mode? %>
+      <%= link_to root_path(anchor: "new-project"), class: "mt-5 flex items-center justify-center rounded-lg border border-dashed border-line px-3 py-2 text-xs font-medium text-muted hover:border-accent hover:text-accent" do %>
+        + New project
+      <% end %>
     <% end %>
     </div>
 
@@ -77,6 +79,7 @@
   </aside>
 
   <main class="min-w-0 bg-canvas">
+    <%= render "shared/demo_banner" if demo_mode? %>
     <%= yield %>
   </main>
 

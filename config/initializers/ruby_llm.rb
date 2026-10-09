@@ -35,13 +35,17 @@ RUBYLLM_CONFIGURATION_ENV = {
 }.freeze
 
 RUBYLLM_CREDENTIALS = begin
-  Rails.application.credentials.config
+  Workbench::DemoMode.enabled? ? {} : Rails.application.credentials.config
 rescue ActiveSupport::EncryptedFile::MissingKeyError
   {}
 end.freeze
 
 RubyLLM.configure do |config|
   RUBYLLM_CONFIGURATION_ENV.each do |option, environment_key|
+    if Workbench::DemoMode.enabled?
+      config.public_send("#{option}=", nil)
+      next
+    end
     value = ENV[environment_key]
     value ||= RUBYLLM_CREDENTIALS.dig(option)
     config.public_send("#{option}=", value) if value.present?

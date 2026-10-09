@@ -1,7 +1,7 @@
 #!/bin/bash -e
 
-# If running the rails server then create or migrate existing database
-if [ "${@: -2:1}" == "./bin/rails" ] && [ "${@: -1:1}" == "server" ]; then
+# The demo snapshot is prepared separately; serving never runs DB maintenance.
+if [ "${@: -2:1}" == "./bin/rails" ] && [ "${@: -1:1}" == "server" ] && [ "${WORKBENCH_DEMO:-0}" != "1" ]; then
   ./bin/rails db:prepare
 fi
 

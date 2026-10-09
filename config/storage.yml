@@ -1,10 +1,10 @@
 test:
   service: Disk
-  root: <%= Rails.root.join("tmp/storage") %>
+  root: <%= Rails.root.join(Workbench::DemoMode.enabled? ? "storage/demo/files" : "tmp/storage") %>
 
 local:
   service: Disk
-  root: <%= Rails.root.join("storage") %>
+  root: <%= Rails.root.join(Workbench::DemoMode.enabled? ? "storage/demo/files" : "storage") %>
 
 # Use bin/rails credentials:edit to set the AWS secrets (as aws:access_key_id|secret_access_key)
 # amazon:

@@ -1,0 +1,33 @@
+#!/usr/bin/env ruby
+require "fileutils"
+
+abort "Usage: bin/demo prepare (builds an isolated synthetic snapshot; never starts a server)" unless ARGV == [ "prepare" ]
+ENV["WORKBENCH_DEMO"] = "1"
+require_relative "../config/environment"
+
+mode = Workbench::DemoMode
+FileUtils.mkdir_p(mode.snapshot_path.dirname)
+abort "A temporary demo build already exists." if mode.database_path.exist?
+
+begin
+  ActiveRecord::Migration.verbose = false
+  load Rails.root.join("db/schema.rb")
+  project = Message.suppressing_turbo_broadcasts { Workbench::DemoTour.build! }
+  counts = { "projects" => Project.count, "runs" => project.runs.count }
+  ActiveRecord::Base.connection_handler.clear_all_connections!
+  File.rename(mode.database_path, mode.snapshot_path)
+  manifest = {
+    "format" => 1, "synthetic" => true, "counts" => counts,
+    "rails_version" => Rails.version, "ruby_llm_version" => RubyLLM::VERSION,
+    "schema_sha256" => Digest::SHA256.file(Rails.root.join("db/schema.rb")).hexdigest,
+    "database_sha256" => Digest::SHA256.file(mode.snapshot_path).hexdigest
+  }
+  temporary_manifest = mode.manifest_path.sub_ext(".build-#{Process.pid}.json")
+  File.write(temporary_manifest, JSON.pretty_generate(manifest))
+  File.rename(temporary_manifest, mode.manifest_path)
+  puts "Prepared synthetic read-only demo: #{counts['projects']} project, #{counts['runs']} runs."
+  puts "No provider requests or jobs were executed. Start separately with WORKBENCH_DEMO=1."
+ensure
+  ActiveRecord::Base.connection_handler.clear_all_connections!
+  FileUtils.rm_f(mode.database_path)
+end

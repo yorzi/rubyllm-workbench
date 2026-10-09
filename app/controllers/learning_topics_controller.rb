@@ -19,6 +19,7 @@ class LearningTopicsController < ApplicationController
     return root_path if candidate.blank?
     return root_path unless candidate.start_with?("/")
     return root_path if candidate.start_with?("//")
+    return root_path if demo_mode? && !Workbench::DemoGate.allowed_path?(candidate.split("?").first)
 
     candidate
   end

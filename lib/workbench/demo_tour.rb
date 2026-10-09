@@ -57,9 +57,9 @@ module Workbench
       end
     end
 
-    def new_chat(title)
+    def new_chat(title, target_model: model)
       chat = @project.chats.new(title:)
-      chat.model = model
+      chat.model = target_model
       chat.save!
       chat
     end
@@ -84,10 +84,10 @@ module Workbench
       )
     end
 
-    def attempt_for(run, sequence: 1, input_tokens: 120, output_tokens: 48, status: :succeeded, finish_reason: "stop")
+    def attempt_for(run, sequence: 1, input_tokens: 120, output_tokens: 48, status: :succeeded, finish_reason: "stop", target_model: model)
       now = Time.current
       run.attempts.create!(
-        sequence:, provider: model.provider.to_s, model_id: model.id, status:,
+        sequence:, provider: target_model.provider.to_s, model_id: target_model.id, status:,
         input_tokens:, output_tokens:, estimated_cost: ((input_tokens * 0.05) + (output_tokens * 0.4)) / 1_000_000,
         cost_status: "estimated", currency: "USD", finish_reason:,
         started_at: now - 2.seconds, finished_at: now, duration_ms: 1_850, time_to_first_output_ms: 420
@@ -217,7 +217,10 @@ module Workbench
     end
 
     def evaluation_dataset
-      dataset = @project.evaluation_datasets.create!(name: "Summary checks", description: "Run a comparison once a provider is configured.")
+      dataset = @project.evaluation_datasets.create!(
+        name: "Summary checks",
+        description: "Synthetic comparison: illustrative outputs, tokens, costs and timings; no provider was called. Valid schema does not guarantee an exact match or answer quality."
+      )
       dataset.create_revision!([
         { "key" => "queue", "input" => { "prompt" => "Solid Queue stores jobs in the database." },
           "expected_output" => { "summary" => "Solid Queue stores jobs in the database.", "confidence" => 1 },
@@ -226,6 +229,91 @@ module Workbench
         { "key" => "turbo", "input" => { "prompt" => "Turbo updates pages without full reloads." },
           "expected_output" => { "summary" => "Turbo updates pages without full reloads.", "confidence" => 1 } }
       ])
+      evaluation_comparison(dataset)
+    end
+
+    def evaluation_comparison(dataset)
+      experiment = @project.experiments.find_by!(name: "Summarize with a schema")
+      revision = dataset.current_revision_record
+      dataset_snapshot = {
+        "id" => dataset.id, "name" => dataset.name, "revision" => revision.revision,
+        "cases" => revision.cases.map { |evaluation_case| evaluation_case.merge("attachments" => []) }
+      }
+      models = ([ model ] + RubyLLM.models.chat_models.all).uniq { |candidate| [ candidate.provider, candidate.id ] }
+        .select { |candidate| candidate.supports?(:structured_output) && !candidate.id.to_s.end_with?(":batch") }.first(2)
+      raise "The synthetic comparison needs two structured-output models in the bundled registry." unless models.size == 2
+
+      targets = models.map do |candidate|
+        { "provider" => candidate.provider.to_s, "model_id" => candidate.id,
+          "name" => candidate.name, "capabilities" => candidate.capabilities.map(&:to_s) }
+      end
+      comparison = @project.evaluation_comparisons.create!(
+        evaluation_dataset_revision: revision, experiment:, requested_by: REQUESTED_BY,
+        dataset_snapshot_json: dataset_snapshot, experiment_snapshot_json: experiment.snapshot,
+        model_targets_json: targets
+      )
+
+      models.each_with_index do |candidate, model_position|
+        target = targets.fetch(model_position).merge("execution_mode" => "individual")
+        execution = @project.evaluation_executions.create!(
+          evaluation_comparison: comparison, evaluation_dataset_revision: revision, experiment:,
+          provider: candidate.provider.to_s, model_id: candidate.id, execution_mode: :individual,
+          status: :completed, case_count: revision.cases.size, requested_by: REQUESTED_BY,
+          started_at: Time.current - 5.seconds, finished_at: Time.current,
+          input_snapshot_json: {
+            "dataset" => comparison.dataset_snapshot, "experiment" => comparison.experiment_snapshot,
+            "target" => target, "judge" => nil, "demo_note" => SYNTHETIC_NOTE
+          }
+        )
+        revision.cases.each_with_index do |evaluation_case, position|
+          evaluation_case_run(execution:, evaluation_case:, position:, candidate:, target:, model_position:)
+        end
+      end
+    end
+
+    def evaluation_case_run(execution:, evaluation_case:, position:, candidate:, target:, model_position:)
+      expected = evaluation_case.fetch("expected_output")
+      actual = expected.deep_dup
+      # A faithful paraphrase still fails exact JSON equality. These invented
+      # examples demonstrate the metric; they are not a model benchmark.
+      actual["summary"] = "Solid Queue persists background jobs in a database." if model_position == 1 && position.zero?
+      schema = execution.input_snapshot.dig("experiment", "schema")
+      errors = Ai::SchemaValidator.new(schema).errors_for(actual)
+      raise "Synthetic evaluation output is invalid: #{errors.join('; ')}" if errors.any?
+
+      chat = new_chat("Summary checks · #{evaluation_case.fetch('key')}", target_model: candidate)
+      case_result = execution.evaluation_case_results.create!(
+        evaluation_dataset_revision: execution.evaluation_dataset_revision,
+        case_key: evaluation_case.fetch("key"), case_position: position,
+        input_json: evaluation_case.fetch("input"), expected_output_json: expected, status: :queued
+      )
+      experiment_snapshot = execution.input_snapshot.fetch("experiment").deep_dup
+      prompt = "#{experiment_snapshot.fetch('input_prompt')}\n\nEvaluation case input (JSON):\n#{JSON.pretty_generate(evaluation_case.fetch('input'))}"
+      experiment_snapshot["input_prompt"] = prompt
+      run = new_run(chat, operation: "structured", experiment: execution.experiment, input: {
+        "experiment" => experiment_snapshot, "target" => target,
+        "evaluation" => {
+          "execution_id" => execution.id, "comparison_id" => execution.evaluation_comparison_id,
+          "case_result_id" => case_result.id, "dataset_revision" => execution.evaluation_dataset_revision.revision,
+          "case_key" => evaluation_case.fetch("key"), "tags" => evaluation_case.fetch("tags", []),
+          "rubric" => evaluation_case.fetch("rubric", []), "attachments" => [],
+          "input" => evaluation_case.fetch("input"), "expected_output" => expected
+        }
+      })
+      run.start!
+      chat.messages.create!(role: "user", content: prompt)
+      chat.messages.create!(role: "assistant", content: JSON.generate(actual))
+      attempt = attempt_for(run, output_tokens: 28, target_model: candidate)
+      run.artifacts.create!(attempt:, kind: "json", name: "Synthetic evaluation output", content_json: actual,
+        content_text: JSON.pretty_generate(actual))
+      run.succeed!("schema_validation" => "valid", "structured_output" => actual, "demo_note" => SYNTHETIC_NOTE)
+      settle(run, seconds: 1.9)
+      passed = actual == expected
+      case_result.update!(
+        run:, status: :completed, transport_status: :received, schema_status: :valid, passed:,
+        actual_output_json: actual, started_at: run.started_at, finished_at: run.finished_at,
+        error_summary: passed ? nil : "Structured output did not exactly match the expected JSON value."
+      )
     end
   end
 end

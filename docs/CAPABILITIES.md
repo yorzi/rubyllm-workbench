@@ -109,6 +109,20 @@ verification of the released fixes.
 
 ## Verification snapshot
 
+2026-10-09 read-only demo development, same pinned versions and macOS arm64:
+
+| Check | Result |
+| --- | --- |
+| Rails suite | 379 runs, 3,341 assertions, 0 failures/errors, 8 opt-in live skips; includes snapshot integrity and demo entrypoint checks |
+| Selenium system suite | 4 runs, 48 assertions, 0 failures/errors; includes read-only desktop/true 390px navigation, explanations and lexical search |
+| Actual production demo | Fresh isolated nine-Run snapshot; read-only SQLite, nil provider settings, rejected queue/database overrides; compiled assets/Turbo, desktop/390px and lexical search passed on loopback |
+| Style/autoload/security | RuboCop and Zeitwerk passed; Brakeman 8.1.0: 0 warnings/errors; gem/npm audits: no vulnerabilities |
+| Provider / container / hosted scope | No live calls, Linux/Docker runtime or current hosted CI; temporary preview stopped after checking |
+
+This is synthetic local verification, not model quality or an externally
+accessible deployment. The editable workbench and read-only viewer use
+different databases and execution boundaries. See [DEMO.md](DEMO.md).
+
 2026-10-08, macOS arm64, Ruby 4.0.2, Node 24.21.0, Rails 8.1.4,
 RubyLLM 2.1.0:
 

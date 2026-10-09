@@ -1,0 +1,10 @@
+<section aria-label="Read-only demo" class="border-b border-indigo-100 bg-indigo-50 px-5 py-4 text-xs leading-5 text-indigo-950 sm:px-8 lg:px-10">
+  <p class="font-semibold">Synthetic read-only demo</p>
+  <p class="mt-1 max-w-3xl">Explore saved examples and the code behind them. No provider was called; outputs, costs and timings are illustrative. Model calls, background jobs and uploads are disabled.</p>
+  <nav aria-label="Demo tour" class="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-medium">
+    <%= link_to "1. Project", project_path("demo-tour"), class: "underline underline-offset-2" %>
+    <%= link_to "2. Run evidence", runs_path, class: "underline underline-offset-2" %>
+    <%= link_to "3. Evaluation results", project_evaluation_datasets_path("demo-tour"), class: "underline underline-offset-2" %>
+    <%= link_to "4. Search sources", project_knowledge_collections_path("demo-tour"), class: "underline underline-offset-2" %>
+  </nav>
+</section>

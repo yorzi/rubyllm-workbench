@@ -6,7 +6,7 @@
         project_evaluation_dataset_revision_case_attachment_path(@project, @dataset, revision, attachment),
         class: "break-all font-medium text-accent hover:underline" %>
       <span class="text-muted"><%= number_to_human_size(attachment.file.blob.byte_size) %> · <%= attachment.file.blob.content_type %></span>
-      <% if allow_mutations %>
+      <% if allow_mutations && !demo_mode? %>
         <%= button_to "Remove in next revision",
           project_evaluation_dataset_case_attachment_path(@project, @dataset, attachment),
           method: :delete,
@@ -15,7 +15,7 @@
       <% end %>
     </div>
   <% end %>
-  <% if allow_mutations %>
+  <% if allow_mutations && !demo_mode? %>
     <%= form_with url: project_evaluation_dataset_case_attachments_path(@project, @dataset),
       scope: :evaluation_case_attachment,
       multipart: true,

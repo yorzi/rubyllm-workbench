@@ -1,6 +1,6 @@
 # Roadmap
 
-Updated: 2026-10-08 · Rails 8.1.4 · RubyLLM 2.1.0
+Updated: 2026-10-09 · Rails 8.1.4 · RubyLLM 2.1.0
 
 The objective is a readable, reproducible Rails reference application that
 demonstrates deep RubyLLM integration. Strengthen evidence visitors can inspect
@@ -21,7 +21,7 @@ before adding more independent labs. Current behavior is in
 | Evaluation datasets, comparisons, reviews, judge, Batch | Implemented locally; judge experimental | Live Batch, judge calibration and native Evaluation/Judge integration. |
 | Exports, lifecycle evidence, upstream drafts | Implemented; drafts experimental | Native OpenTelemetry export and an inspectable trace example. |
 | Source-anchored learning | Implemented, including Agent/evaluation/retrieval maps | Extend explanations alongside each new native integration. |
-| Public read-only demo | Planned | The full app currently allows writes and provider calls. |
+| Read-only synthetic demo | Implemented and locally verified | Public hosting, TLS/host checks and external acceptance remain. The full workbench still requires trusted access. |
 
 The old milestone gate records remain in git history (`TODO.md` at `e9c9faf`).
 Both RubyLLM 2.0 production patches were removed after verifying released 2.1
@@ -32,10 +32,10 @@ fixes. Keep the remaining Agent usage-recorder seam isolated and tested.
 Complete this before expanding the feature set. Follow
 [RELEASING.md](docs/RELEASING.md).
 
-The next implementation slice is the isolated read-only synthetic demo.
-Its route guards, provider/job isolation and mobile tour must pass before
-hosting. Current-version live checks and Linux/container checks are release
-acceptance tasks alongside that work.
+The isolated read-only synthetic demo now passes local request, database,
+job and desktop/390px browser checks, including a real production-mode
+preview. See [DEMO.md](docs/DEMO.md). Next complete current-version live
+acceptance and Linux/container/hosted CI checks before public hosting.
 
 - [x] Pin RubyLLM 2.1.0, apply its Rails migration, verify Rails is already at
       the latest stable 8.1.4, and remove obsolete patches.
@@ -49,12 +49,12 @@ acceptance tasks alongside that work.
       with and without libvips, and the runtime container.
 - [ ] Confirm private vulnerability reporting and review git history and
       synthetic screenshots. Publish/tag `v0.1.0` with owner authorization.
-- [ ] Implement a read-only demo with an isolated synthetic database and no
+- [x] Implement a read-only demo with an isolated synthetic database and no
       provider credentials. Use an explicit route allowlist; permit only local
       lexical search and synthetic evidence downloads. Reject mutation,
-      direct uploads, semantic/rerank GET calls and job submission. Tests must
-      prove crafted requests cannot call a provider, enqueue work or change
-      records. Verify desktop and 390px browsing.
+      direct uploads and job submission; force GET search to lexical with no
+      reranking. Tests prove crafted requests cannot call a provider, enqueue
+      work or change records. Desktop and 390px browsing verified locally.
 - [ ] Publish that demo with TLS and host checks and verify external access.
       Authenticate any deployment of the full workbench.
 
@@ -67,6 +67,11 @@ Public access must not create a model-spending or upload endpoint.
 Next, strengthen the existing Knowledge → Agent → Evaluation path. Suggested
 case: answering questions about a small, redistributable Rails application
 from source excerpts, with citations and refusal when evidence is absent.
+The first provider-free development slice is a licensed corpus and labelled
+query set, lexical recall@k/MRR runner, and tests for missing evidence and
+misleading retrieved instructions. Add measured semantic/hybrid/rerank runs
+only after choosing a provider/model and budget. Keep the synthetic tour
+separate from the measured case study.
 
 1. Version a corpus and labelled query set with relevant chunk IDs, missing-
    answer cases and misleading retrieved instructions. Measure recall@k and

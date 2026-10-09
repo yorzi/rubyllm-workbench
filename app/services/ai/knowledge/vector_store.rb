@@ -309,7 +309,7 @@ module Ai
         end
 
         def selection
-          requested_key = ENV.fetch(SELECTION_ENV, DEFAULT_KEY).to_s
+          requested_key = Workbench::DemoMode.enabled? ? DEFAULT_KEY : ENV.fetch(SELECTION_ENV, DEFAULT_KEY).to_s
           adapter = adapter_for(requested_key)
           return Selection.new(adapter: adapter, key: requested_key, requested_key: requested_key, note: nil) if adapter.available?
 

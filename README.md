@@ -53,8 +53,9 @@ execution maps.
 The screenshot uses synthetic tour records on RubyLLM 2.1.0 (2026-10-08);
 its latency, usage and cost values are illustrative.
 
-The [development plan](ROADMAP.md) prioritizes a safe public read-only demo,
-then a measured Knowledge → Agent → Evaluation case study and native RubyLLM
+The [isolated read-only demo](docs/DEMO.md) lets visitors browse synthetic
+records without credentials or executing jobs. The [development plan](ROADMAP.md)
+next prioritizes release acceptance, a measured Knowledge → Agent → Evaluation case study and native RubyLLM
 2.1 MCP, Judge/Evaluation and OpenTelemetry examples. Those native integrations
 are planned; installing the new framework schema does not implement them.
 
@@ -69,6 +70,10 @@ bin/setup --skip-server       # installs gems and npm packages, prepares SQLite
 bin/rails workbench:demo      # optional: synthetic demo data, no API keys needed
 bin/dev                       # http://127.0.0.1:3000
 ```
+
+For a viewer with no write/execution controls, follow the separate
+[read-only demo setup](docs/DEMO.md). `workbench:demo` above adds examples to
+the editable local workbench; it does not enable read-only isolation.
 
 To call real models, copy `.env.example` to `.env` and fill a provider key
 locally. `bin/dev` loads it through Foreman. Standalone `bin/rails` commands

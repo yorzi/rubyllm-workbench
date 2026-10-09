@@ -349,6 +349,7 @@ class Run < ApplicationRecord
   end
 
   def broadcast_status
+    return if Workbench::DemoMode.enabled?
     return unless defined?(Turbo::StreamsChannel)
 
     Turbo::StreamsChannel.broadcast_replace_to(

@@ -31,7 +31,7 @@ class ToolDefinitionsController < ApplicationController
   end
 
   def sync_registry
-    Ai::ToolRegistry.sync_project!(@project)
+    Ai::ToolRegistry.sync_project!(@project) unless demo_mode?
   end
 
   def tool_definition_params

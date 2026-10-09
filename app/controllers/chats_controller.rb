@@ -80,7 +80,7 @@ class ChatsController < ApplicationController
     @pending_tool_invocations = []
     return unless @latest_run
 
-    Ai::ToolInvocationRecorder.new(run: @latest_run, chat: @chat).sync!
+    Ai::ToolInvocationRecorder.new(run: @latest_run, chat: @chat).sync! unless demo_mode?
     @tool_invocations = @latest_run.tool_invocations.includes(:approval, :tool_definition).recent.to_a
     @pending_tool_invocations = @tool_invocations.select(&:approval_pending?)
   rescue ActiveRecord::RecordNotFound, KeyError

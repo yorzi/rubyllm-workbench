@@ -273,7 +273,7 @@ module Learning
               step("7. The workspace and inspector reconnect the graph", "Project, Chat, Run, Experiment, and Knowledge pages link back to the same slug and durable records, making ownership visible as each feature is used.")
             ),
             code_references: list(
-              reference("app/controllers/projects_controller.rb", "Project index", "Loads the ordered list and unsaved model for the creation form.", 2, 5, "@projects = Project.order(:name)"),
+              reference("app/controllers/projects_controller.rb", "Project index", "Loads the visible ordered projects and unsaved model for the local creation form.", 2, 5, "@projects = visible_projects.order(:name)"),
               reference("app/views/projects/index.html.erb", "Project creation form", "Uses Rails model-backed form helpers for the Project fields.", 46, 74, "form_with model: @project"),
               reference("app/controllers/projects_controller.rb", "Project creation", "Permits the form contract, persists the Project, and redirects to its workspace.", 7, 15, "def create"),
               reference("app/models/project.rb", "Slug validation and routing", "Validates slug format and uniqueness, derives a missing slug, and uses it in routes.", 12, 20, "before_validation :derive_slug"),

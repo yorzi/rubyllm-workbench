@@ -62,7 +62,7 @@ class AgentDefinitionsController < ApplicationController
   end
 
   def sync_tool_registry
-    Ai::ToolRegistry.sync_project!(@project)
+    Ai::ToolRegistry.sync_project!(@project) unless demo_mode?
   end
 
   def set_agent_definition

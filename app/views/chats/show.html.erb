@@ -1,5 +1,5 @@
 <% content_for :title, "#{@chat.display_title.presence || 'Chat'} · #{@project.name}" %>
-<% turbo_stream_from @chat.stream_key %>
+<% turbo_stream_from @chat.stream_key unless demo_mode? %>
 <% content_for :inspector do %>
   <div class="sticky top-0">
     <div class="flex items-center justify-between gap-3">
@@ -34,7 +34,7 @@
     <%= render "shared/flash" %>
     <% if @chat.remote_tool_outcome_unknown? %>
       <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900" role="status">
-        An approved remote tool call has no saved provider result, so its external outcome is unknown. This chat is blocked from resuming that request. <%= link_to "Start a new chat", new_project_chat_path(@project, model_id: @chat.model_id, provider: @chat.provider), class: "font-semibold underline" %>.
+        An approved remote tool call has no saved provider result, so its external outcome is unknown. This chat is blocked from resuming that request. <%= link_to "Start a new chat", new_project_chat_path(@project, model_id: @chat.model_id, provider: @chat.provider), class: "font-semibold underline" unless demo_mode? %>.
       </div>
     <% end %>
 
@@ -44,29 +44,31 @@
         <h1 class="mt-3 truncate text-2xl font-semibold tracking-tight text-ink"><%= @chat.display_title.presence || "Untitled chat" %></h1>
         <p class="mt-2 break-all font-mono text-xs text-muted"><%= @chat.provider %> / <%= @chat.model_id %></p>
       </div>
+      <% unless demo_mode? %>
       <div class="flex flex-wrap items-center gap-2 sm:justify-end">
-        <%= link_to "Change model", new_project_chat_path(@project), class: "rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
+        <%= link_to "Change model", new_project_chat_path(@project), class: "rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" unless demo_mode? %>
         <% if @image_models_available %>
-          <%= link_to "Image", new_project_chat_image_run_path(@project, @chat), class: "rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
+          <%= link_to "Image", new_project_chat_image_run_path(@project, @chat), class: "rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" unless demo_mode? %>
         <% else %>
           <span aria-disabled="true" title="No RubyLLM image-generation model is available" class="cursor-not-allowed rounded-lg border border-line px-3 py-2 text-xs font-medium text-muted opacity-60">Image unavailable</span>
         <% end %>
         <% if @transcription_models_available %>
-          <%= link_to "Transcribe", new_project_chat_transcription_run_path(@project, @chat), class: "rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
+          <%= link_to "Transcribe", new_project_chat_transcription_run_path(@project, @chat), class: "rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" unless demo_mode? %>
         <% else %>
           <span aria-disabled="true" title="No RubyLLM transcription model is available" class="cursor-not-allowed rounded-lg border border-line px-3 py-2 text-xs font-medium text-muted opacity-60">Transcription unavailable</span>
         <% end %>
         <% if @video_models_available %>
-          <%= link_to "Video", new_project_chat_video_run_path(@project, @chat), class: "rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
+          <%= link_to "Video", new_project_chat_video_run_path(@project, @chat), class: "rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" unless demo_mode? %>
         <% else %>
           <span aria-disabled="true" title="No RubyLLM video-generation model is available" class="cursor-not-allowed rounded-lg border border-line px-3 py-2 text-xs font-medium text-muted opacity-60">Video unavailable</span>
         <% end %>
         <%= link_to "Tools", project_tool_definitions_path(@project), class: "rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
         <%= button_to "Delete", project_chat_path(@project, @chat), method: :delete, form: { data: { turbo_confirm: "Delete this chat and its runs?" } }, class: "rounded-lg border border-rose-200 px-3 py-2 text-xs font-medium text-rose-700 hover:bg-rose-50" %>
       </div>
+      <% end %>
     </div>
 
-    <% unless @provider_configured %>
+    <% unless @provider_configured || demo_mode? %>
       <div class="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-warning" role="status">
         This chat is browseable, but its provider is not configured. Add <span class="font-mono"><%= @model_entry&.missing_configuration&.join(", ").presence || "provider configuration" %></span> through the environment or Rails credentials before running it.
       </div>
@@ -90,8 +92,8 @@
               </div>
               <pre class="mt-3 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md bg-canvas p-3 font-mono text-[11px] leading-5 text-muted"><%= JSON.pretty_generate(invocation.arguments) %></pre>
               <div class="mt-3 flex flex-wrap gap-2">
-                <%= button_to "Approve", project_chat_approval_path(@project, @chat, invocation.approval), method: :patch, params: { approval: { decision: "approved" } }, class: "rounded-lg bg-accent px-3 py-2 text-xs font-medium text-white hover:bg-indigo-700" %>
-                <%= button_to "Deny", project_chat_approval_path(@project, @chat, invocation.approval), method: :patch, params: { approval: { decision: "denied" } }, class: "rounded-lg border border-rose-200 px-3 py-2 text-xs font-medium text-rose-700 hover:bg-rose-50" %>
+              <%= button_to "Approve", project_chat_approval_path(@project, @chat, invocation.approval), method: :patch, params: { approval: { decision: "approved" } }, class: "rounded-lg bg-accent px-3 py-2 text-xs font-medium text-white hover:bg-indigo-700" unless demo_mode? %>
+              <%= button_to "Deny", project_chat_approval_path(@project, @chat, invocation.approval), method: :patch, params: { approval: { decision: "denied" } }, class: "rounded-lg border border-rose-200 px-3 py-2 text-xs font-medium text-rose-700 hover:bg-rose-50" unless demo_mode? %>
               </div>
             </div>
           <% end %>
@@ -111,6 +113,7 @@
       <% end %>
     </div>
 
+    <% unless demo_mode? %>
     <div class="sticky bottom-0 -mx-5 border-t border-line bg-canvas/95 px-5 py-4 backdrop-blur sm:-mx-8 sm:px-8 lg:-mx-10 lg:px-10">
       <%= form_with model: [@project, @chat, Message.new], data: { controller: "form-state", action: "turbo:submit-start->form-state#start turbo:submit-end->form-state#finish" }, class: "rounded-2xl border border-line bg-panel p-3 shadow-sm" do |form| %>
         <%= form.label :content, "Message", class: "sr-only" %>
@@ -127,5 +130,6 @@
         </div>
       <% end %>
     </div>
+    <% end %>
   </div>
 <% end %>

@@ -7,6 +7,15 @@ default: &default
   pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
   timeout: 5000
 
+<% if Workbench::DemoMode.enabled? %>
+<%= Rails.env %>:
+  primary:
+    <<: *default
+    database: <%= Workbench::DemoMode.database_path %>
+    readonly: <%= !Workbench::DemoMode.preparing? %>
+    pragmas:
+      journal_mode: delete
+<% else %>
 development:
   primary:
     <<: *default
@@ -37,3 +46,4 @@ production:
     <<: *default
     database: storage/production_queue.sqlite3
     migrations_paths: db/queue_migrate
+<% end %>

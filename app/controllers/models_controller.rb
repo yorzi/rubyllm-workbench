@@ -1,6 +1,6 @@
 class ModelsController < ApplicationController
   def index
-    @projects = Project.order(:name)
+    @projects = visible_projects.order(:name)
     @selected_project = selected_project
     @models = model_catalog.entries(
       query: params[:q],
