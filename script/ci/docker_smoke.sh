@@ -50,20 +50,22 @@ start_server() {
   docker run --detach --name "$container" --env-file "$environment_file" \
     --mount "source=${storage_volume},target=/rails/storage" \
     --publish 127.0.0.1::80 "$@" "$image" >/dev/null
-  local address
-  address="$(docker port "$container" 80/tcp)"
-  [[ "$address" == 127.0.0.1:* ]]
-  base_url="http://${address}"
 }
 
 wait_for_health() {
+  local container="$1"
+  local address
+  # Docker can assign a new ephemeral host port when restarting a container.
+  address="$(docker port "$container" 80/tcp)"
+  [[ "$address" == 127.0.0.1:* ]]
+  base_url="http://${address}"
   for attempt in {1..40}; do
     if curl --silent --fail --max-time 2 "${base_url}/up" >/dev/null; then
       return
     fi
     sleep 1
   done
-  printf '%s\n' 'Container health check timed out.' >&2
+  printf 'Container health check timed out: %s\n' "$container" >&2
   return 1
 }
 
@@ -85,20 +87,23 @@ check_denied() {
 }
 
 start_server "$web_container"
-wait_for_health
+wait_for_health "$web_container"
+printf '%s\n' 'Checking normal production pages and persisted records.'
 check_page / 'Demo tour'
 check_page /models 'Model Explorer'
 check_page /projects/demo-tour 'Synthetic records'
 docker exec "$web_container" ruby script/ci/source_smoke.rb records
 docker restart "$web_container" >/dev/null
-wait_for_health
+wait_for_health "$web_container"
+printf '%s\n' 'Checking persisted records after container restart.'
 check_page /projects/demo-tour 'Demo tour'
 docker exec "$web_container" ruby script/ci/source_smoke.rb records
 docker stop --time 10 "$web_container" >/dev/null
 docker rm "$web_container" >/dev/null
 
 start_server "$demo_container" --env WORKBENCH_DEMO=1
-wait_for_health
+wait_for_health "$demo_container"
+printf '%s\n' 'Checking isolated read-only demo and rejected endpoints.'
 check_page /projects/demo-tour 'Synthetic read-only demo'
 check_page /models 'Synthetic read-only demo'
 check_denied POST /projects
