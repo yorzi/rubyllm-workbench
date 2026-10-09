@@ -338,8 +338,9 @@ request/completed events.
 
 Retrieval calls a provider for explicit embedding, semantic/hybrid queries or
 reranking. Missing prerequisites degrade to lexical with the reason shown.
-**Answer with sources** creates a separate `grounded_answer` Run using lexical
-retrieval and one selected structured-output model. It refuses locally when
+**Answer with sources** creates a separate `grounded_answer` Run using the
+selected lexical, semantic or hybrid mode, optional rerank, and one selected
+structured-output model. It refuses locally when
 no evidence matches. See [the case-study walkthrough](GROUNDED_ANSWERS.md) for
 the import command, frozen inputs, citation limits and focused acceptance.
 

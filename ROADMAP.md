@@ -32,14 +32,15 @@ fixes. Keep the remaining Agent usage-recorder seam isolated and tested.
 
 ## P0 — release the reference app and make the demo safe
 
-Keep these release gates open while implementing locally reviewable workflow
-slices. Publishing still requires their acceptance. Follow
+Source-release checks and public-demo deployment have separate completion
+conditions. Follow
 [RELEASING.md](docs/RELEASING.md).
 
 The isolated read-only synthetic demo now passes local request, database,
 job and desktop/390px browser checks, including a real production-mode
-preview. See [DEMO.md](docs/DEMO.md). Next complete current-version live
-acceptance and Linux/container/hosted CI checks before public hosting. Free
+preview. See [DEMO.md](docs/DEMO.md). The source release uses current-version free
+acceptance and Linux/container/hosted CI checks; public hosting still needs
+TLS, host checks and external acceptance. Free
 2.1 acceptance now verifies five core flows; the full two-model comparison
 remains partial under provider failures/limits. Its small manual rerun and
 the deferred capability list are in [OPERATIONS.md](docs/OPERATIONS.md#remaining-manual-acceptance).
@@ -63,8 +64,11 @@ the deferred capability list are in [OPERATIONS.md](docs/OPERATIONS.md#remaining
       and optional local TTS adapter deferred by owner choice.
 - [ ] Verify hosted CI for the candidate commit, fresh Debian/Ubuntu setup
       with and without libvips, and the runtime container.
-- [ ] Confirm private vulnerability reporting and review git history and
-      synthetic screenshots. Publish/tag `v0.1.0` with owner authorization.
+- [x] Enable private vulnerability reporting, verify the public report link,
+      and review raw Git history and synthetic screenshots.
+- Publish the accepted candidate as `v0.1.0`; the
+  [Release page](https://github.com/yorzi/rubyllm-workbench/releases/tag/v0.1.0)
+  records its immutable tag and downloadable source package.
 - [x] Implement a read-only demo with an isolated synthetic database and no
       provider credentials. Use an explicit route allowlist; permit only local
       lexical search and synthetic evidence downloads. Reject mutation,

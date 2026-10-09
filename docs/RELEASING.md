@@ -2,9 +2,10 @@
 
 Updated: 2026-10-09
 
-The repository has an MIT license and contribution/security guides. GitHub
-still reports it as private. This checklist prepares a release; publication
-and deployment have not happened in this review.
+The repository is public and has an MIT license and contribution/security
+guides. Private vulnerability reporting is enabled and its report link is
+visible on the public security page. This checklist prepares a reviewed
+release; source publication and public demo deployment are separate steps.
 
 ## Prepare a candidate
 
@@ -78,12 +79,15 @@ New 2.1 usage-operation rows must not be loaded by an old schema.
 4. Verify the licence renders and an outside contributor can file an issue,
    reproduce the tour and run documented checks.
 
-No release tag, visibility change, push or deployment is performed by this
-review. [ROADMAP.md](../ROADMAP.md) defines public demo acceptance.
+[CAPABILITIES.md](CAPABILITIES.md#verification-snapshot) records accepted
+release checks, and [ROADMAP.md](../ROADMAP.md) defines public demo acceptance.
 The implemented [read-only mode](DEMO.md) has a separate synthetic snapshot;
 hosting/TLS/host checks and external verification remain release tasks.
 
-## Candidate release-note text
+## Release notes
+
+The complete [v0.1.0 release notes](releases/v0.1.0.md) cover installation,
+accepted scope, manual follow-ups and the upgrade boundary.
 
 RubyLLM Workbench v0.1.0 is a single-user Rails reference app for inspectable
 AI workflows on Rails 8.1.4 and RubyLLM 2.1.0. Explore a synthetic tour without

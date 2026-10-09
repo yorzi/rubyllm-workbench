@@ -28,14 +28,12 @@ Things to know before exposing it:
 
 ## Reporting a vulnerability
 
-When GitHub private vulnerability reporting is enabled, open the repository's
-**Security** tab and choose **Report a vulnerability**. During the 2026-10-09
-review the repository was still private and the reporting API returned 404.
-[GitHub supports this feature for public repositories](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configure-for-a-repository).
-When making the repository public, the maintainer must immediately enable
-this channel and verify it from an outside account before announcing the
-release. If the channel cannot be enabled, publish a verified private contact
-before publication.
+Private vulnerability reporting is enabled for this public repository,
+verified on 2026-10-09 through the repository API and an unauthenticated
+security-page request. Open [Report a vulnerability](https://github.com/yorzi/rubyllm-workbench/security/advisories/new)
+(the form requires a GitHub login), or use the repository's **Security** tab.
+The reporting configuration and public link were checked; no test vulnerability
+report was submitted.
 Do not open a public vulnerability issue or include credentials or other
 people's data in a report.
 

@@ -42,8 +42,21 @@ class GroundedAnswerSystemTest < ApplicationSystemTestCase
       assert_text "Answer with sources"
       fill_in "Question about these sources", with: "quasarxyz"
       select "openrouter / #{model.id}", from: "Answer model"
-      click_button "Create source answer"
-      assert_selector "#grounded-answer-heading"
+      begin
+        # Preserve real enqueue behavior while checking an in-flight redirect.
+        # Hosted runners can exceed Capybara's default two-second wait.
+        enqueue = Ai::Knowledge::GroundedAnswer.method(:enqueue)
+        Ai::Knowledge::GroundedAnswer.define_singleton_method(:enqueue) do |**arguments|
+          sleep 2.25
+          enqueue.call(**arguments)
+        end
+        click_button "Create source answer"
+        assert_selector "#grounded-answer-heading", wait: 10
+      ensure
+        Ai::Knowledge::GroundedAnswer.define_singleton_method(:enqueue, enqueue) if enqueue
+        # Let any in-flight request finish before the test transaction closes.
+        page.has_selector?("#grounded-answer-heading", wait: 10)
+      end
       assert_text "Answer queued or running."
       run = corpus.project.runs.sole
       GroundedAnswerJob.perform_now(run.id)

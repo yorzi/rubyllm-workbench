@@ -52,6 +52,53 @@ jobs:
       - name: Build the production container image
         run: docker build --tag rubyllm-workbench:ci .
 
+      - name: Exercise production and read-only demo containers
+        run: bash script/ci/docker_smoke.sh rubyllm-workbench:ci
+
+  clean-install:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        libvips: [present, absent]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install optional image library
+        if: matrix.libvips == 'present'
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y libvips
+
+      - name: Remove optional image library
+        if: matrix.libvips == 'absent'
+        run: sudo apt-get remove -y 'libvips*'
+
+      - name: Verify clean source setup and synthetic workflows
+        env:
+          CI: "1"
+          EXPECT_LIBVIPS: ${{ matrix.libvips }}
+        run: |
+          bin/setup --skip-server
+          ruby script/ci/source_smoke.rb prepare
+
+      - name: Build production assets without credentials
+        env:
+          RAILS_ENV: production
+          SECRET_KEY_BASE_DUMMY: "1"
+        run: bin/rails assets:precompile
+
   scan_ruby:
     runs-on: ubuntu-latest
 

@@ -6,7 +6,23 @@ before the public-release cleanup are preserved in git history (see this file
 at commit `8bd33c8`), together with the milestone gate records formerly in
 `TODO.md` (commit `e9c9faf`).
 
-## Unreleased: owned retrieval and native saved-answer evaluation (2026-10-09)
+## v0.1.0 (2026-10-09)
+
+First public release of the Rails 8.1.4 / RubyLLM 2.1.0 reference app. See
+[release notes](releases/v0.1.0.md) for installation, included workflows,
+upgrade instructions and experimental/manual boundaries. The dated
+engineering entries below describe the changes included in this release.
+
+- Filter search questions, review/draft prose and serialized user input from
+  request logs; preserve useful model and execution identifiers.
+- Wait for the actual source-answer Turbo redirect on slow responses, with a
+  controlled-delay browser regression.
+- Add Linux clean-install checks with and without libvips, plus production
+  container and isolated read-only demo runtime checks.
+- Enable private vulnerability reporting and replace the obsolete RubyLLM 2.0
+  draft release description with current, version-scoped evidence.
+
+## Included work: owned retrieval and native saved-answer evaluation (2026-10-09)
 
 - Attribute one-shot embedding/query/rerank usage with RubyLLM native owners;
   stop copying batch costs into chunk vectors. Export owner ledger rows and
@@ -24,7 +40,7 @@ at commit `8bd33c8`), together with the milestone gate records formerly in
 - Use OpenRouter Fish for current TTS; optional local TTS no longer blocks work.
   Actual verification and live/manual boundaries are in `CAPABILITIES.md`.
 
-## Earlier unreleased: Rails source answers (2026-10-09)
+## Included work: Rails source answers (2026-10-09)
 
 - Add an original MIT Mini Notes source corpus, versioned cases and an
   idempotent import command that stops on edited source/chunk ownership.
@@ -38,7 +54,7 @@ at commit `8bd33c8`), together with the milestone gate records formerly in
   and desktop/mobile browser coverage. Integration evidence and manual
   quality boundaries are in `CAPABILITIES.md`.
 
-## Earlier unreleased: shared AI policy and free TTS acceptance (2026-10-09)
+## Included work: shared AI policy and free TTS acceptance (2026-10-09)
 
 - Adopt the contributor's AI usage guide at `docs/AI_USAGE_GUIDE.md`, with
   shared `AGENTS.md`/`CLAUDE.md` instructions. Correct RSpec assumptions to the
@@ -53,7 +69,7 @@ at commit `8bd33c8`), together with the milestone gate records formerly in
   live reports. Integration routing also forbids client fallback without
   imposing free-model prices on explicitly authorized paid acceptance.
 
-## Unreleased: RubyLLM 2.1 and showcase review (2026-10-08)
+## Included work: RubyLLM 2.1 and showcase review (2026-10-08)
 
 ### Changed
 
@@ -86,7 +102,7 @@ at commit `8bd33c8`), together with the milestone gate records formerly in
 - Live reports sum known cost categories and do not label the subtotal an
   upper bound when some costs are unknown.
 
-## Earlier unreleased work: public release preparation (2026-09-28)
+## Included work: public release preparation (2026-09-28)
 
 ### Added
 

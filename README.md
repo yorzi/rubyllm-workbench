@@ -63,7 +63,7 @@ its latency, usage and cost values are illustrative.
 
 The [isolated read-only demo](docs/DEMO.md) lets visitors browse synthetic
 records without credentials or executing jobs. The [development plan](ROADMAP.md)
-next prioritizes release acceptance, a saved-Agent case-study extension, native
+next prioritizes a saved-Agent case-study extension, native
 typed Judge live acceptance, MCP and OpenTelemetry examples. Native
 saved-answer Evaluation is implemented; its free linked acceptance and manual
 boundaries are recorded in the capability matrix.
