@@ -42,7 +42,7 @@ gem "kamal", require: false
 gem "thruster", require: false
 
 # Use Active Storage variants [https://guides.rubyonrails.org/active_storage_overview.html#transforming-images]
-gem "image_processing", "~> 2.1"
+gem "image_processing", "~> 2.2"
 # image_processing 2.x no longer pulls in its libvips binding. Loaded lazily by
 # Active Storage variants so Rails still boots when libvips is not installed.
 gem "ruby-vips", "~> 2.3", require: false
