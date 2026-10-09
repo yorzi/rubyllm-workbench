@@ -1,6 +1,38 @@
 require "application_system_test_case"
 
 class GroundedAnswerSystemTest < ApplicationSystemTestCase
+  test "a visitor evaluates a saved case without another model request" do
+    corpus = Workbench::KnowledgeCaseStudy.import!
+    example = corpus.cases.find { |entry| entry.fetch("key") == "missing-billing" }
+    model = RubyLLM.models.chat_models.all.find { |entry| entry.provider == "openrouter" && entry.supports?(:structured_output) }
+    with_provider_configuration("openrouter") do
+      run = Ai::Knowledge::GroundedAnswer.enqueue(collection: corpus.collection,
+        question: example.fetch("question"), model_reference: "openrouter|#{model.id}")
+      GroundedAnswerJob.perform_now(run.id)
+      visit run_path(run)
+      assert_text "Evaluate this saved answer"
+      click_button "Run native assertions · no API request"
+      assert_selector "#native-evaluation-heading"
+      evaluation = corpus.project.runs.where(operation: "native_evaluation").sole
+      NativeEvaluationJob.perform_now(evaluation.id)
+      visit run_path(evaluation)
+      assert_text "Native result: passed"
+      assert_text "answer cost included: false"
+      assert_empty evaluation.attempts
+      assert page.evaluate_script("document.documentElement.scrollWidth <= window.innerWidth")
+      page.driver.browser.execute_cdp("Emulation.setDeviceMetricsOverride", width: 390, height: 844, deviceScaleFactor: 1, mobile: true)
+      visit run_path(evaluation)
+      assert_text "Native result: passed"
+      assert page.evaluate_script("document.documentElement.scrollWidth <= window.innerWidth")
+      click_link "Original answer Run ##{run.id}"
+      assert_selector "#grounded-answer-heading"
+      assert_text "Evaluate this saved answer"
+      assert page.evaluate_script("document.documentElement.scrollWidth <= window.innerWidth")
+    end
+  ensure
+    page.driver.browser.execute_cdp("Emulation.clearDeviceMetricsOverride")
+  end
+
   test "a visitor creates a local refusal and inspects frozen citations on desktop and mobile" do
     corpus = Workbench::KnowledgeCaseStudy.import!
     model = RubyLLM.models.chat_models.all.find { |entry| entry.provider == "openrouter" && entry.supports?(:structured_output) }

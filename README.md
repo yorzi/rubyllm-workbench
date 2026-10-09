@@ -28,9 +28,13 @@ maintainers.
   execution lease and finish with a cited report.
 - **Search your own Knowledge**: text and file sources, provider embeddings,
   lexical/semantic/hybrid retrieval with visible evidence, optional rerank.
-- **Answer with sources**: a bounded lexical workflow with frozen evidence,
+- **Answer with sources**: bounded lexical/semantic/hybrid retrieval with owned
+  usage, optional rerank and frozen evidence,
   checked quotes and local refusal when no chunks match. Try the original MIT
   [Rails source case study](docs/GROUNDED_ANSWERS.md).
+- **Evaluate saved source answers** with native RubyLLM Evaluation assertions,
+  one model reviewer or a supported typed Judge, in independent Runs without
+  replaying generation.
 - **Evaluate models** on revisioned datasets: per-case Runs, outcome metrics,
   human reviews and an optional rubric judge.
 - **Generate media** (experimental): speech, images, video and transcription.
@@ -59,9 +63,10 @@ its latency, usage and cost values are illustrative.
 
 The [isolated read-only demo](docs/DEMO.md) lets visitors browse synthetic
 records without credentials or executing jobs. The [development plan](ROADMAP.md)
-next prioritizes release acceptance, a measured Knowledge → Agent → Evaluation case study and native RubyLLM
-2.1 MCP, Judge/Evaluation and OpenTelemetry examples. Those native integrations
-are planned; installing the new framework schema does not implement them.
+next prioritizes release acceptance, a saved-Agent case-study extension, native
+typed Judge live acceptance, MCP and OpenTelemetry examples. Native
+saved-answer Evaluation is implemented; its free linked acceptance and manual
+boundaries are recorded in the capability matrix.
 
 ## Quickstart
 

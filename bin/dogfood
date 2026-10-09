@@ -33,16 +33,16 @@ rows = File.exist?(report) ? File.readlines(report).map { |line| JSON.parse(line
 abort "No dogfood results were recorded." if rows.empty?
 
 display = ->(value) { value.nil? ? "unknown" : value }
-puts "\n| Scenario | Result | Models | Runs | POST requests | Tokens in/out (Runs only) | Known Run cost (USD) | Coverage | Notes |"
+puts "\n| Scenario | Result | Models | Runs | POST requests | Tokens in/out (attributed) | Known attributed cost (USD) | Coverage | Notes |"
 puts "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"
 rows.sort_by { |row| row["scenario"] }.each do |row|
   notes = [ row["skip_reason"], row["failure"], *row["notes"] ].compact.uniq.join("; ").gsub("|", "\\|")
   coverage = if row["result"] == "skip" && row["run_ids"].empty?
     "not called"
   elsif row["cost_complete"]
-    "Run attempts complete"
+    "attributed cost complete"
   else
-    "incomplete: #{row['unknown_cost_attempts']} unknown Attempts; #{row['untracked_cost_operations'].join(', ')}"
+    "incomplete: #{row['unknown_cost_attempts']} unknown Attempts; #{row.fetch('unknown_owned_usages', 0)} unknown owned calls; #{row['untracked_cost_operations'].join(', ')}"
   end
   puts "| #{row['scenario']} | #{row['result']} | #{row['models'].join(', ')} | #{row['run_ids'].join(', ')} | " \
        "#{display.call(row['http_post_requests'])} | #{display.call(row['input_tokens'])}/#{display.call(row['output_tokens'])} | #{display.call(row['known_cost'])} | #{coverage} | #{notes} |"
@@ -50,5 +50,5 @@ end
 total = rows.sum { |row| row["known_cost"].to_f }
 puts "\nRubyLLM #{rows.first['ruby_llm']} · #{rows.count { |row| row['result'] == 'pass' }} passed · " \
      "#{rows.count { |row| row['result'] == 'fail' }} failed · #{rows.count { |row| row['result'] == 'skip' }} manual/skipped · " \
-     "known Run cost subtotal $#{total.round(6)} (unknown costs excluded) · #{report}"
+     "known attributed cost subtotal $#{total.round(6)} (unknown costs excluded) · #{report}"
 exit status

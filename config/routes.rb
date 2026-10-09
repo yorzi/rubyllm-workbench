@@ -44,6 +44,7 @@ Rails.application.routes.draw do
   end
 
   resources :runs, only: %i[index show] do
+    post "native_evaluations", to: "native_evaluations#create", on: :member
     post :cancel, on: :member
     get :reproduction, on: :member
     get :events, on: :member

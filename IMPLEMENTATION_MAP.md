@@ -65,6 +65,16 @@ records; those operations do not create Runs.
 `Chunker`, `Embedder`, `EmbeddingCatalog`, `Retriever`, `Search`,
 `VectorStore`, `Reranker`, `RerankCatalog`, `OcrCatalog`.
 
+Source answers: `KnowledgeAnswersController`, `Ai::Knowledge::{ProviderCall,
+EvidenceSnapshot,GroundedAnswer,GroundedAnswerExecutor,GroundedResponse}`,
+`GroundedAnswerJob`, `GroundedAnswerRecoveryJob`.
+
+Native saved-answer evaluation: `NativeEvaluationsController`,
+`Ai::Knowledge::{NativeEvaluation,NativeEvaluationExecutor,GroundedAnswerEvaluation,
+GroundedAnswerReviewer,GroundedAnswerJudge}`, `Ai::JudgmentCatalog`,
+`NativeEvaluationJob`, `NativeEvaluationRecoveryJob`. The native owner ledger
+links to individual Attempts; the original answer is not replayed.
+
 ## Media (experimental)
 
 | Operation | Code |

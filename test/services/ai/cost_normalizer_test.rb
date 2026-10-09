@@ -29,6 +29,24 @@ class Ai::CostNormalizerTest < ActiveSupport::TestCase
     end
   end
 
+  test "a default cache zero without measured usage is unknown while the native row remains intact" do
+    tokens = RubyLLM::Tokens.new(cache_write: 0)
+    usage = StoredUsage.new(tokens, RubyLLM::Cost.from_h({ cache_write: 0, total: 0 }), BigDecimal("0"))
+    result = Ai::CostNormalizer.for(usage)
+    assert_equal "unknown", result[:cost_status]
+    assert_nil result[:recorded_cost]
+    assert_equal BigDecimal("0"), usage.total_cost
+    response = SpeechUsage.new(tokens, RubyLLM::Cost.new(tokens:))
+    assert_equal "unknown", Ai::CostNormalizer.for(response, model: RubyLLM.models.chat_models.all.first)[:cost_status]
+  end
+
+  test "explicit reported zero is retained even without token measurements" do
+    tokens = RubyLLM::Tokens.new(reported_cost: 0)
+    result = Ai::CostNormalizer.for(SpeechUsage.new(tokens, RubyLLM::Cost.new(tokens:)))
+    assert_equal "reported", result[:cost_status]
+    assert_equal 0, result[:reported_cost]
+  end
+
   test "keeps the provider-reported total including hosted tool fees" do
     tokens = RubyLLM::Tokens.new(input: 10, output: 5, server_tool_use: { "web_search_requests" => 2 }, reported_cost: 0.02)
     result = Ai::CostNormalizer.for(SpeechUsage.new(tokens, RubyLLM::Cost.new(tokens:)))

@@ -62,13 +62,19 @@
     <section class="mt-8 rounded-2xl border border-line bg-panel p-5 shadow-sm sm:p-6" aria-labelledby="answer-source-heading">
       <h2 id="answer-source-heading" class="text-sm font-semibold text-ink">Answer with sources</h2>
       <%= render "shared/learning_link", topic: "grounded_answer", label: "How source answers work" %>
-      <p class="mt-1 text-xs leading-5 text-muted">Retrieve up to 8 chunks with lexical search, then ask one model for cited claims. Evidence and model settings are frozen in a Run. No matches means a local refusal with no model request. Review claims yourself.</p>
+      <p class="mt-1 text-xs leading-5 text-muted">Retrieve up to 8 chunks, then ask one model for cited claims. Lexical search is local; semantic/hybrid and optional rerank make separately recorded provider requests. Missing evidence skips answer generation. Review claims yourself.</p>
       <% if @answer_models.any? %>
         <%= form_with url: project_knowledge_collection_answers_path(@project, @collection), scope: :knowledge_answer, class: "mt-4 space-y-3" do |form| %>
           <%= form.label :question, "Question about these sources", class: "block text-xs font-medium text-ink" %>
           <%= form.text_area :question, value: @query, required: true, maxlength: 500, rows: 2, class: "w-full rounded-lg border border-line bg-canvas px-3 py-2 text-sm text-ink" %>
           <%= form.label :model_reference, "Answer model", class: "block text-xs font-medium text-ink" %>
           <%= form.select :model_reference, options_for_select(@answer_models.map { |entry| [ "#{entry.provider} / #{entry.id}", "#{entry.provider}|#{entry.id}" ] }), {}, class: "w-full rounded-lg border border-line bg-canvas px-3 py-2 text-xs text-ink" %>
+          <%= form.label :mode, "Retrieval mode", class: "block text-xs font-medium text-ink" %>
+          <%= form.select :mode, [["Lexical · no query embedding", "lexical"], ["Semantic · collection embedding model", "semantic"], ["Hybrid · lexical + semantic", "hybrid"]], {}, class: "w-full rounded-lg border border-line bg-canvas px-3 py-2 text-xs text-ink" %>
+          <p class="text-xs leading-5 text-muted">Semantic/hybrid uses the stored collection model. Missing embeddings or a provider failure explicitly degrades to lexical. Prepare embeddings below first.</p>
+          <label class="flex items-center gap-2 text-xs text-ink"><%= form.check_box :rerank %> Rerank retrieved chunks</label>
+          <%= form.label :rerank_model_id, "Optional rerank model", class: "block text-xs font-medium text-ink" %>
+          <%= form.select :rerank_model_id, @rerank_models.map { |entry| ["#{entry.provider} / #{entry.id}", "#{entry.provider}|#{entry.id}"] }, { include_blank: "Choose only when reranking is enabled" }, class: "w-full rounded-lg border border-line bg-canvas px-3 py-2 text-xs text-ink" %>
           <p class="text-xs leading-5 text-muted">The selected model may charge. Free model IDs appear first; no automatic model fallback is used.</p>
           <%= form.submit "Create source answer", class: "cursor-pointer rounded-lg bg-accent px-4 py-2.5 text-xs font-medium text-white hover:bg-indigo-700" %>
         <% end %>
@@ -150,6 +156,15 @@
     <% end %>
 
     <% unless demo_mode? %>
+    <section class="mt-8 rounded-xl border border-line bg-panel p-5" aria-labelledby="retrieval-usage-heading">
+      <h2 id="retrieval-usage-heading" class="text-sm font-semibold text-ink">Collection retrieval usage</h2>
+      <p class="mt-1 text-xs leading-5 text-muted">One native ledger row per physical embedding/rerank request, including failures. Chunk vectors carry no copied batch charge. Source-answer retrieval belongs to its Run Attempts and is separate from this collection ledger. Missing usage stays unknown; recorded cost is not an invoice.</p>
+      <div class="mt-3 max-h-64 overflow-auto">
+        <% @collection.ruby_llm_usages.reorder(id: :desc).limit(30).each do |usage| %>
+          <p class="border-t border-line py-2 break-words font-mono text-[10px] text-muted">#<%= usage.id %> · <%= usage.operation %> · <%= usage.status %> · <%= usage.provider %>/<%= usage.model %> · input <%= usage.input_tokens.nil? ? "unknown" : usage.input_tokens %> · cost <%= usage.total_cost.nil? ? "unknown" : "#{usage.total_cost.to_s('F')} USD (recorded)" %></p>
+        <% end %>
+      </div>
+    </section>
     <section class="mt-8 rounded-2xl border border-line bg-panel p-5 shadow-sm sm:p-6" aria-labelledby="add-document-heading">
       <div class="flex items-start justify-between gap-3">
         <div>

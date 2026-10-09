@@ -3,7 +3,8 @@ module Ai
     class GroundedAnswer
       OPERATION = "grounded_answer".freeze
 
-      def self.enqueue(collection:, question:, model_reference:, requested_by: "local_user", model_catalog: Ai::ModelCatalog.new)
+      def self.enqueue(collection:, question:, model_reference:, requested_by: "local_user", model_catalog: Ai::ModelCatalog.new,
+                       mode: "lexical", rerank: false, rerank_model_id: nil)
         question = question.to_s.strip
         raise ArgumentError, "Enter a question of 1 to 500 characters." if question.blank? || question.length > 500
 
@@ -13,9 +14,31 @@ module Ai
         end
         raise ArgumentError, "Choose a configured structured-output model." unless entry
 
+        raise ArgumentError, "Choose lexical, semantic or hybrid retrieval." unless Search::MODES.include?(mode.to_s)
+        mode = mode.to_s
+        rerank = rerank.to_s.in?(%w[1 true])
+        rerank_model_id = rerank_model_id.to_s.strip.presence
+        if rerank && (rerank_model_id.nil? || rerank_model_id.length > 200)
+          raise ArgumentError, "Choose a rerank model when reranking is enabled."
+        end
+
+        rerank_provider = nil
+        if rerank
+          rerank_provider, rerank_model_id = rerank_model_id.split("|", 2) if rerank_model_id.include?("|")
+          availability = RerankCatalog.availability(rerank_model_id, provider: rerank_provider)
+          raise ArgumentError, availability.reason unless availability.available
+
+          rerank_provider = availability.entry.provider
+        end
+
         run = nil
         collection.transaction do
-          snapshot = EvidenceSnapshot.capture(collection:, question:).merge(
+          snapshot = if mode == "lexical" && !rerank
+            EvidenceSnapshot.capture(collection:, question:)
+          else
+            EvidenceSnapshot.prepare(collection:, question:, mode:, rerank:, rerank_model_id:, rerank_provider:)
+          end
+          snapshot = snapshot.merge(
             "instructions" => GroundedResponse::INSTRUCTIONS, "schema_json" => JSON.generate(GroundedResponse::SCHEMA),
             "generation_options" => { "max_output_tokens" => 2_048 }
           )

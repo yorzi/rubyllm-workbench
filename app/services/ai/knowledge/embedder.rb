@@ -19,12 +19,13 @@ module Ai
         new(collection:, model_id:, provider:, client:, adapter:).call
       end
 
-      def self.embed_text(text, model_id:, provider: nil, client: RubyLLM)
-        new(collection: nil, model_id:, provider:, client:).embed_query(text)
+      def self.embed_text(text, model_id:, provider: nil, client: RubyLLM, owner: nil, run: nil)
+        new(collection: owner, model_id:, provider:, client:, run:).embed_query(text)
       end
 
-      def initialize(collection:, model_id:, provider: nil, client: RubyLLM, adapter: nil)
+      def initialize(collection:, model_id:, provider: nil, client: RubyLLM, adapter: nil, run: nil)
         @collection = collection
+        @run = run
         @model_id = model_id.to_s
         @provider = provider.presence
         @client = client
@@ -70,7 +71,7 @@ module Ai
         raise ConfigurationError, availability.reason unless availability.available
 
         entry = availability.entry
-        result = @client.embed(text.to_s, model: entry.id, provider: entry.provider)
+        result = request(text.to_s, entry, phase: "query_embedding")
         vector = extract_vector(result.vectors)
         raise Error, "Embedding model #{entry.id} returned no vector for the query." if vector.empty?
 
@@ -85,11 +86,11 @@ module Ai
 
       def embed_slice(slice, entry)
         texts = slice.map(&:content_text)
-        result = @client.embed(texts, model: entry.id, provider: entry.provider)
+        result = request(texts, entry, phase: "document_embedding")
         vectors = extract_vectors(result.vectors, slice.length)
 
         slice.zip(vectors).each do |chunk, vector|
-          persist_chunk(chunk, vector, entry, usage: usage_for(result))
+          persist_chunk(chunk, vector, entry)
         end
       rescue StandardError => error
         record_error(error)
@@ -97,17 +98,21 @@ module Ai
       end
 
       def embed_single(chunk, entry)
-        result = @client.embed(chunk.content_text, model: entry.id, provider: entry.provider)
+        result = request(chunk.content_text, entry, phase: "document_embedding")
         vector = extract_vector(result.vectors)
         raise Error, "no vector returned" if vector.empty?
 
-        persist_chunk(chunk, vector, entry, usage: usage_for(result))
+        persist_chunk(chunk, vector, entry)
       rescue StandardError => error
         record_error(error)
         @failed += 1
       end
 
-      def persist_chunk(chunk, vector, entry, usage:)
+      def persist_chunk(chunk, vector, entry)
+        unless vector.is_a?(Array) && vector.any? && vector.all? { |value| value.is_a?(Numeric) && value.to_f.finite? } &&
+            (@dimensions.nil? || vector.length == @dimensions)
+          raise Error, "Embedding vector dimensions or values are inconsistent within this import."
+        end
         record = KnowledgeEmbedding.find_or_initialize_by(knowledge_chunk_id: chunk.id, model_id: entry.id.to_s)
         record.assign_attributes(
           provider: entry.provider.to_s,
@@ -115,8 +120,8 @@ module Ai
           vector: @adapter.encode(vector),
           content_checksum: chunk.content_checksum,
           status: :ready,
-          input_tokens: usage[:input_tokens],
-          reported_cost: usage[:cost],
+          input_tokens: nil,
+          reported_cost: nil,
           metadata_json: {
             "adapter" => @adapter.key,
             "precision" => Ai::Knowledge::VectorStore::SqliteApplicationCosine::PRECISION,
@@ -133,24 +138,20 @@ module Ai
       rescue StandardError => error
         record_error(error)
         @failed += 1
+        KnowledgeEmbedding.where(knowledge_chunk_id: chunk.id, model_id: entry.id.to_s).update_all(status: "failed")
       end
 
-      def usage_for(result)
-        tokens = result.respond_to?(:tokens) ? result.tokens : nil
-        cost = result.respond_to?(:cost) ? result.cost : nil
-        {
-          input_tokens: tokens&.respond_to?(:input) ? tokens.input : nil,
-          cost: cost&.respond_to?(:total_cost) ? cost.total_cost : nil
-        }
-      rescue StandardError
-        { input_tokens: nil, cost: nil }
+      def request(text, entry, phase:)
+        ProviderCall.call(owner: @collection, run: @run, phase:, provider: entry.provider, model_id: entry.id) do |owner, context|
+          @client.embed(text, model: entry.id, provider: entry.provider, owner:, context:)
+        end
       end
 
       def extract_vectors(vectors, expected)
         rows = vectors.is_a?(Array) && vectors.first.is_a?(Array) ? vectors : [ vectors ]
-        return rows if rows.length == expected
+        raise Error, "Expected #{expected} embedding vectors, received #{rows.length}." unless rows.length == expected
 
-        rows.first(expected)
+        rows
       end
 
       def extract_vector(vectors)

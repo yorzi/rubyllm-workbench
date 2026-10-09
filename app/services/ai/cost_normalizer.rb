@@ -22,11 +22,16 @@ module Ai
       # time, but does not retain whether that total was provider-reported or
       # estimated. Preserve it without repricing history or inventing provenance.
       if @value.respond_to?(:total_cost)
-        return { recorded_cost: @value.total_cost, reported_cost: nil, estimated_cost: nil,
-          cost_status: @value.total_cost.nil? ? "unknown" : "recorded", currency: "USD" }
+        total = @value.total_cost
+        # RubyLLM 2.1 may manufacture a zero cache count when chat usage is
+        # absent. The native row loses reported/estimated provenance; this
+        # ambiguous zero cannot establish a free request. Keep its raw ledger.
+        total = nil if total == 0 && unmeasured?(tokens)
+        return { recorded_cost: total, reported_cost: nil, estimated_cost: nil,
+          cost_status: total.nil? ? "unknown" : "recorded", currency: "USD" }
       end
 
-      if @model && tokens.to_h.any?
+      if @model && tokens.to_h.any? && !unmeasured?(tokens)
         estimated = RubyLLM::Cost.new(tokens:, model: @model, category: @category).total
         return { reported_cost: nil, recorded_cost: nil, estimated_cost: estimated, cost_status: "estimated", currency: "USD" } if estimated
       end
@@ -35,6 +40,10 @@ module Ai
     end
 
     private
+
+    def unmeasured?(tokens)
+      tokens.input.nil? && tokens.output.nil? && tokens.to_h.values.all? { |value| value.nil? || value == 0 }
+    end
 
     def reported_cost?(cost, tokens)
       return true if tokens.respond_to?(:reported_cost) && tokens.reported_cost

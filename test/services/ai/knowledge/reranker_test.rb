@@ -53,6 +53,29 @@ class Ai::Knowledge::RerankerTest < ActiveSupport::TestCase
     end
   end
 
+  test "invalid duplicate or coerced rankings fail rather than cite a different source" do
+    [ [ -1, 0.8 ], [ 1.2, 0.8 ], [ "0", 0.8 ], [ 2, 0.8 ], [ 0, "bad" ], [ 0, Float::NAN ] ].each do |index, score|
+      client = Object.new
+      client.define_singleton_method(:rerank) do |*args, **options|
+        Struct.new(:results).new([ FakeEmbeddingClient::RerankRow.new(index:, score:, document: "untrusted") ])
+      end
+      with_provider_configuration("openrouter") do
+        assert_raises(Ai::Knowledge::Reranker::Error) do
+          Ai::Knowledge::Reranker.call(query: "sqlite", documents: [ "a", "b" ], model_id: MODEL_ID, client:)
+        end
+      end
+    end
+    client = Object.new
+    client.define_singleton_method(:rerank) do |*args, **options|
+      Struct.new(:results).new([ 0.8, 0.4 ].map { |score| FakeEmbeddingClient::RerankRow.new(index: 0, score:, document: "a") })
+    end
+    with_provider_configuration("openrouter") do
+      assert_raises(Ai::Knowledge::Reranker::Error) do
+        Ai::Knowledge::Reranker.call(query: "sqlite", documents: [ "a", "b" ], model_id: MODEL_ID, client:)
+      end
+    end
+  end
+
   test "reranker refuses an unavailable model without calling the provider" do
     with_provider_configuration("openrouter") do
       client = FakeEmbeddingClient.new

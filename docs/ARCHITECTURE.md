@@ -359,10 +359,16 @@ has been observed returning parallel calls.
 
 Knowledge retrieval keeps source/chunk evidence separately. The explicit
 **Answer with sources** action creates a `grounded_answer` Run with a fresh
-Chat and frozen lexical evidence. Its job uses native RubyLLM structured
-output, then validates exact-quote citations under the Run completion lock.
-Empty retrieval refuses without a model request. Corpus drift, cancellation
-and interrupted workers leave inspectable outcomes without automatic replay.
+Chat and fixed corpus/vector revisions. Lexical evidence is captured locally;
+semantic/hybrid and optional rerank resolve once in the worker outside the
+snapshot commit transaction. Native `owner:` ledger rows belong to collections
+or retrieval Attempts, with no copied batch charge. The job uses native
+structured output, then validates exact-quote citations under the completion
+lock. Empty retrieval skips answer generation; preceding retrieval usage
+remains. Corpus/vector drift, cancellation and interrupted workers leave
+inspectable outcomes without replay. A separate native Evaluation Run reuses
+saved JSON for assertions, one Agent reviewer or a supported typed Judge;
+it never generates the original answer again or adds its cost.
 The [case-study diagram and walkthrough](GROUNDED_ANSWERS.md) explain that path.
 
 ```mermaid

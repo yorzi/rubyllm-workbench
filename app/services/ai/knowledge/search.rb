@@ -27,6 +27,7 @@ module Ai
         :adapter_key,
         :adapter_note,
         :rerank_model_id,
+        :rerank_provider,
         :rerank_note,
         :rerank_applied
       )
@@ -34,12 +35,13 @@ module Ai
       RerankState = Data.define(:results, :model_id, :note, :applied)
 
       def self.call(collection:, query:, mode: "lexical", limit: Ai::Knowledge::Retriever::DEFAULT_LIMIT,
-                    embedding_model_id: nil, rerank: false, rerank_model_id: nil, client: RubyLLM)
-        new(collection:, query:, mode:, limit:, embedding_model_id:, rerank:, rerank_model_id:, client:).call
+                    embedding_model_id: nil, rerank: false, rerank_model_id: nil, client: RubyLLM, run: nil, rerank_provider: nil)
+        new(collection:, query:, mode:, limit:, embedding_model_id:, rerank:, rerank_model_id:, client:, run:, rerank_provider:).call
       end
 
-      def initialize(collection:, query:, mode:, limit:, embedding_model_id:, rerank:, rerank_model_id:, client:)
+      def initialize(collection:, query:, mode:, limit:, embedding_model_id:, rerank:, rerank_model_id:, client:, run:, rerank_provider:)
         @collection = collection
+        @run = run
         @query = query.to_s
         @limit = limit
         @requested_mode = MODES.include?(mode.to_s) ? mode.to_s : "lexical"
@@ -47,6 +49,7 @@ module Ai
         @embedding_provider = collection.embedding_provider.presence if @embedding_model_id == collection.embedding_model_id
         @rerank = rerank.to_s.in?(%w[1 true]) || rerank == true
         @rerank_model_id = rerank_model_id.presence
+        @rerank_provider = rerank_provider.presence
         @client = client
       end
 
@@ -81,6 +84,7 @@ module Ai
           adapter_key: selection.key,
           adapter_note: selection.note,
           rerank_model_id: rerank_state.model_id,
+          rerank_provider: @rerank_provider,
           rerank_note: rerank_state.note,
           rerank_applied: rerank_state.applied
         )
@@ -92,8 +96,9 @@ module Ai
         return RerankState.new(results: results, model_id: nil, note: nil, applied: false) unless @rerank
         return skipped(results, "No rerank model is selected.") if @rerank_model_id.blank?
 
-        availability = Ai::Knowledge::RerankCatalog.availability(@rerank_model_id)
+        availability = Ai::Knowledge::RerankCatalog.availability(@rerank_model_id, provider: @rerank_provider)
         return skipped(results, availability.reason) unless availability.available
+        @rerank_provider = availability.entry.provider
         return skipped(results, "No evidence to rerank.") if results.empty?
 
         rerank_results(results)
@@ -106,7 +111,7 @@ module Ai
           query: @query,
           documents: results.map { |result| result.chunk.content_text },
           model_id: @rerank_model_id,
-          client: @client
+          client: @client, owner: @collection, run: @run, provider: @rerank_provider
         )
 
         ordered = ranked.filter_map do |row|
@@ -152,6 +157,7 @@ module Ai
           adapter_key: selection.key,
           adapter_note: selection.note,
           rerank_model_id: nil,
+          rerank_provider: nil,
           rerank_note: nil,
           rerank_applied: false
         )
@@ -179,7 +185,12 @@ module Ai
       end
 
       def embed_query
-        Ai::Knowledge::Embedder.embed_text(@query, model_id: @embedding_model_id, provider: @embedding_provider, client: @client)
+        vector = Ai::Knowledge::Embedder.embed_text(@query, model_id: @embedding_model_id, provider: @embedding_provider, client: @client, owner: @collection, run: @run)
+        unless vector.is_a?(Array) && vector.length == @collection.embedding_dimensions &&
+            vector.any? && vector.all? { |value| value.is_a?(Numeric) && value.to_f.finite? }
+          raise Ai::Knowledge::Embedder::Error, "Query vector dimensions or values do not match the stored collection embeddings."
+        end
+        vector
       end
     end
   end

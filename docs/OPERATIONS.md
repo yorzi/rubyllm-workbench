@@ -176,8 +176,8 @@ the RubyLLM scenario verifies the Speech object, Run, attachment, hash and
 playback controls. Neither evaluates voice quality. Missing usage/cost remains
 unknown. RubyLLM's MIME is format-derived, distinct from raw HTTP MIME.
 
-Local TTS remains pending the owner's API details and adapter; the OpenRouter
-acceptance is independent and does not certify that future local service.
+Current speech uses OpenRouter Fish; development does not wait for a local
+TTS API. A local adapter is an optional future extension, separately tested.
 Hosted web search, transcription and image generation remain
 manual unless deliberately enabled. Transcription also requires a short local
 `DOGFOOD_TRANSCRIPTION_FILE`. The harness does not start a TTS service.
@@ -185,10 +185,11 @@ manual unless deliberately enabled. Transcription also requires a short local
 Reports include profile, capabilities, duration and HTTP status/error metadata;
 request IDs not exposed by RubyLLM remain unknown. They never retain request
 headers, bodies or raw responses. Runs use the test database and roll back.
-Cost/tokens in the report cover Run
-Attempts; embedding/query/rerank usage is still unowned and is labelled
-unknown, never inferred as zero or summed from per-chunk copies of batch
-usage. A zero known subtotal is not a complete invoice. Free model availability
+Cost/tokens cover Run Attempts plus unmirrored owned one-shot ledger rows.
+Collection embedding/search owns its native rows; answer retrieval owns Run
+Attempts. Mirrors are deduplicated by native usage ID, not summed twice;
+chunk rows do not carry copied batch charges. Missing values and ambiguous
+default-cache-only zeros remain unknown, while raw native rows are retained. A zero known subtotal is not a complete invoice. Free model availability
 and account-enforced plugins remain external constraints; review the
 [OpenRouter plugin settings](https://openrouter.ai/docs/guides/features/plugins/overview)
 if the account forces plugins that requests cannot disable. Record results in
@@ -204,7 +205,8 @@ voice and image quality are outside this exercise.
 | --- | --- | --- |
 | Full grounded-answer case group | Use an available explicit free model with `bin/dogfood --include test_grounded_answer_case_study`. Current untrusted-source failures remain visible; no automatic retry is scheduled. | Each scheduled answer/refusal satisfies the snapshot schema and citation rules and leaves correct durable state. Expected facts and semantic quality remain manual. |
 | Full two-model comparison | When free capacity is available, run `bin/dogfood --include test_evaluation_comparison_with_judge`; keep both explicit free IDs. | Both case outputs received/schema-valid and both intended judge Runs complete in the same invocation. A partial run stays failed. |
-| Local TTS | Owner supplies loopback endpoint, API protocol, model and voice; implement the adapter before acceptance. | Existing Speech Run → audio Artifact → Active Storage attachment → playback; failure/cancellation/recovery preserve correct state. No cloud fallback. |
+| Native typed Judge | Select a supported judgment provider/model and intentionally authorize its live scope. OpenRouter reviewer acceptance cannot certify this protocol. | Saved answer is reused; decision measurements, evaluator usage and errors are stored in an independent Run. No calibration claim. |
+| Local TTS (optional) | Deferred; current speech uses the accepted OpenRouter Fish route. | A future adapter needs separate acceptance and does not block current development. |
 | Hosted web search | Deliberately choose model and fee budget, then run only its scenario with `--paid --include test_agent_with_hosted_web_search`. | Local tool completes, hosted usage is observed, citations/report are stored; do not infer search use from answer text. |
 | Transcription | Provide a short local audio file through `DOGFOOD_TRANSCRIPTION_FILE` and an explicit supported model; intentionally enable only its paid scenario. | Source-audio and nonblank transcript Artifacts persist in a successful Run. Do not rate transcription accuracy. |
 | Image | Deliberately select supported model/budget and run only `test_image_generation` with `--paid`. | Successful Run with attached image Artifact and a valid image MIME type. |
@@ -253,6 +255,23 @@ separately against the same storage and queue database.
 `SECRET_KEY_BASE` (generate one with `bin/rails secret`) plus any provider keys.
 A deployment reachable by others needs authentication, TLS and host checks in
 front of it; the image provides none of these.
+
+## Saved source answers and native evaluation
+
+Import the licensed source cases with `bin/rails workbench:knowledge_case_study:import`.
+Select lexical, semantic or hybrid retrieval in **Answer with sources**;
+semantic modes use the collection's stored embedding model, with optional
+explicit rerank. The Run records actual degradation, vector revision,
+retrieval Attempts and cited output.
+
+On a successful exact case question, **Evaluate this saved answer** offers
+native assertions (no API), one structured reviewer request, or a configured
+typed Judge. Each has its own `native_evaluation` Run and report; generation
+is not replayed. Completed transport and native verdict are separate outcomes.
+Free linked acceptance: `bin/dogfood --include test_semantic_answer_native_evaluation`
+plans five POSTs with current zero-price checks. See
+[GROUNDED_ANSWERS.md](GROUNDED_ANSWERS.md) for snapshots, accounting and failure
+boundaries; [CAPABILITIES.md](CAPABILITIES.md) remains the evidence source.
 
 ## Evaluation datasets
 

@@ -7,25 +7,33 @@ module Ai
         end
       end
 
-      def initialize(run_id, chat: nil)
+      def initialize(run_id, chat: nil, client: RubyLLM)
         @run = Run.includes(:project, :chat, :attempts).find(run_id)
         @chat = chat || @run.chat
+        @client = client
       end
 
       def call
         return @run unless @run.claim_queued_execution!(operation: GroundedAnswer::OPERATION)
 
         snapshot = @run.input_snapshot.fetch("grounded_answer")
-        EvidenceSnapshot.verify_current!(snapshot, project: @run.project)
+        collection = EvidenceSnapshot.verify_current!(snapshot, project: @run.project)
+        snapshot = retrieve(snapshot, collection) if snapshot["retrieval_pending"]
+        return @run unless @run.reload.running?
         if snapshot.fetch("evidence").empty?
           persist_result(GroundedResponse.empty_evidence_response, model_request: false)
           return @run
         end
 
-        recorder = Ai::AttemptRecorder.new(@run, chat: @chat)
+        @answer_attempt = @run.attempts.find { |attempt| attempt.metadata_json.to_h["phase"].nil? }
+        recorder = nil
         started = @run.with_lock do
           next false unless @run.running?
 
+          @answer_attempt ||= @run.attempts.create!(sequence: @run.attempts.maximum(:sequence).to_i + 1,
+            provider: @chat.provider.to_s, model_id: @chat.model_id, status: :queued,
+            metadata_json: { "phase" => "answer" })
+          recorder = Ai::AttemptRecorder.new(@run, chat: @chat, attempt: @answer_attempt)
           recorder.start!
         end
         return @run unless started
@@ -50,7 +58,7 @@ module Ai
         end
         return @run unless @run.reload.running?
 
-        response = Ai::ExecutionContext.with(run_id: @run.id, attempt_id: @run.attempts.first.id) do
+        response = Ai::ExecutionContext.with(run_id: @run.id, attempt_id: @answer_attempt.id) do
           @chat.ask(JSON.generate(snapshot.slice("question", "evidence")))
         end
         parsed = GroundedResponse.parse!(response.content, snapshot:)
@@ -61,7 +69,7 @@ module Ai
           if recorder
             recorder.fail_step!(error, usage_ids_before: usage_ids_before || [])
           else
-            @run.attempts.first&.finish!(
+            (@answer_attempt || @run.attempts.find { |attempt| attempt.metadata_json.to_h["phase"].nil? })&.finish!(
               status: :failed, finished_at: Time.current, error_class: error.class.name,
               error_code: Ai::ErrorClassifier.code(error), error_message: Ai::ErrorText.redact(error.message).to_s.truncate(2_000)
             )
@@ -72,11 +80,29 @@ module Ai
 
       private
 
+      def retrieve(snapshot, collection)
+        options = snapshot.fetch("retrieval")
+        outcome = Search.call(collection:, query: snapshot.fetch("question"), limit: EvidenceSnapshot::LIMIT,
+          mode: options.fetch("requested_mode"), embedding_model_id: options["embedding_model_id"],
+          rerank: options["rerank_requested"], rerank_model_id: options["rerank_model_id"], rerank_provider: options["rerank_provider"], client: @client, run: @run)
+        frozen = snapshot
+        @run.with_lock do
+          next unless @run.running?
+
+          EvidenceSnapshot.verify_current!(snapshot, project: @run.project)
+          resolved = EvidenceSnapshot.capture(collection:, question: snapshot.fetch("question"), outcome:)
+          frozen = snapshot.merge(resolved.slice("evidence", "retrieval")).merge("retrieval_pending" => false)
+          frozen["retrieval"]["rerank_requested"] = options["rerank_requested"]
+          @run.update!(input_snapshot_json: @run.input_snapshot.merge("grounded_answer" => frozen))
+        end
+        frozen
+      end
+
       def persist_result(parsed, model_request:, recorder: nil, response: nil, usage_ids_before: [])
         @run.finish_running_execution!(operation: GroundedAnswer::OPERATION, status: :succeeded) do
           recorder&.finish_step!(response, usage_ids_before:)
           artifact = @run.artifacts.create!(
-            attempt: @run.attempts.first, kind: "json", name: "grounded_answer",
+            attempt: @answer_attempt, kind: "json", name: "grounded_answer",
             content_json: parsed, content_text: JSON.pretty_generate(parsed),
             metadata_json: {
               "report_type" => GroundedAnswer::OPERATION, "citation_validation" => "valid",

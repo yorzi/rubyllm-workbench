@@ -1,0 +1,18 @@
+<% snapshot = run.input_snapshot.fetch("native_evaluation") %>
+<% artifact = run.artifacts.find { |item| item.metadata_json["report_type"] == "native_evaluation" } %>
+<section class="mt-8 min-w-0 rounded-xl border border-line bg-panel p-5" aria-labelledby="native-evaluation-heading">
+  <h2 id="native-evaluation-heading" class="text-sm font-semibold text-ink">Native saved-answer evaluation</h2>
+  <%= link_to "Original answer Run ##{snapshot.fetch('answer_run_id')}", run_path(snapshot.fetch("answer_run_id")), class: "mt-2 inline-block text-xs text-accent hover:underline" %>
+  <p class="mt-2 text-xs text-muted">Case <%= snapshot.dig("case", "key") %> · evaluator <%= snapshot.dig("evaluator", "kind") %> · answer replay: false · answer cost included: false</p>
+  <p class="mt-2 text-xs leading-5 text-muted">A completed Run means evaluation completed. Native pass/fail/measured results describe configured checks; they do not certify answer truth or calibrated judgment quality.</p>
+  <p class="mt-2 text-xs text-muted">Usage coverage: <%= run.result_summary.dig("accounting", "usage_coverage") || "pending" %>. Native raw cost can differ from normalized application cost when usage is incomplete; do not add the two.</p>
+  <% if artifact %>
+    <p class="mt-3 text-sm font-medium text-ink">Native result: <%= run.result_summary["native_status"] %></p>
+    <details class="mt-3" open>
+      <summary class="cursor-pointer text-xs font-medium text-ink">Native report · raw per-phase usage; see Attempts for normalized cost</summary>
+      <pre class="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words font-mono text-[10px] text-muted"><%= JSON.pretty_generate(artifact.content_json) %></pre>
+    </details>
+  <% else %>
+    <p class="mt-3 text-xs text-muted"><%= run.terminal? ? "No report was saved. See the Run diagnostic." : "Evaluation queued or running. Refresh for results." %></p>
+  <% end %>
+</section>

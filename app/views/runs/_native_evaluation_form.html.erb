@@ -1,0 +1,30 @@
+<section class="mt-8 min-w-0 rounded-xl border border-line bg-panel p-5" aria-labelledby="native-evaluation-form-heading">
+  <h2 id="native-evaluation-form-heading" class="text-sm font-semibold text-ink">Evaluate this saved answer</h2>
+  <p class="mt-2 text-xs leading-5 text-muted">Case: <%= case_data.fetch("key") %>. Native RubyLLM::Evaluation reuses this frozen answer. Each evaluation creates its own Run; the original answer is never generated again and its cost is not added. Reference checks and model judgments do not certify truth.</p>
+  <%= form_with url: native_evaluations_run_path(run), scope: :native_evaluation, class: "mt-4" do |form| %>
+    <%= form.hidden_field :case_key, value: case_data.fetch("key") %>
+    <%= form.hidden_field :evaluator_kind, value: "assertions" %>
+    <%= form.submit "Run native assertions · no API request", class: "cursor-pointer rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink" %>
+  <% end %>
+  <% if @reviewer_models.any? %>
+    <%= form_with url: native_evaluations_run_path(run), scope: :native_evaluation, class: "mt-4 space-y-2" do |form| %>
+      <%= form.hidden_field :case_key, value: case_data.fetch("key") %>
+      <%= form.hidden_field :evaluator_kind, value: "reviewer" %>
+      <%= form.label :model_reference, "Evaluation reviewer model", class: "block text-xs font-medium text-ink" %>
+      <%= form.select :model_reference, @reviewer_models.map { |entry| ["#{entry.provider} / #{entry.id}", "#{entry.provider}|#{entry.id}"] }, {}, class: "w-full min-w-0 rounded-lg border border-line bg-canvas px-3 py-2 text-xs text-ink" %>
+      <p class="text-xs text-muted">One structured reviewer request. Concrete free IDs appear first; selected models may charge.</p>
+      <%= form.submit "Evaluate with reviewer", class: "cursor-pointer rounded-lg bg-accent px-3 py-2 text-xs font-medium text-white" %>
+    <% end %>
+  <% end %>
+  <% if @native_judge_models.any? %>
+    <%= form_with url: native_evaluations_run_path(run), scope: :native_evaluation, class: "mt-4 space-y-2" do |form| %>
+      <%= form.hidden_field :case_key, value: case_data.fetch("key") %>
+      <%= form.hidden_field :evaluator_kind, value: "judge" %>
+      <%= form.label :model_reference, "Native typed Judge model", class: "block text-xs font-medium text-ink" %>
+      <%= form.select :model_reference, @native_judge_models.map { |entry| ["#{entry.provider} / #{entry.id}", "#{entry.provider}|#{entry.id}"] }, {}, class: "w-full min-w-0 rounded-lg border border-line bg-canvas px-3 py-2 text-xs text-ink" %>
+      <%= form.submit "Measure with native Judge", class: "cursor-pointer rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink" %>
+    <% end %>
+  <% else %>
+    <p class="mt-4 text-xs leading-5 text-muted">Native RubyLLM::Judge requires a configured typed judgment provider. OpenRouter chat reviewers use Evaluation's separate reviewer API. Judge live acceptance is manual; no paid fallback.</p>
+  <% end %>
+</section>

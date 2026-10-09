@@ -80,6 +80,9 @@ module Ai
         @run.lifecycle_events,
         newest_order: { occurred_at: :desc, id: :desc }
       ).map { |event| event_document(event) }
+      owned_usage_scope = RubyLLM::ActiveRecord::Usage.where(owner_type: "Attempt", owner_id: @run.attempts.select(:id))
+      owned_usages = limited_records("owned_provider_usages", owned_usage_scope,
+        newest_order: { id: :desc }).map { |usage| usage_document(usage) }
       chat_context = chat_context_document
       artifacts = exportable_artifacts.map { |artifact| artifact_document(artifact) }
       document = {
@@ -88,6 +91,8 @@ module Ai
         "run" => run,
         "chat_context" => chat_context,
         "attempts" => attempts,
+        "owned_provider_usages" => owned_usages,
+        "accounting_note" => "Provider usage rows mirror Attempts; do not sum both. Native raw cost may have incomplete provenance.",
         "tools" => tools,
         "events" => events,
         "artifacts" => artifacts
@@ -232,6 +237,17 @@ module Ai
           "message" => safe_text(attempt.error_message)
         },
         "metadata" => safe_value(attempt.metadata_json || {})
+      }
+    end
+
+    def usage_document(usage)
+      {
+        "id" => usage.id, "owner_attempt_id" => usage.owner_id,
+        "operation" => safe_text(usage.operation), "provider" => safe_text(usage.provider),
+        "model_id" => safe_text(usage.model), "status" => safe_text(usage.status),
+        "input_tokens" => usage.input_tokens, "output_tokens" => usage.output_tokens,
+        "native_recorded_cost" => decimal(usage.total_cost),
+        "normalized_cost" => safe_value(Ai::CostNormalizer.for(usage))
       }
     end
 

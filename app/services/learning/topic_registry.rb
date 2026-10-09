@@ -385,20 +385,23 @@ module Learning
         Topic.new(
           key: "grounded_answer",
           title: "How source answers work",
-          kicker: "Lexical evidence → frozen Run → checked quotes",
-          summary: "Source answers make one native RubyLLM structured request from bounded lexical evidence. Rails keeps the request snapshot and execution state; exact quotes establish provenance, while people assess whether claims are correct.",
+          kicker: "Owned retrieval → frozen evidence → native evaluation",
+          summary: "Source answers make one native RubyLLM structured request from bounded lexical, semantic or hybrid evidence. Query embedding and rerank have their own ledger ownership. Rails keeps the request snapshot and execution state; exact quotes establish provenance, while people assess whether claims are correct.",
           steps: list(
-            step("1. Freeze local evidence", "Retrieve up to 8 source chunks and capture their text, IDs, checksums and offsets. Source instructions remain untrusted data."),
-            step("2. Claim once and check drift", "The worker claims the queued Run, rejects changed corpus/model/history and starts its Attempt under the Run lock."),
-            step("3. Ask or refuse", "No evidence produces a local refusal with no model Attempt. Otherwise RubyLLM receives the frozen question and sources with a strict JSON schema."),
+            step("1. Freeze local evidence", "Freeze the corpus and vector revision. Retrieve up to 8 chunks locally or in the worker, then capture text, IDs, checksums and offsets. Source instructions remain untrusted data."),
+            step("2. Claim once and check drift", "The worker claims the queued Run, rejects changed corpus/vectors/model/history and starts each provider Attempt under the Run lock."),
+            step("3. Ask or refuse", "No evidence produces a local refusal with no answer Attempt; prior retrieval usage is retained. Otherwise RubyLLM receives the frozen question and sources with a strict JSON schema."),
             step("4. Check citations", "Every claim needs known evidence IDs and exact source quotes. A model refusal is distinct from a provider failure."),
-            step("5. Fence completion", "Cancelled or interrupted Runs cannot save a late successful result. Recovery fails visibly and never replays a provider request automatically.")
+            step("5. Fence completion", "Cancelled or interrupted Runs cannot save a late successful result. Recovery fails visibly and never replays a provider request automatically."),
+            step("6. Evaluate saved outputs", "Native Evaluation reuses the original frozen answer. Assertions, an OpenRouter-compatible reviewer or a typed Judge record separate outcomes and cost; they never regenerate the answer.")
           ),
           code_references: list(
             reference("app/services/ai/knowledge/evidence_snapshot.rb", "Frozen retrieval", "Captures bounded source and chunk provenance.", 14, 50, "def self.capture"),
             reference("app/services/ai/knowledge/grounded_answer.rb", "Atomic enqueue", "Creates a dedicated Chat, Run and optional provider Attempt.", 17, 40, "collection.transaction"),
             reference("app/services/ai/knowledge/grounded_answer_executor.rb", "Claim and request", "Checks drift, state and target before native structured output.", 15, 57, "claim_queued_execution!"),
-            reference("app/services/ai/knowledge/grounded_response.rb", "Quote validation", "Rejects unknown references and invented quotes.", 48, 79, "source.fetch(\"text\").include?(quote)")
+            reference("app/services/ai/knowledge/grounded_response.rb", "Quote validation", "Rejects unknown references and invented quotes.", 48, 79, "source.fetch(\"text\").include?(quote)"),
+            reference("app/services/ai/knowledge/provider_call.rb", "Usage ownership", "Native physical-request ledger and fenced Attempt mirrors.", 1, 70, "class ProviderCall"),
+            reference("app/services/ai/knowledge/native_evaluation_executor.rb", "Saved-answer evaluation", "Native Evaluation with independent evaluator usage.", 30, 65, "evaluation_class(snapshot).run")
           ),
           external_references: list(
             external("RubyLLM structured output", "https://rubyllm.com/structured-output/", "Native schema request API"),
@@ -410,7 +413,7 @@ module Learning
           ),
           boundaries: list(
             "Exact quotes prove source provenance, not semantic entailment or answer quality.",
-            "This workflow uses lexical retrieval and one model request. Native Agent/Evaluation integration and semantic/reranked answers remain planned.",
+            "Native Evaluation outcomes do not certify truth. Typed Judge uses a separate supported decision protocol; OpenRouter chat reviewers do not implement that protocol.",
             "A provider request accepted before cancellation may finish or incur cost; local fencing cannot revoke it."
           )
         )

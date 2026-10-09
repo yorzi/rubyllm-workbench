@@ -2,9 +2,10 @@ class KnowledgeAnswersController < ApplicationController
   def create
     project = Project.find_by!(slug: params[:project_id])
     collection = project.knowledge_collections.find(params[:knowledge_collection_id])
-    attributes = params.expect(knowledge_answer: [ :question, :model_reference ])
+    attributes = params.expect(knowledge_answer: [ :question, :model_reference, :mode, :rerank, :rerank_model_id ])
     run = Ai::Knowledge::GroundedAnswer.enqueue(
-      collection:, question: attributes[:question], model_reference: attributes[:model_reference], model_catalog:
+      collection:, question: attributes[:question], model_reference: attributes[:model_reference], model_catalog:, mode: attributes[:mode].presence || "lexical",
+      rerank: attributes[:rerank], rerank_model_id: attributes[:rerank_model_id]
     )
     redirect_to run_path(run), status: :see_other
   rescue ArgumentError, Ai::Knowledge::EvidenceSnapshot::StaleEvidence => error

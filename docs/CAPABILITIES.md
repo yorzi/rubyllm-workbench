@@ -31,16 +31,18 @@ region will accept the request.
 | Local tools with approval | Tool enabled for the Project. Saved Agents with local tools require the exact provider/model registry entry to explicitly declare `function_calling`, checked on save, on enqueue and on every worker restore. | Approval, denial, expiry, cancellation, failed-Run closure, unknown remote outcomes, parallel-call policy. | Passed on 2.1, 2026-10-09: `save_run_note` approval, continuation and report on `liquid/lfm-2.5-2.6b:free`. Parallel calls remain manual. |
 | Provider web search | `web_search` is an allowlisted RubyLLM provider tool. There is no reliable Workbench model-level web-search capability gate; the provider may reject the tool or the model may not use it. | Snapshotting, citations, usage-only tool accounting; native 2.1 streaming regression. | Passed on 2.0 in an Agent Run on `openai/gpt-5-nano`: search counted, citation stored, using the then-required patch. 2.1 live check pending. |
 | Saved Agents | As for local tools; provider tools are outside the local-tool gate. | Durable outbox, execution lease and generation fencing, crash/replay drill, cancellation race, empty-answer guard, research report. | Passed on 2.1, 2026-10-09: two-step Agent (`project_snapshot`, final answer/report) on `liquid/lfm-2.5-2.6b:free`. Hosted search remains historical 2.0 evidence. |
-| Knowledge embeddings | RubyLLM embedding-model registry plus provider configuration. | Chunking, checksums, stale-vector skipping, vector adapters, lexical/semantic/hybrid retrieval, explicit degradation, selected-provider preservation. | Passed on 2.1, 2026-10-09: `liquid/lfm-2.5-embedding-350m:free`, 3 chunks, 1,024 dimensions, semantic and hybrid requests. No retrieval-quality claim. |
+| Knowledge embeddings | RubyLLM embedding-model registry plus provider configuration. | Chunking, checksums, stale-vector skipping, vector adapters, lexical/semantic/hybrid retrieval, explicit degradation, selected-provider preservation, native collection/query ownership and no copied batch charge. | Passed on 2.1, 2026-10-09: `liquid/lfm-2.5-embedding-350m:free`, 3 chunks, 1,024 dimensions, semantic and hybrid requests. No retrieval-quality claim. |
 | Knowledge rerank | Registry model whose output modality includes `rerank`, plus configuration. | Pre/post rank kept alongside unchanged retrieval evidence. | Passed on 2.1, 2026-10-09: `nvidia/llama-nemotron-rerank-vl-1b-v2:free`, applied ranking with 3 results. No ranking-quality claim. |
-| Grounded source answers | Configured interactive structured-output model; lexical-v1 only, at most 8 × 800-character chunks. | Original MIT corpus/import, frozen hashes/offsets/release references, real RubyLLM HTTP contract, exact quotes, local refusal, queue rejection, drift/cancellation/recovery, desktop/390px inspector and learning map. | Partial on 2.1, 2026-10-09: normal-source answers passed on Liquid and Nvidia free routes; the complete case group remains manual because the untrusted-source response violated structure/citation rules. No semantic-quality claim. |
+| Grounded source answers | Configured interactive structured-output model; lexical/semantic/hybrid, optional explicit rerank, at most 8 × 800-character chunks. | Original MIT corpus/import, frozen corpus/vector revisions and text/offsets, independently owned retrieval/answer Attempts, actual HTTP contract, exact quotes, explicit degradation, refusal, cancellation/recovery and responsive inspector/map. | Passed for one hybrid/reranked title case on 2.1, 2026-10-09, including linked native Evaluation. The complete five-case group remains partial/manual because earlier untrusted-source outputs violated structure/citation rules. No semantic-quality claim. |
 | Document OCR | Model declares `ocr` and its provider is configured. | Local extraction and provenance Artifacts. | Not tested: no OCR model is available through OpenRouter's registry entries. |
 | Evaluation comparison | 2-5 configured models declaring `structured_output`. | Frozen revision and Experiment snapshot, per-case Runs, outcome metrics, queue rejection, recovery. | Partial on 2.1, 2026-10-09: Liquid and Nvidia each returned valid case output in separate invocations; no complete two-model/one-case invocation passed. Dots schema failure, Apodex provider error and Liquid rate limiting remain visible. Historical 2.0 comparison is below. |
+| Native saved-answer Evaluation | Exact versioned case question on a successful imported-case answer. Local assertions or explicitly selected configured structured reviewer. | Public RubyLLM::Evaluation + Agent reviewer, one HTTP request for two criteria, immutable independent snapshot/checksum, no answer replay/cost duplication, native result vs transport outcome, owner ledger, cancellation/recovery/UI. | Passed on 2.1, 2026-10-09: title-validation answer, native assertions and native Nvidia free reviewer completed together; 5 total workflow POSTs. No quality/calibration claim. |
+| Native typed Judge | Configured registry judgment model and supported decision protocol; OpenRouter chat is excluded. | Public RubyLLM::Judge through native Evaluation, TypeSafe one-POST HTTP fixture, probability measurements without an invented threshold, independent owner usage. | Manual: no supported typed-provider live call or calibration performed. Free OpenRouter reviewer is a different API. |
 | Rubric judge (experimental) | Optional; runs only after a successful case output. | Prompt isolation (expected output, tags and attachments are never sent), separate Run/Attempt/cost, recovery, late-response fencing. | Partial on 2.1, 2026-10-09: Liquid judgments completed for successful Liquid/Nvidia outputs; the complete intended pair is still pending. Uncalibrated; never changes exact-match results. |
 | Human reviews | Completed case outputs; ratings from a fixed allowlist. | Append-only reviews and per-criterion ratings. | Not applicable (no provider). |
 | Case attachments | Up to 5 files per case, 50 per revision, 10 MB each, 50 MB per revision. | Format prechecks (PDF header, JPEG/PNG signatures, JSON, CSV, UTF-8 text), revision ownership, purge on Project deletion. Excluded from every provider prompt. | Not applicable. The checks do not fully decode files or scan for malware; there is no lifetime storage cap. |
 | Provider Batch evaluation | Model declares `structured_output` and `batch`, and the provider reports `batches?`; one provider per execution. | Submission, refresh, ordered reconciliation, malformed-index rejection. | Not tested. No live provider Batch compatibility is claimed. |
-| Speech generation (experimental) | Model declares `speech_generation`; optional provider voice identifier. | Audio Artifacts, storage failure, recovery, cancellation. | Passed on 2.1, 2026-10-09: free Fish raw REST and RubyLLM/Rails paths independently accepted, one POST each. MP3/attachment/playback controls verified; quality/listening remains manual. Local TTS adapter and acceptance still pending owner API details. |
+| Speech generation (experimental) | Model declares `speech_generation`; optional provider voice identifier. | Audio Artifacts, storage failure, recovery, cancellation. | Passed on 2.1, 2026-10-09: free Fish raw REST and RubyLLM/Rails paths independently accepted, one POST each. MP3/attachment/playback controls verified; quality/listening remains manual. Current speech uses this OpenRouter route; local TTS is an optional future adapter and does not block development. |
 | Audio transcription (experimental) | Model declares `transcription`. | Source-audio and transcript Artifacts, blank-transcript handling. | Manual on 2.1; historical 2.0 success used `mistralai/voxtral-mini-3b-2507`. |
 | Image generation (experimental) | Model declares `image_generation`. | Image Artifacts, storage failure, late-response fencing. | Manual on 2.1; historical 2.0 success used `black-forest-labs/flux.2-klein-4b`, reported $0.014. |
 | Video generation (experimental) | Model type is `video` with video output. | Submission, polling, provider job reference in the timeline. | Not tested. Workbench cannot durably restore a VideoJob or link its 2.1 job-ledger cost to the Attempt yet. |
@@ -81,6 +83,63 @@ does not establish an account invoice or independently identify the upstream.
 The latest local schema/state/quote contract passed offline tests. Live output
 quality remains variable, and partial invocations are not combined into a
 complete case-group result.
+
+### 2026-10-09 — owned retrieval and native saved-answer evaluation
+
+The current implementation extends source answers to semantic/hybrid and
+explicit-provider rerank. Document batches and interactive search own native
+`KnowledgeCollection` usage rows; query/rerank for an answer own its Attempts.
+A batch is billed once rather than copied onto every chunk. Native retries
+retain each physical request exactly once; unknown failure cost is retained.
+No historical per-chunk data is retroactively converted into owned billing.
+
+Native `RubyLLM::Evaluation` returns the saved answer from `perform`; it never
+asks its generating model again. Local assertions make no API call. One Agent
+reviewer request returns both criteria; a typed `RubyLLM::Judge` request is a
+separate supported protocol. Native reports/results and application Run state
+remain separate: a completed evaluation can report failed or measured checks.
+Original answer cost is not included in evaluation cost.
+
+Offline HTTP contracts exercise public APIs, actual native owner ledgers,
+503→200 retry deduplication, quoted provenance, malformed judgments, absent
+usage, source/vector drift, inconsistent vector dimensions, cancellation
+before transport/during response, recovery, queue rejection and readonly demo.
+The missing-usage/default-cache-zero behavior is a version-scoped RubyLLM
+candidate in [UPSTREAM_ISSUES.md](UPSTREAM_ISSUES.md), not yet verified on main.
+Native raw zero remains; normalized application cost can be unknown.
+
+The new linked free scenario plans one document batch, query embedding,
+rerank, answer and reviewer (**5 POSTs**), plus zero-request assertions.
+Live evidence, in separate bounded invocations:
+
+- Catalog timeout: `20261009T065656Z.jsonl`; preflight skipped, **0 POSTs**.
+- Liquid answer route: `20261009T070620Z.jsonl`; batch/query/rerank succeeded,
+  answer returned `RubyLLM::RateLimitError`; **4 POSTs**, failed answer Run,
+  no native evaluation request. HTTP failure status is unavailable in the
+  notification; do not invent a status code.
+- Explicit Nvidia answer/reviewer route: `20261009T070810Z.jsonl`;
+  **5 POSTs**, all HTTP 200, 29 assertions. `title-validation` produced a
+  validated cited answer, followed by passed native assertions and passed
+  reviewer results. Three succeeded Runs; no replay or added original cost.
+  Models: `liquid/lfm-2.5-embedding-350m:free`,
+  `nvidia/llama-nemotron-rerank-vl-1b-v2:free`,
+  `nvidia/nemotron-3-super-120b-a12b:free`. Document batch owner had one
+  ledger row, query/rerank/reviewer had separate Attempt owners; generation's
+  Chat ledger was mirrored once. Known recorded subtotal **USD 0**, 7,932
+  aggregate input tokens; aggregate output tokens remain unknown because
+  embedding/rerank omit that field. Attributed cost coverage is complete,
+  but this is not independent invoice/upstream-model verification.
+
+Total real transport in this slice: **9 verified-free POSTs**, no paid route,
+no automatic model fallback. Reports are ignored local files under
+`tmp/dogfood/`; test database records rolled back. The passing invocation
+stands alone; partial attempts are not combined to claim a full pass.
+The complete five-case group, typed Judge live acceptance, reviewer
+calibration and model/retrieval quality are separate boundaries.
+
+OpenRouter Fish is the current TTS route; its independent earlier acceptance
+below remains applicable to the unchanged speech implementation. A local TTS
+API is not required or awaited for current development.
 
 ### 2026-10-09 — free TTS, independent REST and RubyLLM paths
 
@@ -223,6 +282,25 @@ verification of the released fixes.
 `test/services/ai/ruby_llm_internals_test.rb` fails when one moves.
 
 ## Verification snapshot
+
+2026-10-09 owned retrieval / native Evaluation slice, pinned versions, macOS arm64:
+
+| Check | Result |
+| --- | --- |
+| Rails suite | 506 runs, 4,360 assertions, 0 failures/errors, 13 default opt-in live skips |
+| Selenium system suite | 6 runs, 82 assertions, 0 failures/errors; original flows plus native assertion submission/report and 390px evaluation form/report |
+| Free linked acceptance | One complete hybrid/reranked title case + native assertions/reviewer: 5 HTTP 200 POSTs, 29 assertions; separate 0-POST catalog skip and 4-POST Liquid rate-limit failure retained; 9 POSTs total |
+| Accounting regressions | Collection batch counted once; query/rerank/reviewer Attempts distinct; native retries mirrored once; late usage retained without state revival; unknown default-cache-only zero normalized conservatively |
+| Style / autoload / assets | 338 Ruby files clean; Zeitwerk passed; forced Vite test build and final Tailwind build passed; source-anchored learning references passed |
+| Static security / advisory check | Brakeman 8.1.0 local scan: 0 warnings/errors; installed-gem check against cached advisories: no vulnerabilities; staged gitleaks scan: no leaks |
+| Upstream candidate | Missing-usage/cache-zero public API reproduction on locked 2.1.0: 1 WebMock-intercepted request, 0 real network/DB; main remains unverified |
+| External/manual scope | Typed Judge live, full untrusted-source case group, quality/calibration, hosted CI, container/deployment unverified; current TTS is accepted OpenRouter Fish, optional local adapter deferred |
+
+No paid request, model fallback, push, release or upstream submission occurred.
+Task-owned loopback system-test processes exited; process-name-only inspection
+found no task Ruby/Puma/ChromeDriver/Vite/Tailwind service remaining. Native report raw usage is distinct
+from normalized application billing and neither establishes an independent invoice.
+
 
 2026-10-09 Rails source answer slice, pinned versions, macOS arm64:
 

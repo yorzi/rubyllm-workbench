@@ -40,6 +40,26 @@ class Ai::Knowledge::EmbedderTest < ActiveSupport::TestCase
     end
   end
 
+  test "mixed vector dimensions produce partial coverage without additional provider requests" do
+    with_provider_configuration("openrouter") do
+      2.times { |index| add_item(title: "Note #{index}", text: "SQLite retrieval evidence #{index}.") }
+      client = Object.new
+      requests = 0
+      client.define_singleton_method(:embed) do |*args, **options|
+        requests += 1
+        RubyLLM::Embedding.new(vectors: [ [ 1.0, 0.0 ], [ 1.0, 0.0, 0.0 ] ], model: MODEL_ID, input_tokens: 12)
+      end
+      summary = Ai::Knowledge::Embedder.call(collection: @collection, model_id: MODEL_ID, client:)
+      assert_equal "partial", summary.status
+      assert_equal 1, summary.embedded
+      assert_equal 1, summary.failed
+      assert_equal 2, summary.dimensions
+      assert_includes summary.error, "inconsistent"
+      assert_equal 1, requests
+      assert_equal [ 2 ], @collection.knowledge_embeddings.ready.pluck(:dimensions)
+    end
+  end
+
   test "re-embedding with the same model replaces rows instead of duplicating them" do
     with_provider_configuration("openrouter") do
       add_item(title: "Retrieval notes", text: "SQLite retrieval evidence.")

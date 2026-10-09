@@ -2,6 +2,7 @@ class KnowledgeCollection < ApplicationRecord
   EMBEDDING_STATUSES = %w[none partial ready failed].freeze
 
   belongs_to :project
+  has_many :ruby_llm_usages, as: :owner, class_name: "RubyLLM::ActiveRecord::Usage", dependent: :nullify
   has_many :knowledge_items, dependent: :destroy
   has_many :knowledge_chunks, through: :knowledge_items
   has_many :knowledge_embeddings, through: :knowledge_chunks

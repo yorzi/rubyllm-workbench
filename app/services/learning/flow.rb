@@ -5,14 +5,15 @@ module Learning
     DIAGRAMS = {
       "grounded_answer" => {
         stages: [
-          [ "Freeze the sources", "Lexical retrieval → IDs, text, checksums, offsets" ],
-          [ "Claim the Run", "One queued worker → drift and cancellation checks" ],
+          [ "Freeze the sources", "Corpus + vector revision → fixed retrieval configuration" ],
+          [ "Claim the Run", "Local or provider retrieval → owned query/rerank usage" ],
           [ "Generate structured claims", "RubyLLM with_schema → one model request" ],
           [ "Validate exact quotes", "Known snapshot IDs + source substrings" ],
-          [ "Save fenced evidence", "Run / Attempt / JSON Artifact → source links" ]
+          [ "Save fenced evidence", "Run / Attempt / JSON Artifact → source links" ],
+          [ "Evaluate the saved answer", "Native assertions, reviewer or typed Judge → separate Run" ]
         ],
         branches: [
-          "No matching evidence → local refusal → no model request or provider Attempt.",
+          "No matching evidence → local refusal → no answer request. Retrieval usage remains separate.",
           "Drift, cancellation or interrupted work → visible outcome, no automatic replay. Citation validity does not verify truth."
         ]
       },

@@ -12,8 +12,8 @@ module Ai
         end
       end
 
-      def self.capture(collection:, question:)
-        outcome = Search.call(collection:, query: question, mode: "lexical", limit: LIMIT)
+      def self.capture(collection:, question:, outcome: nil)
+        outcome ||= Search.call(collection:, query: question, mode: "lexical", limit: LIMIT)
         evidence = outcome.results.each_with_index.map do |result, index|
           chunk = result.chunk
           source = chunk.knowledge_item
@@ -36,6 +36,8 @@ module Ai
             "chunker" => chunk.metadata_json.to_h["chunker"], "text" => chunk.content_text,
             "corpus_release" => release_metadata(source),
             "score" => result.score, "matched_terms" => result.matched_terms,
+            "lexical_score" => result.lexical_score, "similarity" => result.similarity,
+            "rerank_score" => result.rerank_score, "pre_rank" => result.pre_rank,
             "trust" => "untrusted"
           }
         end
@@ -43,11 +45,44 @@ module Ai
           "version" => 1, "collection_id" => collection.id, "collection_name" => collection.name,
           "question" => question, "corpus_checksum" => corpus_checksum(collection),
           "retrieval" => {
-            "requested_mode" => "lexical", "mode" => outcome.mode, "algorithm" => "lexical-v1",
-            "limit" => LIMIT, "embedding_model_id" => nil, "embedding_provider" => nil, "rerank" => false
+            "requested_mode" => outcome.requested_mode, "mode" => outcome.mode, "algorithm" => "#{outcome.mode}-v1",
+            "limit" => LIMIT, "embedding_model_id" => outcome.requested_mode == "lexical" ? nil : outcome.embedding_model_id,
+            "embedding_provider" => outcome.requested_mode == "lexical" ? nil : outcome.embedding_provider,
+            "dimensions" => outcome.dimensions, "adapter" => outcome.adapter_key,
+            "degraded_reason" => outcome.degraded_reason, "stale_count" => outcome.stale_count,
+            "rerank" => outcome.rerank_applied, "rerank_model_id" => outcome.rerank_model_id,
+            "rerank_provider" => outcome.rerank_provider,
+            "rerank_note" => outcome.rerank_note
           },
           "evidence" => evidence
         }
+      end
+
+      # Provider retrieval runs in the worker, outside the enqueue transaction.
+      # Freeze configuration and revisions now, then freeze ranked evidence once.
+      def self.prepare(collection:, question:, mode:, rerank:, rerank_model_id:, rerank_provider:)
+        {
+          "version" => 2, "collection_id" => collection.id, "collection_name" => collection.name,
+          "question" => question, "corpus_checksum" => corpus_checksum(collection),
+          "embedding_revision" => mode == "lexical" ? nil : embedding_revision(collection),
+          "retrieval_pending" => true, "evidence" => [],
+          "retrieval" => { "requested_mode" => mode, "limit" => LIMIT,
+            "embedding_model_id" => collection.embedding_model_id,
+            "embedding_provider" => collection.embedding_provider,
+            "rerank_requested" => rerank, "rerank_model_id" => rerank_model_id, "rerank_provider" => rerank_provider }
+        }
+      end
+
+      def self.embedding_revision(collection)
+        rows = collection.knowledge_embeddings.ready.for_model(collection.embedding_model_id)
+          .where(provider: collection.embedding_provider).order(:id).map do |row|
+            [ row.id, row.knowledge_chunk_id, row.provider, row.model_id, row.dimensions,
+              row.content_checksum, Digest::SHA256.hexdigest(row.vector) ]
+          end
+        Digest::SHA256.hexdigest(JSON.generate([
+          collection.embedding_model_id, collection.embedding_provider,
+          collection.embedding_dimensions, collection.embedding_status, rows
+        ]))
       end
 
       # This is a revision of the searchable corpus, including chunk boundaries,
@@ -71,6 +106,10 @@ module Ai
         unless collection && corpus_checksum(collection) == snapshot.fetch("corpus_checksum")
           raise StaleEvidence, "The searchable corpus changed after this Run was queued. Create a new answer to retrieve current evidence."
         end
+        if snapshot["embedding_revision"] && embedding_revision(collection) != snapshot["embedding_revision"]
+          raise StaleEvidence, "The stored embeddings changed after this Run was queued. Create a new answer."
+        end
+        collection
       end
 
       def self.release_metadata(source)

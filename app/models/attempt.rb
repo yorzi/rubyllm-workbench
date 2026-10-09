@@ -3,6 +3,7 @@ class Attempt < ApplicationRecord
 
   belongs_to :run
   has_many :lifecycle_events, dependent: :nullify
+  has_many :ruby_llm_usages, as: :owner, class_name: "RubyLLM::ActiveRecord::Usage", dependent: :nullify
 
   enum :status, STATUSES.index_with(&:itself), validate: true
 

@@ -8,10 +8,11 @@ module Ai
       thinking_tokens: :thinking
     }.freeze
 
-    def initialize(run, attempt: nil, clock: Process.method(:clock_gettime), chat: nil, continuation: false)
+    def initialize(run, attempt: nil, clock: Process.method(:clock_gettime), chat: nil, continuation: false, usage_scope: nil)
       @run = run
       @chat = chat || @run.chat
       @attempt = attempt
+      @usage_scope = usage_scope
       @continuation = continuation
       @clock = clock
       @started_monotonic = @clock.call(Process::CLOCK_MONOTONIC)
@@ -147,7 +148,7 @@ module Ai
     private
 
     def new_usage_records(usage_ids_before)
-      relation = @chat.ruby_llm_usages
+      relation = (@usage_scope || @chat.ruby_llm_usages).reload
       records = if usage_ids_before.empty?
         relation.to_a
       else
@@ -229,7 +230,7 @@ module Ai
       summary = {}
       summary["finish_reason"] = response.finish_reason.to_s if response.respond_to?(:finish_reason) && response.finish_reason
       summary["message_id"] = response.id if response.respond_to?(:id) && response.id
-      summary["usage_ids"] = @chat.ruby_llm_usages.chronological.pluck(:id)
+      summary["usage_ids"] = (@usage_scope || @chat.ruby_llm_usages).chronological.pluck(:id)
       summary
     end
 

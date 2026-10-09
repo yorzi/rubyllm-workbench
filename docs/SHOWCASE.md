@@ -41,8 +41,8 @@ any recording or presentation.
 | Rails transactions, outbox and locking | `Ai::AgentRunExecutor`, `AgentRunDelivery`, `Run::AgentExecutionLease` | `test/integration/agent_run_worker_replay_test.rb`, `test/integration/agent_run_cancellation_race_test.rb` | Local fencing does not guarantee exactly-once provider side effects. |
 | Active Job continuations and recovery | `AgentRunJob`, `Ai::AgentLeaseHeartbeat`, recovery jobs | `test/jobs/agent_run_job_test.rb`, `test/jobs/evaluation_case_recovery_job_test.rb` | SQLite concurrency and large-scale throughput are unmeasured. |
 | Retrieval provenance and vector compatibility | `Ai::Knowledge::{Chunker,Embedder,Retriever,Search,VectorStore,Reranker}` | `test/integration/knowledge_flow_test.rb`, Knowledge service tests | Original MIT case corpus exists; retrieval quality remains unmeasured. |
-| Grounded answers and asynchronous request boundaries | `Ai::Knowledge::{EvidenceSnapshot,GroundedAnswer,GroundedAnswerExecutor,GroundedResponse}` | `test/integration/grounded_answer_flow_test.rb`, grounded-answer service/system tests | Bounded lexical workflow; checked quotes prove provenance, not semantic correctness. [Walkthrough](GROUNDED_ANSWERS.md). |
-| Honest evaluation methodology | `EvaluationDatasetRevision`, `Ai::EvaluationExecutor`, `Ai::EvaluationCaseOutcome`, `Ai::EvaluationMetrics` | `test/integration/evaluation_flow_test.rb`, evaluation metrics tests | Exact match, human review and uncalibrated model review are distinct; native RubyLLM 2.1 Evaluations/Judges are not integrated yet. |
+| Grounded answers and asynchronous request boundaries | `Ai::Knowledge::{EvidenceSnapshot,GroundedAnswer,GroundedAnswerExecutor,GroundedResponse}` | `test/integration/grounded_answer_flow_test.rb`, grounded-answer service/system tests | Bounded lexical/semantic/hybrid/reranked workflow with owned usage; quotes prove provenance, not semantic correctness. [Walkthrough](GROUNDED_ANSWERS.md). |
+| Honest evaluation methodology | `EvaluationDatasetRevision`, `Ai::EvaluationExecutor`, `Ai::EvaluationCaseOutcome`, `Ai::EvaluationMetrics` | `test/integration/evaluation_flow_test.rb`, evaluation metrics tests | Exact match, human review and uncalibrated model review are distinct; native saved-answer Evaluation assertions/reviewer are integrated; supported typed Judge is locally verified and live remains manual. |
 | Batch uncertainty and reconciliation | `EvaluationBatchSubmissionJob`, `EvaluationBatchRefreshJob`, `Ai::EvaluationBatchResults` | `test/jobs/evaluation_batch_workflow_test.rb` | Requires a complete submitted-chat manifest; no live Batch acceptance yet. |
 | Accounting and observability | `Ai::AttemptRecorder`, `Ai::CostNormalizer`, `Ai::RubyLlmInstrumentation` | Recorder, cost and instrumentation service tests | Persisted ledger costs lack original reported/estimated provenance; OpenTelemetry export is planned. |
 | Active Storage lifecycle and upload boundaries | `Ai::MediaBlobStorage`, attachment validator, purge/recovery jobs | `test/integration/media_run_flow_test.rb`, attachment boundary tests | Video recovery and ledger attribution are incomplete; format checks are not a malware scanner. |
@@ -84,3 +84,12 @@ Release success means a new developer can install it, complete the tour,
 explain the execution boundaries, run a regression, and identify the remaining
 limits from the documentation. Downloads, stars and portfolio outcomes have
 not been measured.
+
+## Optional real source-answer extension
+
+Follow [the source-case walkthrough](GROUNDED_ANSWERS.md): import the MIT cases,
+prepare embeddings, choose hybrid retrieval/rerank and an explicit free answer
+model, then evaluate that saved answer. Its five-POST free-provider acceptance
+is in [CAPABILITIES.md](CAPABILITIES.md); it is independent from synthetic tour
+records. Native assertions require no model call. Reviewers and typed Judges
+use separate APIs and their measured outcomes do not certify truth.

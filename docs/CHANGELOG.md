@@ -6,7 +6,25 @@ before the public-release cleanup are preserved in git history (see this file
 at commit `8bd33c8`), together with the milestone gate records formerly in
 `TODO.md` (commit `e9c9faf`).
 
-## Unreleased: Rails source answers (2026-10-09)
+## Unreleased: owned retrieval and native saved-answer evaluation (2026-10-09)
+
+- Attribute one-shot embedding/query/rerank usage with RubyLLM native owners;
+  stop copying batch costs into chunk vectors. Export owner ledger rows and
+  deduplicate live report accounting against Attempt mirrors.
+- Extend source answers to semantic/hybrid and explicit-provider rerank;
+  freeze corpus/vector revisions, resolve retrieval outside transactions,
+  retain degradation and fence cancellation at native transport boundaries.
+- Add native `RubyLLM::Evaluation` assertions and one-request Agent reviewer,
+  plus supported typed `RubyLLM::Judge` decision measurements. Reuse saved
+  answers in independent evaluation Runs and reports without replay/cost reuse.
+- Add evaluation UI, recovery, offline HTTP contracts and browser coverage.
+  Correct invalid ranking indices and inconsistent vector dimensions.
+- Record the version-scoped missing-usage/default-zero upstream candidate;
+  normalize ambiguous costs conservatively without changing vendor code.
+- Use OpenRouter Fish for current TTS; optional local TTS no longer blocks work.
+  Actual verification and live/manual boundaries are in `CAPABILITIES.md`.
+
+## Earlier unreleased: Rails source answers (2026-10-09)
 
 - Add an original MIT Mini Notes source corpus, versioned cases and an
   idempotent import command that stops on edited source/chunk ownership.

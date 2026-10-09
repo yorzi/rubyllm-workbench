@@ -30,6 +30,7 @@ module DogfoodReport
   module TestHelpers
     def before_setup
       @dogfood_runs = []
+      @dogfood_collection_ids = []
       @dogfood_notes = []
       @dogfood_requested_models = []
       @dogfood_untracked_cost_operations = []
@@ -50,11 +51,17 @@ module DogfoodReport
         runs = Run.where(id: run_ids).includes(:attempts).to_a
         attempts = runs.flat_map(&:attempts)
         observed_models = attempts.map { |attempt| "#{attempt.provider}/#{attempt.model_id}" }.uniq
+        owned_usages = RubyLLM::ActiveRecord::Usage.where(owner_type: "KnowledgeCollection", owner_id: @dogfood_collection_ids)
+          .or(RubyLLM::ActiveRecord::Usage.where(owner_type: "Attempt", owner_id: attempts.map(&:id))).chronological.to_a
+        mirrored_ids = attempts.flat_map(&:ruby_llm_usage_ids_json).map(&:to_i)
+        additional_usages = owned_usages.reject { |usage| mirrored_ids.include?(usage.id) }
+        additional_costs = additional_usages.map { |usage| Ai::CostNormalizer.for(usage) }
         unknown_cost_attempts = attempts.count { |attempt| attempt.cost.nil? }
+        unknown_owned_usages = additional_costs.count { |cost| cost[:cost_status] == "unknown" }
         DogfoodReport.append(
           scenario: name.delete_prefix("test_"),
           profile: ENV.fetch("AI_TEST_PROFILE", "mock"),
-          capabilities: runs.map(&:operation).uniq | @dogfood_untracked_cost_operations,
+          capabilities: runs.map(&:operation).uniq | owned_usages.map(&:operation).uniq | @dogfood_untracked_cost_operations,
           duration_ms: ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - @dogfood_started_at) * 1_000).round(2),
           result: dogfood_result,
           failure: skipped? ? nil : failure&.class&.name,
@@ -65,16 +72,18 @@ module DogfoodReport
           run_statuses: runs.map(&:status).tally,
           http_post_requests: @live_policy&.request_count,
           http_requests: @dogfood_http_requests,
-          input_tokens: DogfoodReport.token_total(attempts.map(&:input_tokens)),
-          output_tokens: DogfoodReport.token_total(attempts.map(&:output_tokens)),
-          token_coverage: "run_attempts_only",
-          reported_cost: sum_known_cost(attempts.filter_map(&:reported_cost)),
-          recorded_cost: sum_known_cost(attempts.filter_map(&:recorded_cost)),
-          estimated_cost: sum_known_cost(attempts.filter_map(&:estimated_cost)),
-          known_cost: sum_known_cost(attempts.filter_map(&:cost)),
+          input_tokens: DogfoodReport.token_total(attempts.map(&:input_tokens) + additional_usages.map(&:input_tokens)),
+          output_tokens: DogfoodReport.token_total(attempts.map(&:output_tokens) + additional_usages.map(&:output_tokens)),
+          token_coverage: "run_attempts_and_unmirrored_owned_usages",
+          owned_provider_usages: owned_usages.map { |usage| { id: usage.id, operation: usage.operation, owner_type: usage.owner_type, owner_id: usage.owner_id, provider: usage.provider, model: usage.model, status: usage.status, input_tokens: usage.input_tokens, output_tokens: usage.output_tokens, native_recorded_cost: usage.total_cost&.to_f, normalized_cost: Ai::CostNormalizer.for(usage) } },
+          reported_cost: sum_known_cost(attempts.filter_map(&:reported_cost) + additional_costs.filter_map { |cost| cost[:reported_cost] }),
+          recorded_cost: sum_known_cost(attempts.filter_map(&:recorded_cost) + additional_costs.filter_map { |cost| cost[:recorded_cost] }),
+          estimated_cost: sum_known_cost(attempts.filter_map(&:estimated_cost) + additional_costs.filter_map { |cost| cost[:estimated_cost] }),
+          known_cost: sum_known_cost(attempts.filter_map(&:cost) + additional_costs.filter_map { |cost| cost[:reported_cost] || cost[:recorded_cost] || cost[:estimated_cost] }),
           unknown_cost_attempts: unknown_cost_attempts,
+          unknown_owned_usages: unknown_owned_usages,
           untracked_cost_operations: @dogfood_untracked_cost_operations.uniq,
-          cost_complete: unknown_cost_attempts.zero? && @dogfood_untracked_cost_operations.empty?,
+          cost_complete: unknown_cost_attempts.zero? && unknown_owned_usages.zero? && @dogfood_untracked_cost_operations.empty?,
           notes: @dogfood_notes,
           ruby_llm: Gem.loaded_specs.fetch("ruby_llm").version.to_s,
           at: Time.current.utc.iso8601
@@ -95,6 +104,11 @@ module DogfoodReport
     def track_run(run)
       @dogfood_runs << run
       run
+    end
+
+    def track_collection(collection)
+      @dogfood_collection_ids << collection.id
+      collection
     end
 
     def request_model(reference)

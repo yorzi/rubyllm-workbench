@@ -28,6 +28,28 @@ upstream 提交 Issue 或 PR。下面的候选仍需要你进一步求证。
   或 reported 金额，并覆盖 owner-only usage。旧记录保持 unknown，
   不能根据历史 `total_cost` 猜出来源。先确认设计意图再写迁移和 PR。
 
+### RLLM-003 — usage 缺失时默认 cache zero 可能制造零成本
+
+- 发现：2026-10-09。状态：**已在锁定 RubyLLM 2.1.0 复现，未验证 upstream main**。
+  类型：缺失用量/成本边界缺陷候选；还不能称已确认的上游 bug。
+- 公开 API：`RubyLLM.chat(model: "liquid/lfm-2.5-2.6b:free", provider: :openrouter).ask(...)`。
+  WebMock HTTP fixture 完全省略 usage，回复正常文本。未加载 Rails、凭证或数据库，
+  只有一个拦截的 POST，零真实网络。Ruby 4.0.2。
+- 实际：`message.tokens.to_h` 只有 `cache_write_tokens: 0`，input/output 和
+  reported_cost 均为 nil，`message.cost.to_h` 却返回 cache_write/total 零值。
+  原生 Evaluation reviewer 的 Rails owner-only Usage 也因此可能保存 total_cost=0。
+- 预期候选：未上报 usage 且没有明确 reported cost 时，未知不应成为可证明的零成本。
+  需要向 maintainer 确认 Cost.total 的合约究竟是完整成本还是已知分量小计。
+- 最小复现：`bundle exec ruby script/diagnostics/ruby_llm_missing_usage_cost.rb`。
+  [脚本](../script/diagnostics/ruby_llm_missing_usage_cost.rb) 使用无效占位 key，
+  禁止全部外部网络；不是由免费价格、模型回答质量或 Workbench聚合造成。
+- 应用处理：保留原生账本/report 原值；`Ai::CostNormalizer` 将没有 input/output
+  且只有默认零分量的持久化零成本标 unknown。明确 reported zero 仍被接受，
+  已有真实 token measurements 的零成本也保留。报告另示 usage_coverage。
+- 下一步：在干净 upstream main 用公开 API 分别复现 omitted usage、empty usage、
+  明确全零、正常 counts、明确 reported zero 和 cache-only usage。确认语义后
+  才拟补丁与边界测试；本轮没有改 vendor、提交 Issue 或修复 PR。
+
 ## 已排除的候选
 
 ### RLLM-002 — `with_thinking(false)` 是否遗漏 OpenRouter disable 参数
@@ -50,6 +72,9 @@ bundle exec ruby script/diagnostics/ruby_llm_openrouter_thinking_disable.rb
 
 | 发现 | 归属与处理 |
 | --- | --- |
+| 批量 embedding 用量复制到每个 chunk | Workbench 账务归属错误；新写入向量不再复制整批 charge，原生 owner ledger 一次记录每个物理请求；不推断历史归属。 |
+| 查询/同批文档向量维度不一致导致假无证据或假 ready | Workbench 校验缺口，离线复现后修正：查询明确降级，文档导入显示 partial/failed；不是模型质量判断或 gem 缺陷。 |
+| 检索 Attempt 创建后取消仍能进入 provider block | Workbench 竞态，已补 yield 前和 native request instrumentation 两层检查；离线取消注入证明无 transport POST。 |
 | RubyLLM 异常被 Workbench 记成成功/收到响应 | Workbench 通知适配器未识别 Rails 的 `exception_object` / `exception`。已修复并用真实通知总线的离线抛错回归验证。 |
 | embedding 检查/查询忽略选定 provider，部分重建混入旧 provider 向量 | Workbench catalog、查询、覆盖数和候选筛选问题。已修复。不能作为 RubyLLM 缺陷提交。 |
 | SQLite native 派生索引只比较数量，未感知向量替换与候选排除 | Workbench adapter 问题。已改为从候选快照重建，在同一事务内扫描。测试使用真实 SQLite 索引维护和 Ruby 扫描替身，实际 native binary 验收仍未完成。 |

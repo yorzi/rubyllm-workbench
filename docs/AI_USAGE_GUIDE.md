@@ -68,7 +68,7 @@ Workbench 的目标是**用尽可能低的成本跑通 AI 功能，快速发现 
 - [x] 默认套件不要求 API Key，默认 WebMock 阻止外部 Ruby HTTP；loopback 服务例外。
 - [x] 已配置 Key 且获授权后，可用一条 `bin/dogfood --include test_chat_streaming` 发起免费 Chat 验收。
 - [ ] Streaming、Tools、JSON Schema、Vision、Embedding 各有一个最小用例。
-- [x] 图片、音频能力的证据按 `CAPABILITIES.md` 区分；免费 TTS 与本地 TTS 分开。
+- [x] 图片、音频能力的证据按 `CAPABILITIES.md` 区分；当前使用 OpenRouter 免费 TTS，本地 TTS 是可选后续扩展。
 - [ ] 所有真实请求均可看到所选 Provider、Model ID、运行 Profile、结果和成本（若 API 提供）。
 - [ ] 失败时不会自动切换到其他 Provider 并把失败隐藏。
 - [ ] API Key 有独立的月度额度限制，且不进入 Git、测试快照或日志。
@@ -252,7 +252,7 @@ RUN_LIVE_AI=1 AI_TEST_PROFILE=free RAILS_ENV=test \
 
 `bin/dogfood` 自动设置 `RUN_LIVE_AI=1 AI_TEST_PROFILE=free LIVE_DOGFOOD=1`，并串行执行指定用例。免费模式拒绝未知价格、非 `:free` ID 和未检查模型。每次模型/能力变化先核价；目录失败不得继续猜测价格。
 
-如果失败，首先检查 API Key、额度、模型可用性/能力、协议、网络错误。不要自动切换付费模型或打开 Fallback。TTS 模型和 voice 可用性与证据边界见 [CAPABILITIES.md](CAPABILITIES.md)；本地 TTS 等所有者提供 API 后另行接入。
+如果失败，首先检查 API Key、额度、模型可用性/能力、协议、网络错误。不要自动切换付费模型或打开 Fallback。TTS 模型和 voice 可用性与证据边界见 [CAPABILITIES.md](CAPABILITIES.md)；当前采用 OpenRouter Fish TTS，不等待本地接口；本地适配器仅作为可选后续扩展。
 
 ---
 

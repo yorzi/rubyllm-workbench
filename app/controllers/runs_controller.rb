@@ -27,6 +27,15 @@ class RunsController < ApplicationController
     Ai::ToolInvocationRecorder.new(run: @run, chat: @run.chat).sync! unless demo_mode?
     @tool_invocations = @run.tool_invocations.includes(:approval, :tool_definition).recent.to_a
     @lifecycle_events = @run.lifecycle_events.chronological.to_a
+    if !demo_mode? && @run.operation == "grounded_answer" && @run.succeeded? &&
+        @run.project.settings_json.to_h[Workbench::KnowledgeCaseStudy::OWNERSHIP_KEY]
+      @native_case = Workbench::KnowledgeCaseStudy.cases.find do |entry|
+        entry.fetch("question") == @run.input_snapshot.dig("grounded_answer", "question")
+      end
+      @reviewer_models = model_catalog.entries(capability: "structured_output", configured: "true").select(&:interactive?)
+        .sort_by { |entry| [ entry.id.to_s.end_with?(":free") ? 0 : 1, entry.provider, entry.id ] }
+      @native_judge_models = Ai::JudgmentCatalog.entries(configured: "true").select(&:interactive?)
+    end
     @messages = @run.chat.messages
     source_message_id = @run.result_summary["source_message_id"]
     @source_assistant_message = if source_message_id.present?
@@ -95,7 +104,7 @@ class RunsController < ApplicationController
 
   def cancel
     run = Run.find(params[:id])
-    raise ActiveRecord::RecordNotFound unless run.operation.in?(%w[agent image speech transcription video grounded_answer])
+    raise ActiveRecord::RecordNotFound unless run.operation.in?(%w[agent image speech transcription video grounded_answer native_evaluation])
 
     run.cancel!
     redirect_to run_path(run), notice: "Run ##{run.id} cancelled.", status: :see_other

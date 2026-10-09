@@ -19,9 +19,9 @@ an upstream contribution.
 | Projects, model discovery, persisted streaming Chat | Implemented | Availability feedback when registry models stop being served. |
 | Structured Experiments, tools, approvals | Implemented | Live parallel calls on a supporting provider. |
 | Durable saved Agents | Implemented | Measured concurrency and a current-version live recovery walkthrough. |
-| Knowledge extraction, embeddings, retrieval, rerank | Implemented; bounded lexical source answers added | Case-study semantic/hybrid/rerank integration, scale measurements and live OCR. Quality study deferred. |
+| Knowledge extraction, embeddings, retrieval, rerank | Implemented; owned semantic/hybrid/reranked source answers | Scale measurements, live OCR and saved-Agent case-study extension. Quality study deferred. |
 | Speech, transcription, image, video | Partial; experimental | Video resumption, video-job ledger attribution and live video. |
-| Evaluation datasets, comparisons, reviews, judge, Batch | Implemented locally; judge experimental | Live Batch, judge calibration and native Evaluation/Judge integration. |
+| Evaluation datasets, comparisons, reviews, judge, Batch | Implemented locally; judge experimental | Live Batch, native typed Judge live acceptance and calibration. |
 | Exports, lifecycle evidence, upstream drafts | Implemented; drafts experimental | Native OpenTelemetry export and an inspectable trace example. |
 | Source-anchored learning | Implemented, including Agent/evaluation/retrieval maps | Extend explanations alongside each new native integration. |
 | Read-only synthetic demo | Implemented and locally verified | Public hosting, TLS/host checks and external acceptance remain. The full workbench still requires trusted access. |
@@ -60,7 +60,7 @@ the deferred capability list are in [OPERATIONS.md](docs/OPERATIONS.md#remaining
       in OpenRouter Dashboard; repository guidance does not prove account setup.
 - [ ] Complete the full two-model/one-case comparison when free capacity
       permits it. Keep hosted search/transcription/image as owner acceptance,
-      and local TTS pending API details and adapter work.
+      and optional local TTS adapter deferred by owner choice.
 - [ ] Verify hosted CI for the candidate commit, fresh Debian/Ubuntu setup
       with and without libvips, and the runtime container.
 - [ ] Confirm private vulnerability reporting and review git history and
@@ -88,39 +88,34 @@ path, durable evidence and failure behavior. Answer and retrieval quality
 benchmarks are deferred by owner preference; they do not block integration
 acceptance. Keep the synthetic tour separate from real requests.
 
-Completed slice: the original MIT Mini Notes corpus, versioned cases and
-idempotent importer, plus a bounded lexical `grounded_answer` Run with frozen
-sources, exact-quote citation checks, refusal, drift rejection, cancellation
-and interrupted-worker recovery. Walkthrough: [GROUNDED_ANSWERS.md](docs/GROUNDED_ANSWERS.md).
-Current local/live acceptance is recorded only in [CAPABILITIES.md](docs/CAPABILITIES.md).
-This is a single model request; native Agent/Evaluation integration remains.
+Completed: original MIT Mini Notes corpus/import, lexical/semantic/hybrid
+source-answer Runs, optional rerank, corpus/vector revision checks, exact
+citations and local refusal. Native one-shot usage owners distinguish
+collection imports/search from Run retrieval Attempts. Native
+`RubyLLM::Evaluation` reuses saved answers with local assertions or one model
+reviewer; typed `RubyLLM::Judge` uses a distinct supported decision protocol.
+Neither replays answer generation or includes its cost again. Walkthrough:
+[GROUNDED_ANSWERS.md](docs/GROUNDED_ANSWERS.md); actual acceptance is recorded
+only in [CAPABILITIES.md](docs/CAPABILITIES.md).
 
-Next executable slice: attribute one-shot query embedding/rerank calls before
-extending grounded answers to semantic/hybrid/reranked retrieval. Then run the
-same frozen case set through native Evaluation/Judge without duplicate calls.
+Next executable work:
 
-1. Corpus/import/cases completed, including missing evidence and misleading
-   instructions. Extend its frozen-revision retrieval checks to semantic,
-   hybrid and rerank; record selected provider/model, vector revision and
-   availability outcomes. Source data never grants tool authority.
-2. Lexical grounded-answer slice completed. Extend its Run snapshot to other
-   retrieval modes with embedding/rerank configuration and owned usage.
-   Reuse the empty-evidence, drift, citation and cancellation contracts.
-   Complete the live untrusted-source group manually with valid structured
-   output; citation validity alone is not truth.
-3. Integrate `RubyLLM::Evaluation` and `RubyLLM::Judge` 2.1 on that case set.
-   Keep native evaluation distinct from the immutable application ledger and
-   avoid duplicate calls. Compare exact matching with a human-calibrated
-   qualitative rubric when quality study is requested; initially accept that
-   each scheduled output and judgment completes and is stored correctly.
-4. Attribute one-shot embedding, rerank and media usage to an application
-   owner. Preserve reported/estimated provenance before serialization when
-   public callbacks permit it; never infer it from a ledger total. Reconcile
-   retries and hosted-tool fees without counting a request twice.
+1. Preserve the full untrusted-source case group's manual acceptance status.
+   Complete it only when a bounded explicit free-model invocation satisfies
+   structure and citations; do not retry for answer quality.
+2. Validate typed Judge live with a deliberately selected supported provider
+   and agreed scope. OpenRouter structured reviewers are not typed Judges.
+   Keep probabilities measured until a quality/calibration study is requested.
+3. Investigate the missing-usage/default-cache-zero RubyLLM candidate on clean
+   upstream main before drafting a fix; reproduce offline first. Extend native
+   media/job ownership and cost provenance without inventing historical data.
+4. Add a small saved-Agent walkthrough over these owned retrieval/evaluation
+   boundaries, with explicit tool authority and one traceable case. Retain
+   the existing direct source-answer path for an understandable introduction.
 
-5. Connect the owner's local TTS API once endpoint, protocol, model and voice
-   are provided. Reuse Speech Runs, Artifacts, Active Storage and playback;
-   verify errors, cancellation and recovery. No cloud TTS fallback.
+TTS decision: use the accepted OpenRouter Fish speech route now. The local TTS
+adapter is an optional future extension and does not block development or
+acceptance; no owner API details are required for the current speech flow.
 
 Completion: a reproducible workflow with commands, corpus licence, frozen
 inputs, flow outcomes and useful failure evidence. Free calls are the default;

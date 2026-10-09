@@ -35,6 +35,7 @@ class ProviderDogfoodTest < ActionDispatch::IntegrationTest
     "tool_approval_continuation" => [ :tools ],
     "knowledge_embedding_and_rerank" => [ :embedding, :rerank ],
     "grounded_answer_case_study" => [ :structured ],
+    "semantic_answer_native_evaluation" => [ :embedding, :rerank, :structured ],
     "evaluation_comparison_with_judge" => [ :structured, :structured_alt ],
     "saved_agent_with_local_tool" => [ :agent ],
     "agent_with_hosted_web_search" => [ :agent ],
@@ -133,7 +134,7 @@ class ProviderDogfoodTest < ActionDispatch::IntegrationTest
 
   test "knowledge_embedding_and_rerank" do
     require_models!(:embedding, :rerank)
-    collection = @project.knowledge_collections.create!(name: "Dogfood corpus")
+    collection = track_collection(@project.knowledge_collections.create!(name: "Dogfood corpus"))
     {
       "Solid Queue" => "Solid Queue is a database-backed Active Job backend that runs recurring tasks and workers.",
       "Tomatoes" => "Tomatoes grow best in warm soil with full sun and regular watering.",
@@ -144,7 +145,6 @@ class ProviderDogfoodTest < ActionDispatch::IntegrationTest
     end
     assert_equal 3, collection.knowledge_chunks.count
 
-    untracked_cost_operations("embedding")
     summary = Ai::Knowledge::Embedder.call(collection:, model_id: MODELS[:embedding], provider: PROVIDER)
     assert_equal "ready", summary.status, summary.error.to_s
     note "embedded=#{summary.embedded} dims=#{summary.dimensions}"
@@ -153,7 +153,6 @@ class ProviderDogfoodTest < ActionDispatch::IntegrationTest
     assert_equal "semantic", semantic.mode, semantic.degraded_reason.to_s
     note "semantic_results=#{semantic.results.size}"
 
-    untracked_cost_operations("rerank")
     reranked = Ai::Knowledge::Search.call(
       collection:, query: "background job processing in Rails", mode: "hybrid",
       rerank: true, rerank_model_id: MODELS[:rerank]
@@ -197,6 +196,48 @@ class ProviderDogfoodTest < ActionDispatch::IntegrationTest
       assert_select "#grounded-answer-heading", text: "Answer with sources"
     end
     note "fixed_corpus_revision=1 citations_checked_when_answered=true expected_facts=manual"
+  end
+
+  test "semantic_answer_native_evaluation" do
+    require_models!(:embedding, :rerank, :structured)
+    corpus = Workbench::KnowledgeCaseStudy.import!
+    collection = track_collection(corpus.collection)
+    example = corpus.cases.find { |entry| entry.fetch("key") == "title-validation" }
+    reference = "#{PROVIDER}|#{MODELS[:structured]}"
+    summary = Ai::Knowledge::Embedder.call(collection:, model_id: MODELS[:embedding], provider: PROVIDER)
+    assert_equal "ready", summary.status, summary.error.to_s
+    assert_equal 1, collection.ruby_llm_usages.count, "a 5-source batch must be billed once"
+    assert collection.knowledge_embeddings.all? { |row| row.input_tokens.nil? && row.reported_cost.nil? }
+    perform_enqueued_jobs do
+      post project_knowledge_collection_answers_path(corpus.project, collection), params: { knowledge_answer: {
+        question: example.fetch("question"), model_reference: reference, mode: "hybrid", rerank: "1", rerank_model_id: MODELS[:rerank] }
+      }
+    end
+    answer = track_run(corpus.project.runs.recent.first)
+    assert answer.succeeded?, run_failure(answer)
+    assert_equal "hybrid", answer.input_snapshot.dig("grounded_answer", "retrieval", "mode")
+    assert_equal true, answer.input_snapshot.dig("grounded_answer", "retrieval", "rerank")
+    assert_equal %w[query_embedding rerank answer], answer.attempts.map { |attempt| attempt.metadata_json["phase"] }
+    %w[assertions reviewer].each do |kind|
+      perform_enqueued_jobs do
+        post native_evaluations_run_path(answer), params: { native_evaluation: {
+          case_key: example.fetch("key"), evaluator_kind: kind, model_reference: reference }
+        }
+      end
+      evaluation = track_run(corpus.project.runs.recent.first)
+      assert_equal "native_evaluation", evaluation.operation
+      assert evaluation.succeeded?, run_failure(evaluation)
+      assert_equal answer.id, evaluation.result_summary["answer_run_id"]
+      assert_equal false, evaluation.result_summary.dig("accounting", "task_replayed")
+      assert_equal false, evaluation.result_summary.dig("accounting", "answer_cost_included")
+      assert_equal kind == "reviewer" ? 1 : 0, evaluation.attempts.count
+      note "native_kind=#{kind} native_status=#{evaluation.result_summary['native_status']} answer_replayed=false"
+      get run_path(evaluation)
+      assert_response :success
+      assert_select "#native-evaluation-heading", text: "Native saved-answer evaluation"
+    end
+    assert_equal 5, @live_policy.request_count, "one document batch, query, rerank, answer and reviewer; assertions stay local"
+    note "case=title-validation hybrid_rerank=true answer_status=#{answer.result_summary['answer_status']} physical_posts=5 judge_live=manual"
   end
 
   test "evaluation_comparison_with_judge" do
