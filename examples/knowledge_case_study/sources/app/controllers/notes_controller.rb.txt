@@ -1,0 +1,26 @@
+class NotesController < ApplicationController
+  before_action :set_note, only: %i[show update archive]
+
+  def update
+    if @note.update(note_params)
+      redirect_to @note, notice: "Note updated."
+    else
+      render :edit, status: :unprocessable_entity
+    end
+  end
+
+  def archive
+    ArchiveNoteJob.perform_later(@note.id)
+    redirect_to notes_path, notice: "Archive requested."
+  end
+
+  private
+
+  def set_note
+    @note = current_user.notes.find(params[:id])
+  end
+
+  def note_params
+    params.expect(note: [:title, :body])
+  end
+end

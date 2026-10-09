@@ -1,0 +1,7 @@
+class ArchiveNoteJob < ApplicationJob
+  queue_as :default
+
+  def perform(note_id)
+    Note.find(note_id).update!(archived: true)
+  end
+end

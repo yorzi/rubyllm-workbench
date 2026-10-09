@@ -19,7 +19,7 @@ an upstream contribution.
 | Projects, model discovery, persisted streaming Chat | Implemented | Availability feedback when registry models stop being served. |
 | Structured Experiments, tools, approvals | Implemented | Live parallel calls on a supporting provider. |
 | Durable saved Agents | Implemented | Measured concurrency and a current-version live recovery walkthrough. |
-| Knowledge extraction, embeddings, retrieval, rerank | Implemented | Quality dataset, scale measurements, grounded answers and live OCR. |
+| Knowledge extraction, embeddings, retrieval, rerank | Implemented; bounded lexical source answers added | Case-study semantic/hybrid/rerank integration, scale measurements and live OCR. Quality study deferred. |
 | Speech, transcription, image, video | Partial; experimental | Video resumption, video-job ledger attribution and live video. |
 | Evaluation datasets, comparisons, reviews, judge, Batch | Implemented locally; judge experimental | Live Batch, judge calibration and native Evaluation/Judge integration. |
 | Exports, lifecycle evidence, upstream drafts | Implemented; drafts experimental | Native OpenTelemetry export and an inspectable trace example. |
@@ -32,7 +32,8 @@ fixes. Keep the remaining Agent usage-recorder seam isolated and tested.
 
 ## P0 — release the reference app and make the demo safe
 
-Complete this before expanding the feature set. Follow
+Keep these release gates open while implementing locally reviewable workflow
+slices. Publishing still requires their acceptance. Follow
 [RELEASING.md](docs/RELEASING.md).
 
 The isolated read-only synthetic demo now passes local request, database,
@@ -87,14 +88,26 @@ path, durable evidence and failure behavior. Answer and retrieval quality
 benchmarks are deferred by owner preference; they do not block integration
 acceptance. Keep the synthetic tour separate from real requests.
 
-1. Version a small corpus with relevant chunk IDs, missing-answer cases and
-   misleading retrieved instructions. Verify lexical, semantic, hybrid and
-   reranked requests on frozen corpus/model/chunk revisions. Keep source text
-   separate from tool authority; record availability and flow outcomes.
-2. Add a bounded grounded-answer workflow that freezes source IDs, checksums,
-   offsets, retrieval options and embedding model into a Run. Validate returned
-   citations against the snapshot. Test empty evidence, stale sources,
-   unsupported claims and cancellation. Citation validity alone is not truth.
+Completed slice: the original MIT Mini Notes corpus, versioned cases and
+idempotent importer, plus a bounded lexical `grounded_answer` Run with frozen
+sources, exact-quote citation checks, refusal, drift rejection, cancellation
+and interrupted-worker recovery. Walkthrough: [GROUNDED_ANSWERS.md](docs/GROUNDED_ANSWERS.md).
+Current local/live acceptance is recorded only in [CAPABILITIES.md](docs/CAPABILITIES.md).
+This is a single model request; native Agent/Evaluation integration remains.
+
+Next executable slice: attribute one-shot query embedding/rerank calls before
+extending grounded answers to semantic/hybrid/reranked retrieval. Then run the
+same frozen case set through native Evaluation/Judge without duplicate calls.
+
+1. Corpus/import/cases completed, including missing evidence and misleading
+   instructions. Extend its frozen-revision retrieval checks to semantic,
+   hybrid and rerank; record selected provider/model, vector revision and
+   availability outcomes. Source data never grants tool authority.
+2. Lexical grounded-answer slice completed. Extend its Run snapshot to other
+   retrieval modes with embedding/rerank configuration and owned usage.
+   Reuse the empty-evidence, drift, citation and cancellation contracts.
+   Complete the live untrusted-source group manually with valid structured
+   output; citation validity alone is not truth.
 3. Integrate `RubyLLM::Evaluation` and `RubyLLM::Judge` 2.1 on that case set.
    Keep native evaluation distinct from the immutable application ledger and
    avoid duplicate calls. Compare exact matching with a human-calibrated

@@ -59,6 +59,23 @@
     </div>
 
     <% unless demo_mode? %>
+    <section class="mt-8 rounded-2xl border border-line bg-panel p-5 shadow-sm sm:p-6" aria-labelledby="answer-source-heading">
+      <h2 id="answer-source-heading" class="text-sm font-semibold text-ink">Answer with sources</h2>
+      <%= render "shared/learning_link", topic: "grounded_answer", label: "How source answers work" %>
+      <p class="mt-1 text-xs leading-5 text-muted">Retrieve up to 8 chunks with lexical search, then ask one model for cited claims. Evidence and model settings are frozen in a Run. No matches means a local refusal with no model request. Review claims yourself.</p>
+      <% if @answer_models.any? %>
+        <%= form_with url: project_knowledge_collection_answers_path(@project, @collection), scope: :knowledge_answer, class: "mt-4 space-y-3" do |form| %>
+          <%= form.label :question, "Question about these sources", class: "block text-xs font-medium text-ink" %>
+          <%= form.text_area :question, value: @query, required: true, maxlength: 500, rows: 2, class: "w-full rounded-lg border border-line bg-canvas px-3 py-2 text-sm text-ink" %>
+          <%= form.label :model_reference, "Answer model", class: "block text-xs font-medium text-ink" %>
+          <%= form.select :model_reference, options_for_select(@answer_models.map { |entry| [ "#{entry.provider} / #{entry.id}", "#{entry.provider}|#{entry.id}" ] }), {}, class: "w-full rounded-lg border border-line bg-canvas px-3 py-2 text-xs text-ink" %>
+          <p class="text-xs leading-5 text-muted">The selected model may charge. Free model IDs appear first; no automatic model fallback is used.</p>
+          <%= form.submit "Create source answer", class: "cursor-pointer rounded-lg bg-accent px-4 py-2.5 text-xs font-medium text-white hover:bg-indigo-700" %>
+        <% end %>
+      <% else %>
+        <p class="mt-4 text-sm text-muted">Configure a structured-output model to create an answer. You can search the evidence below without one.</p>
+      <% end %>
+    </section>
     <section class="mt-8 rounded-2xl border border-line bg-panel p-5 shadow-sm sm:p-6" aria-labelledby="add-source-heading">
       <div class="flex items-start justify-between gap-3">
         <div>

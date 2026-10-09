@@ -128,7 +128,7 @@ The live suite in `test/live/provider_dogfood_test.rb` is opt-in and skipped by
 default. It needs a configured provider (OpenRouter by default):
 
 ```sh
-bin/dogfood           # seven free-model flow checks; manual items are reported separately
+bin/dogfood           # eight free-model flow checks; manual items are reported separately
 # Only with deliberate fee-bearing acceptance and explicit model selection:
 bin/dogfood --paid
 ```
@@ -145,9 +145,10 @@ are disabled, requests time out after 60 seconds, outputs are capped at 2,048
 tokens, and the process stops allowing calls after 24 POST requests. These
 test-only limits do not alter the interactive workbench.
 
-The seven automated checks cover streaming, structured output, tool approval
+The eight automated checks cover streaming, structured output, tool approval
 and continuation, embeddings/semantic/hybrid/rerank, two-model comparison
-with all intended judgments, a saved Agent using a local tool, and free TTS. Assertions
+with all intended judgments, a saved Agent using a local tool, free TTS and
+the Rails source grounded-answer case study. Assertions
 check integration and durable records, without rating answer/retrieval quality.
 Missing models and fee-bearing capabilities stay visible as manual skips.
 The harness also requires `RUN_LIVE_AI=1` and `AI_TEST_PROFILE=free` (or
@@ -201,6 +202,7 @@ voice and image quality are outside this exercise.
 
 | Item | Next action | Flow acceptance |
 | --- | --- | --- |
+| Full grounded-answer case group | Use an available explicit free model with `bin/dogfood --include test_grounded_answer_case_study`. Current untrusted-source failures remain visible; no automatic retry is scheduled. | Each scheduled answer/refusal satisfies the snapshot schema and citation rules and leaves correct durable state. Expected facts and semantic quality remain manual. |
 | Full two-model comparison | When free capacity is available, run `bin/dogfood --include test_evaluation_comparison_with_judge`; keep both explicit free IDs. | Both case outputs received/schema-valid and both intended judge Runs complete in the same invocation. A partial run stays failed. |
 | Local TTS | Owner supplies loopback endpoint, API protocol, model and voice; implement the adapter before acceptance. | Existing Speech Run → audio Artifact → Active Storage attachment → playback; failure/cancellation/recovery preserve correct state. No cloud fallback. |
 | Hosted web search | Deliberately choose model and fee budget, then run only its scenario with `--paid --include test_agent_with_hosted_web_search`. | Local tool completes, hosted usage is observed, citations/report are stored; do not infer search use from answer text. |
@@ -315,9 +317,12 @@ request/completed events.
 6. Optionally rerank with a configured rerank model. Results show
    `rank N (was M)` and the rerank score; retrieval evidence is unchanged.
 
-The workspace never creates Runs and calls a provider only for an explicit
-embed or a semantic/hybrid query. Missing prerequisites degrade to lexical
-with the reason shown.
+Retrieval calls a provider for explicit embedding, semantic/hybrid queries or
+reranking. Missing prerequisites degrade to lexical with the reason shown.
+**Answer with sources** creates a separate `grounded_answer` Run using lexical
+retrieval and one selected structured-output model. It refuses locally when
+no evidence matches. See [the case-study walkthrough](GROUNDED_ANSWERS.md) for
+the import command, frozen inputs, citation limits and focused acceptance.
 
 ### Optional sqlite-vector adapter
 
@@ -378,7 +383,7 @@ ready state does not prove a provider is reachable.
 ## Reading the Run inspector
 
 1. **Status**: succeeded, failed, cancelled, or waiting for approval.
-2. **Operation**: `chat`, `structured`, `agent`, `speech`, `image`, `video` or
+2. **Operation**: `chat`, `structured`, `grounded_answer`, `agent`, `speech`, `image`, `video` or
    `transcription`.
 3. **Attempts**: retries, the provider/model that ran, usage, cost provenance
    (reported, recorded, estimated, unknown) and finish reason.

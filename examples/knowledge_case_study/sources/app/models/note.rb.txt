@@ -1,0 +1,8 @@
+class Note < ApplicationRecord
+  belongs_to :user
+
+  validates :title, presence: true, length: { maximum: 120 }
+  validates :body, length: { maximum: 10_000 }
+
+  scope :active, -> { where(archived: false) }
+end

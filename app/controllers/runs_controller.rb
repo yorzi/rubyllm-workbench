@@ -95,7 +95,7 @@ class RunsController < ApplicationController
 
   def cancel
     run = Run.find(params[:id])
-    raise ActiveRecord::RecordNotFound unless run.operation.in?(%w[agent image speech transcription video])
+    raise ActiveRecord::RecordNotFound unless run.operation.in?(%w[agent image speech transcription video grounded_answer])
 
     run.cancel!
     redirect_to run_path(run), notice: "Run ##{run.id} cancelled.", status: :see_other

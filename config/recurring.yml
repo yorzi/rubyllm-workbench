@@ -10,6 +10,10 @@
 #     schedule: at 5am every day
 
 development:
+  recover_stale_grounded_answers:
+    class: GroundedAnswerRecoveryJob
+    queue: maintenance
+    schedule: every minute
   dispatch_agent_run_deliveries:
     class: AgentRunDeliveryDispatcherJob
     queue: maintenance
@@ -40,6 +44,10 @@ development:
     schedule: every day at 4am
 
 production:
+  recover_stale_grounded_answers:
+    class: GroundedAnswerRecoveryJob
+    queue: maintenance
+    schedule: every minute
   dispatch_agent_run_deliveries:
     class: AgentRunDeliveryDispatcherJob
     queue: maintenance

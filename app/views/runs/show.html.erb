@@ -36,7 +36,7 @@
       <div class="flex flex-wrap gap-2">
         <%= link_to "Download events JSON", events_run_path(@run), data: { turbo_confirm: (demo_mode? ? nil : "This export contains sanitized event metadata, limited to the latest 100 events. Review it before sharing.") }, class: "inline-flex items-center justify-center rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
         <%= link_to "Download reproduction JSON", reproduction_run_path(@run), data: { turbo_confirm: (demo_mode? ? nil : "This export contains the Chat history and Run messages plus sanitized execution context. Review it before sharing.") }, class: "inline-flex items-center justify-center rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" %>
-        <% if !demo_mode? && %w[agent image speech transcription video].include?(@run.operation) && !@run.terminal? %>
+        <% if !demo_mode? && %w[agent image speech transcription video grounded_answer].include?(@run.operation) && !@run.terminal? %>
           <%= button_to "Cancel Run", cancel_run_path(@run), method: :post, form: { data: { turbo_confirm: "Cancel this Run? The provider may already have accepted the request." } }, class: "inline-flex cursor-pointer items-center justify-center rounded-lg border border-rose-200 px-3 py-2 text-xs font-medium text-rose-700 hover:bg-rose-50" %>
         <% end %>
         <%= link_to "Return to chat", project_chat_path(@run.project, @run.chat), class: "inline-flex items-center justify-center rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-accent hover:text-accent" if @run.chat %>
@@ -61,6 +61,8 @@
         <% if @run.result_summary["failure_kind"].present? %><p class="mt-2 font-mono text-[11px] text-rose-700">failure_kind: <%= @run.result_summary["failure_kind"] %></p><% end %>
       </section>
     <% end %>
+
+    <%= render "runs/grounded_answer", run: @run if @run.operation == "grounded_answer" %>
 
     <% if @agent_research_report %>
       <% research_report = @agent_research_report.content_json %>
@@ -208,11 +210,11 @@
     </section>
 
     <section class="mt-8 grid gap-6 xl:grid-cols-2">
-      <div class="rounded-xl border border-line bg-panel p-5">
+      <div class="min-w-0 rounded-xl border border-line bg-panel p-5">
         <h2 class="text-sm font-semibold text-ink">Input snapshot</h2>
         <pre class="mt-4 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-canvas p-4 font-mono text-xs leading-5 text-muted"><%= JSON.pretty_generate(@run.input_snapshot) %></pre>
       </div>
-      <div class="rounded-xl border border-line bg-panel p-5">
+      <div class="min-w-0 rounded-xl border border-line bg-panel p-5">
         <h2 class="text-sm font-semibold text-ink">Result</h2>
         <% if @structured_artifact %>
           <div class="mt-4 flex items-center justify-between gap-3"><span class="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-medium text-success">JSON artifact · valid</span><span class="font-mono text-[10px] text-muted"><%= @structured_artifact.name %></span></div>

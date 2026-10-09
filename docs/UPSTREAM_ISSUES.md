@@ -55,6 +55,9 @@ bundle exec ruby script/diagnostics/ruby_llm_openrouter_thinking_disable.rb
 | SQLite native 派生索引只比较数量，未感知向量替换与候选排除 | Workbench adapter 问题。已改为从候选快照重建，在同一事务内扫描。测试使用真实 SQLite 索引维护和 Ruby 扫描替身，实际 native binary 验收仍未完成。 |
 | Dots schema-invalid、Apodex provider error、Liquid rate limit | 本次只能确认 provider 响应/可用性限制；不能从失败日志推断 gem 有 bug。完整两模型比较仍待复验。 |
 | TTS 验收报告把缺失的 token 数显示为 0 | Workbench 报告使用 `.to_i` 聚合缺失值。已修正为 unknown，并覆盖缺失、部分缺失和明确 0 的离线回归。不是 RubyLLM 用量 bug。 |
+| 新源码问答在 claim 后取消，仍请求模型并把 Attempt 改回 running | Workbench 实现竞态，离线注入取消已复现；已用 Run 行锁保护 Attempt 启动，并在 RubyLLM `before_request` 再检查状态。复验为 cancelled Run / cancelled Attempt / 0 请求；迟到成功结果仍被 fencing 拦截。不是 Rails 或 RubyLLM 缺陷。 |
+| Run 快照包含长 hash/schema 后撑宽手机页面 | Workbench 网格子项缺少 `min-w-0`，390px 浏览器实测溢出。已修正输入/结果卡片宽度，浏览器回归覆盖引用、转义和图解面板。不是 Rails 缺陷。 |
+| 免费模型在误导来源案例返回结构矛盾或不匹配的引用 | Liquid/Nvidia 真实响应未满足应用契约，错误已保留；正常来源案例有有效回答。没有证据表明 RubyLLM 改写了响应或 Rails 丢失状态，不能定性为 gem bug。完整案例组仍为人工验收项。 |
 
 Rails：本轮没有发现可独立复现的框架缺陷。后续记录新候选时沿用
 编号 `RAILS-001`，补上 Rails/Ruby/数据库/适配器版本和最小复现。

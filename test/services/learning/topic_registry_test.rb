@@ -11,6 +11,7 @@ class LearningTopicRegistryTest < ActiveSupport::TestCase
     project_boundary
     knowledge_ingestion
     knowledge_search
+    grounded_answer
     agent_execution
     evaluation_workflow
   ].freeze

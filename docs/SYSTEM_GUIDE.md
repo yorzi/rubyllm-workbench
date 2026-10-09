@@ -36,7 +36,8 @@ application can make every AI call durable, explainable and recoverable.
 - Not an agent platform. Agents exist to demonstrate durable, approvable,
   resumable execution, not to compete with agent frameworks.
 - Not a complete RAG system: Knowledge covers local text and file sources,
-  provider embeddings, explainable retrieval and optional rerank. Provider file
+  provider embeddings, explainable retrieval, optional rerank and bounded
+  lexical source answers. Provider file
   references and page-level provenance are not implemented.
 - It never runs Ruby, shell or code uploaded through the browser.
 - Local tests passing, a successful live dogfood run, or a commit existing do
@@ -231,8 +232,10 @@ runner.
 - **Run inspector**: a stable view of one execution, reachable from global Run
   history, with export downloads.
 - **Knowledge workspace**: collections, sources, embeddings and search evidence.
-  It never creates Runs and calls a provider only on an explicit embed or a
-  semantic/hybrid query.
+  Retrieval calls providers for explicit embeddings, semantic/hybrid queries
+  or rerank. **Answer with sources** creates a separate `grounded_answer` Run;
+  its first version uses lexical evidence and one structured-output request.
+  See [GROUNDED_ANSWERS.md](GROUNDED_ANSWERS.md) for snapshots and failure limits.
 - **Runtime panel**: web liveness shown separately from background-job
   readiness (scheduler, dispatcher and maintenance worker heartbeats).
 

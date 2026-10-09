@@ -357,7 +357,13 @@ has been observed returning parallel calls.
 
 ## 4.2 Runtime: Knowledge retrieval
 
-Knowledge is a separate product flow, not a Chat Run.
+Knowledge retrieval keeps source/chunk evidence separately. The explicit
+**Answer with sources** action creates a `grounded_answer` Run with a fresh
+Chat and frozen lexical evidence. Its job uses native RubyLLM structured
+output, then validates exact-quote citations under the Run completion lock.
+Empty retrieval refuses without a model request. Corpus drift, cancellation
+and interrupted workers leave inspectable outcomes without automatic replay.
+The [case-study diagram and walkthrough](GROUNDED_ANSWERS.md) explain that path.
 
 ```mermaid
 flowchart TD

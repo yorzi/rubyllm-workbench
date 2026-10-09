@@ -20,6 +20,8 @@ class KnowledgeCollectionsController < ApplicationController
 
   def show
     @items = @collection.knowledge_items.order(created_at: :desc, id: :desc)
+    @answer_models = demo_mode? ? [] : model_catalog.entries(capability: "structured_output", configured: "true").select(&:interactive?)
+    @answer_models.sort_by! { |entry| [ entry.id.to_s.end_with?(":free") ? 0 : 1, entry.provider, entry.id ] }
     @query = params[:q].to_s.strip.truncate(500)
     @mode = !demo_mode? && Ai::Knowledge::Search::MODES.include?(params[:mode].to_s) ? params[:mode].to_s : "lexical"
     @embedding_models = Ai::Knowledge::EmbeddingCatalog.configured_entries

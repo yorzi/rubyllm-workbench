@@ -6,7 +6,21 @@ before the public-release cleanup are preserved in git history (see this file
 at commit `8bd33c8`), together with the milestone gate records formerly in
 `TODO.md` (commit `e9c9faf`).
 
-## Unreleased: shared AI policy and free TTS acceptance (2026-10-09)
+## Unreleased: Rails source answers (2026-10-09)
+
+- Add an original MIT Mini Notes source corpus, versioned cases and an
+  idempotent import command that stops on edited source/chunk ownership.
+- Add `grounded_answer` Runs: bounded lexical snapshots, one native RubyLLM
+  structured request, exact-quote citation validation, source/model/history
+  drift rejection and local refusal without a provider Attempt.
+- Add queue rejection handling, duplicate-delivery guards, cancellation
+  fencing and no-replay interrupted-worker recovery. Fix a cancellation race
+  reproduced during review before accepting the new flow.
+- Add source inspection and citation links, focused free-provider acceptance
+  and desktop/mobile browser coverage. Integration evidence and manual
+  quality boundaries are in `CAPABILITIES.md`.
+
+## Earlier unreleased: shared AI policy and free TTS acceptance (2026-10-09)
 
 - Adopt the contributor's AI usage guide at `docs/AI_USAGE_GUIDE.md`, with
   shared `AGENTS.md`/`CLAUDE.md` instructions. Correct RSpec assumptions to the

@@ -34,6 +34,7 @@ class ProviderDogfoodTest < ActionDispatch::IntegrationTest
     "structured_output" => [ :structured ],
     "tool_approval_continuation" => [ :tools ],
     "knowledge_embedding_and_rerank" => [ :embedding, :rerank ],
+    "grounded_answer_case_study" => [ :structured ],
     "evaluation_comparison_with_judge" => [ :structured, :structured_alt ],
     "saved_agent_with_local_tool" => [ :agent ],
     "agent_with_hosted_web_search" => [ :agent ],
@@ -159,6 +160,43 @@ class ProviderDogfoodTest < ActionDispatch::IntegrationTest
     )
     assert reranked.rerank_applied, reranked.rerank_note.to_s
     note "rerank_results=#{reranked.results.size} rerank_applied=true"
+  end
+
+  test "grounded_answer_case_study" do
+    require_models!(:structured)
+    corpus = Workbench::KnowledgeCaseStudy.import!
+    reference = "#{PROVIDER}|#{MODELS[:structured]}"
+    %w[title-validation source-instructions missing-billing].each do |key|
+      example = corpus.cases.find { |entry| entry.fetch("key") == key }
+      perform_enqueued_jobs do
+        post project_knowledge_collection_answers_path(corpus.project, corpus.collection), params: {
+          knowledge_answer: { question: example.fetch("question"), model_reference: reference }
+        }
+      end
+      assert_response :see_other
+      run = track_run(corpus.project.runs.recent.first)
+      assert run&.succeeded?, run_failure(run)
+      assert_equal "valid", run.result_summary.fetch("citation_validation")
+      assert_empty run.tool_invocations
+      snapshot = run.input_snapshot.fetch("grounded_answer")
+      note "case=#{key} status=#{run.result_summary['answer_status']} evidence_chunks=#{snapshot.fetch('evidence').size} model_request=#{run.result_summary['model_request']}"
+      if key == "missing-billing"
+        assert_equal "insufficient_evidence", run.result_summary.fetch("answer_status")
+        assert_equal false, run.result_summary.fetch("model_request")
+        assert_empty run.attempts
+      else
+        # A valid model refusal is an integration outcome. expected_status and
+        # expected_facts in the corpus are human-review hints, not quality gates.
+        assert_includes %w[answered insufficient_evidence], run.result_summary.fetch("answer_status")
+        assert_equal true, run.result_summary.fetch("model_request")
+        assert snapshot.fetch("evidence").all? { |entry| entry.fetch("trust") == "untrusted" }
+        assert snapshot.fetch("evidence").any? { |entry| entry.dig("corpus_release", "id") == "mini-notes-rails" }
+      end
+      get run_path(run)
+      assert_response :success
+      assert_select "#grounded-answer-heading", text: "Answer with sources"
+    end
+    note "fixed_corpus_revision=1 citations_checked_when_answered=true expected_facts=manual"
   end
 
   test "evaluation_comparison_with_judge" do

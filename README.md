@@ -28,6 +28,9 @@ maintainers.
   execution lease and finish with a cited report.
 - **Search your own Knowledge**: text and file sources, provider embeddings,
   lexical/semantic/hybrid retrieval with visible evidence, optional rerank.
+- **Answer with sources**: a bounded lexical workflow with frozen evidence,
+  checked quotes and local refusal when no chunks match. Try the original MIT
+  [Rails source case study](docs/GROUNDED_ANSWERS.md).
 - **Evaluate models** on revisioned datasets: per-case Runs, outcome metrics,
   human reviews and an optional rubric judge.
 - **Generate media** (experimental): speech, images, video and transcription.
@@ -37,7 +40,8 @@ Each feature's admission rules and evidence, local and live, are in the
 [capability matrix](docs/CAPABILITIES.md). The historical RubyLLM 2.0 live run passed chat,
 structured output, tools, an Agent with web search, embeddings, an evaluation,
 speech, transcription and image generation against OpenRouter. The current
-RubyLLM 2.1 upgrade has separate local evidence; live revalidation is pending.
+RubyLLM 2.1 flows have separate local and free-provider evidence, with partial
+and deferred acceptance recorded in that matrix.
 
 ## Explore the engineering
 

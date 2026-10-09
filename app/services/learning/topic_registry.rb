@@ -375,9 +375,45 @@ module Learning
               "Search evidence is not an LLM answer, citation guarantee, production deployment result, or business outcome."
             )
           ),
+          grounded_answer_topic,
           agent_execution_topic,
           evaluation_workflow_topic
         ].freeze
+      end
+
+      def grounded_answer_topic
+        Topic.new(
+          key: "grounded_answer",
+          title: "How source answers work",
+          kicker: "Lexical evidence → frozen Run → checked quotes",
+          summary: "Source answers make one native RubyLLM structured request from bounded lexical evidence. Rails keeps the request snapshot and execution state; exact quotes establish provenance, while people assess whether claims are correct.",
+          steps: list(
+            step("1. Freeze local evidence", "Retrieve up to 8 source chunks and capture their text, IDs, checksums and offsets. Source instructions remain untrusted data."),
+            step("2. Claim once and check drift", "The worker claims the queued Run, rejects changed corpus/model/history and starts its Attempt under the Run lock."),
+            step("3. Ask or refuse", "No evidence produces a local refusal with no model Attempt. Otherwise RubyLLM receives the frozen question and sources with a strict JSON schema."),
+            step("4. Check citations", "Every claim needs known evidence IDs and exact source quotes. A model refusal is distinct from a provider failure."),
+            step("5. Fence completion", "Cancelled or interrupted Runs cannot save a late successful result. Recovery fails visibly and never replays a provider request automatically.")
+          ),
+          code_references: list(
+            reference("app/services/ai/knowledge/evidence_snapshot.rb", "Frozen retrieval", "Captures bounded source and chunk provenance.", 14, 50, "def self.capture"),
+            reference("app/services/ai/knowledge/grounded_answer.rb", "Atomic enqueue", "Creates a dedicated Chat, Run and optional provider Attempt.", 17, 40, "collection.transaction"),
+            reference("app/services/ai/knowledge/grounded_answer_executor.rb", "Claim and request", "Checks drift, state and target before native structured output.", 15, 57, "claim_queued_execution!"),
+            reference("app/services/ai/knowledge/grounded_response.rb", "Quote validation", "Rejects unknown references and invented quotes.", 48, 79, "source.fetch(\"text\").include?(quote)")
+          ),
+          external_references: list(
+            external("RubyLLM structured output", "https://rubyllm.com/structured-output/", "Native schema request API"),
+            external("Rails Active Job", "https://guides.rubyonrails.org/active_job_basics.html", "Queue and transaction boundaries")
+          ),
+          evidence: list(
+            note("Run snapshot", "The frozen corpus revision, bounded text, model target and schema."),
+            note("Attempt and Artifact", "Provider usage when available, validated JSON and direct links to original quotes.")
+          ),
+          boundaries: list(
+            "Exact quotes prove source provenance, not semantic entailment or answer quality.",
+            "This workflow uses lexical retrieval and one model request. Native Agent/Evaluation integration and semantic/reranked answers remain planned.",
+            "A provider request accepted before cancellation may finish or incur cost; local fencing cannot revoke it."
+          )
+        )
       end
 
       def agent_execution_topic

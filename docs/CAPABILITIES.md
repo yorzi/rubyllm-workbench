@@ -33,6 +33,7 @@ region will accept the request.
 | Saved Agents | As for local tools; provider tools are outside the local-tool gate. | Durable outbox, execution lease and generation fencing, crash/replay drill, cancellation race, empty-answer guard, research report. | Passed on 2.1, 2026-10-09: two-step Agent (`project_snapshot`, final answer/report) on `liquid/lfm-2.5-2.6b:free`. Hosted search remains historical 2.0 evidence. |
 | Knowledge embeddings | RubyLLM embedding-model registry plus provider configuration. | Chunking, checksums, stale-vector skipping, vector adapters, lexical/semantic/hybrid retrieval, explicit degradation, selected-provider preservation. | Passed on 2.1, 2026-10-09: `liquid/lfm-2.5-embedding-350m:free`, 3 chunks, 1,024 dimensions, semantic and hybrid requests. No retrieval-quality claim. |
 | Knowledge rerank | Registry model whose output modality includes `rerank`, plus configuration. | Pre/post rank kept alongside unchanged retrieval evidence. | Passed on 2.1, 2026-10-09: `nvidia/llama-nemotron-rerank-vl-1b-v2:free`, applied ranking with 3 results. No ranking-quality claim. |
+| Grounded source answers | Configured interactive structured-output model; lexical-v1 only, at most 8 × 800-character chunks. | Original MIT corpus/import, frozen hashes/offsets/release references, real RubyLLM HTTP contract, exact quotes, local refusal, queue rejection, drift/cancellation/recovery, desktop/390px inspector and learning map. | Partial on 2.1, 2026-10-09: normal-source answers passed on Liquid and Nvidia free routes; the complete case group remains manual because the untrusted-source response violated structure/citation rules. No semantic-quality claim. |
 | Document OCR | Model declares `ocr` and its provider is configured. | Local extraction and provenance Artifacts. | Not tested: no OCR model is available through OpenRouter's registry entries. |
 | Evaluation comparison | 2-5 configured models declaring `structured_output`. | Frozen revision and Experiment snapshot, per-case Runs, outcome metrics, queue rejection, recovery. | Partial on 2.1, 2026-10-09: Liquid and Nvidia each returned valid case output in separate invocations; no complete two-model/one-case invocation passed. Dots schema failure, Apodex provider error and Liquid rate limiting remain visible. Historical 2.0 comparison is below. |
 | Rubric judge (experimental) | Optional; runs only after a successful case output. | Prompt isolation (expected output, tags and attachments are never sent), separate Run/Attempt/cost, recovery, late-response fencing. | Partial on 2.1, 2026-10-09: Liquid judgments completed for successful Liquid/Nvidia outputs; the complete intended pair is still pending. Uncalibrated; never changes exact-match results. |
@@ -47,6 +48,39 @@ region will accept the request.
 | Upstream gap reports (experimental) | Manual classification of a Run. | Append-only candidates, redacted Markdown issue drafts. | Not applicable. Drafts need a manual privacy review. |
 
 ## Live dogfood record
+
+### 2026-10-09 — Rails source answers, bounded free attempts
+
+Four focused invocations selected `liquid/lfm-2.5-2.6b:free` (twice) and
+`nvidia/nemotron-3-super-120b-a12b:free` (twice), rechecking public catalog and
+registry prices, disabling retries and model fallback. They admitted **7 POST
+requests** in total (2, 2, 1, 2). Known Run ledger cost was $0; that subtotal
+does not establish an account invoice or independently identify the upstream.
+
+- Normal title-validation questions produced stored answers with valid
+  snapshot IDs and exact quotes on both selected routes. One Nvidia response
+  was a consistent refusal, also stored correctly. Initially the harness
+  demanded an answer; it now accepts valid refusals in accordance with the
+  owner's integration-only acceptance scope. Expected facts remain manual.
+- The misleading `token_dump` source did not produce a complete accepted case
+  group: Liquid returned inconsistent output and Nvidia returned an invalid
+  citation. The first Liquid result also exposed an unnecessary empty-reason
+  constraint; answered reasons now remain raw metadata, while every displayed
+  claim still needs a valid exact quote. Refusal consistency and quote checks
+  remain strict. No invalid response was relabelled as a valid Artifact.
+- No tools, hosted search or paid fallback were admitted. These responses do
+  not prove comprehensive prompt-injection resistance or a gem defect.
+- Later cases in the failed live scenario did not execute. The zero-request
+  empty-evidence path passed through the real controller/job locally and in
+  Selenium. The complete live group remains an explicit manual rerun; stop
+  spending requests on repeated low-quality output for this iteration.
+- Ignored reports: `tmp/dogfood/20261009T060429Z.jsonl`,
+  `20261009T060936Z.jsonl`, `20261009T061100Z.jsonl`, and
+  `20261009T061347Z.jsonl`. Test database records rolled back.
+
+The latest local schema/state/quote contract passed offline tests. Live output
+quality remains variable, and partial invocations are not combined into a
+complete case-group result.
 
 ### 2026-10-09 — free TTS, independent REST and RubyLLM paths
 
@@ -189,6 +223,22 @@ verification of the released fixes.
 `test/services/ai/ruby_llm_internals_test.rb` fails when one moves.
 
 ## Verification snapshot
+
+2026-10-09 Rails source answer slice, pinned versions, macOS arm64:
+
+| Check | Result |
+| --- | --- |
+| Rails suite | 466 runs, 4,026 assertions, 0 failures/errors, 12 default opt-in live skips |
+| Selenium system suite | 5 runs, 70 assertions, 0 failures/errors; local refusal, escaped output, citation navigation, learning map, desktop/390px layout and existing demo tests |
+| Source import | Development database import and repeated import: 5 sources created, then 5 reused; identical source/chunk receipts and 0 provider requests |
+| Style / autoload / assets | 323 Ruby files clean; Zeitwerk passed; forced Vite test build and Tailwind build passed; source-anchored learning references validated |
+| Static security / advisory check | Brakeman 8.1.0 local scan: 0 warnings/errors; installed-gem audit against cached advisory data: no vulnerabilities |
+| Live scope | Normal answers accepted; whole untrusted-source group remains partial/manual as recorded above; 7 verified-free POSTs, no paid request |
+| External scope | Hosted CI, Linux/container runtime, release/deployment and local TTS adapter remain unverified; no task-owned service remains |
+
+The cancellation race and mobile grid overflow found during implementation
+were Workbench defects and were corrected. No Rails/RubyLLM gem defect was
+confirmed. The tests establish execution and provenance, not answer quality.
 
 2026-10-09 shared AI policy and free TTS slice, pinned versions, macOS arm64:
 

@@ -1,0 +1,43 @@
+{
+  "id": "mini-notes-rails",
+  "revision": 1,
+  "project_slug": "rails-source-case-study",
+  "project_name": "Rails source case study",
+  "collection_name": "Mini Notes Rails · v1",
+  "license": "MIT",
+  "origin": "Original manually constructed RubyLLM Workbench example by Andy Wang, 2026; no third-party application source copied.",
+  "sources": [
+    {
+      "key": "note-model",
+      "path": "sources/app/models/note.rb.txt",
+      "title": "Note model validation",
+      "sha256": "0a9e441a349a0693ed478527891ef57ab00cee135e51d6f5aa233250b3e26487"
+    },
+    {
+      "key": "notes-controller",
+      "path": "sources/app/controllers/notes_controller.rb.txt",
+      "title": "Note controller ownership and enqueue",
+      "sha256": "f94b690a24554ff124eb9af37da5669db7b1e2cac54d8113fd1a6a7583d2d64e"
+    },
+    {
+      "key": "archive-job",
+      "path": "sources/app/jobs/archive_note_job.rb.txt",
+      "title": "Archive background job",
+      "sha256": "d862aa166488ca12a17dde01c3f0c5895249efac4369dee66a2edc35cfddf371"
+    },
+    {
+      "key": "note-routes",
+      "path": "sources/config/routes.rb.txt",
+      "title": "Note routes",
+      "sha256": "eb7c81280e8179911700689a7dcaf10b04e3e7bc02f617093a2d772041e4335d"
+    },
+    {
+      "key": "untrusted-import",
+      "path": "sources/docs/untrusted_import.txt",
+      "title": "Misleading source instructions (untrusted data)",
+      "sha256": "cc4a129f09bf538af37c54fe58a6dcbe9b9062a41187aab8493b6400552e5ed9"
+    }
+  ],
+  "cases_path": "cases.json",
+  "cases_sha256": "d76123cd4741d72eff6486b87d64908a1194c1e53f13c7749d11d886de9b3321"
+}

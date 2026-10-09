@@ -27,6 +27,8 @@ Topics live in a version-controlled static registry,
   Run snapshots.
 - `knowledge_ingestion`: extraction, provenance and deterministic chunks.
 - `knowledge_search`: retrieval over ready sources and optional rerank.
+- `grounded_answer`: bounded lexical snapshots, native structured output,
+  exact-quote citations, local refusal and asynchronous completion fencing.
 - `agent_execution`: transactional launch/outbox, worker lease, continuable
   steps, approval pauses and external-outcome limits.
 - `evaluation_workflow`: frozen comparisons, transport/schema/exact-match
