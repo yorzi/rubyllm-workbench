@@ -54,6 +54,7 @@ bundle exec ruby script/diagnostics/ruby_llm_openrouter_thinking_disable.rb
 | embedding 检查/查询忽略选定 provider，部分重建混入旧 provider 向量 | Workbench catalog、查询、覆盖数和候选筛选问题。已修复。不能作为 RubyLLM 缺陷提交。 |
 | SQLite native 派生索引只比较数量，未感知向量替换与候选排除 | Workbench adapter 问题。已改为从候选快照重建，在同一事务内扫描。测试使用真实 SQLite 索引维护和 Ruby 扫描替身，实际 native binary 验收仍未完成。 |
 | Dots schema-invalid、Apodex provider error、Liquid rate limit | 本次只能确认 provider 响应/可用性限制；不能从失败日志推断 gem 有 bug。完整两模型比较仍待复验。 |
+| TTS 验收报告把缺失的 token 数显示为 0 | Workbench 报告使用 `.to_i` 聚合缺失值。已修正为 unknown，并覆盖缺失、部分缺失和明确 0 的离线回归。不是 RubyLLM 用量 bug。 |
 
 Rails：本轮没有发现可独立复现的框架缺陷。后续记录新候选时沿用
 编号 `RAILS-001`，补上 Rails/Ruby/数据库/适配器版本和最小复现。

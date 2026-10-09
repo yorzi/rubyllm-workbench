@@ -6,6 +6,21 @@ before the public-release cleanup are preserved in git history (see this file
 at commit `8bd33c8`), together with the milestone gate records formerly in
 `TODO.md` (commit `e9c9faf`).
 
+## Unreleased: shared AI policy and free TTS acceptance (2026-10-09)
+
+- Adopt the contributor's AI usage guide at `docs/AI_USAGE_GUIDE.md`, with
+  shared `AGENTS.md`/`CLAUDE.md` instructions. Correct RSpec assumptions to the
+  existing Rails Minitest suite, unsafe inline-key examples and proposed
+  environment variables that do not configure the app.
+- Add WebMock to the test bundle. Ordinary tests block external Ruby HTTP;
+  explicit serial live profiles allow the official OpenRouter HTTPS host only.
+- Add separate free TTS raw REST and native RubyLLM/Rails probes, with speech
+  catalog/short-input guards, zero retries and no paid fallback. Retain pending
+  local TTS acceptance separately. Record actual evidence in `CAPABILITIES.md`.
+- Keep missing tokens unknown and add safe profile/timing/HTTP metadata to
+  live reports. Integration routing also forbids client fallback without
+  imposing free-model prices on explicitly authorized paid acceptance.
+
 ## Unreleased: RubyLLM 2.1 and showcase review (2026-10-08)
 
 ### Changed

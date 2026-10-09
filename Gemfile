@@ -67,6 +67,8 @@ group :development do
 end
 
 group :test do
+  # Deny external HTTP by default; deliberate live tests allow OpenRouter only.
+  gem "webmock", "~> 3.26", require: false
   # Use system testing [https://guides.rubyonrails.org/testing.html#system-testing]
   gem "capybara"
   gem "selenium-webdriver"

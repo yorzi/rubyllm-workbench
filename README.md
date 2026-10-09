@@ -116,6 +116,8 @@ that never silently replays provider work. See
 - [Architecture](docs/ARCHITECTURE.md): diagrams of records, jobs and states
 - [Operations](docs/OPERATIONS.md): setup, verification, live dogfood,
   troubleshooting
+- [AI configuration and test policy](docs/AI_USAGE_GUIDE.md) (Chinese working guide)
+  and shared contributor instructions in [AGENTS.md](AGENTS.md)
 - [Implementation map](IMPLEMENTATION_MAP.md): where the code lives
 - [Roadmap](ROADMAP.md) and [changelog](docs/CHANGELOG.md)
 - [Release checklist](docs/RELEASING.md) and [upgrade review](docs/UPGRADE_REVIEW_2026-10-08.md)

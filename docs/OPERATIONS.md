@@ -55,6 +55,10 @@ works without keys) and an evaluation dataset. No provider is called.
 
 ## Provider configuration
 
+Read [AI_USAGE_GUIDE.md](AI_USAGE_GUIDE.md) for the shared Codex/Claude Code
+configuration and testing policy. It uses the existing Rails Minitest suite;
+model and budget variables marked as proposals do not configure the app.
+
 Workbench reads provider settings only through RubyLLM's configuration, from
 environment variables first and then encrypted Rails credentials:
 
@@ -89,6 +93,11 @@ or commits, and never print a decrypted credentials file.
 
 Run the cheap, deterministic checks first:
 
+WebMock blocks external Ruby HTTP before test boot; loopback is allowed for
+local test services. Ordinary tests stay offline even when a provider key is
+configured. Only the explicit live harness opens `https://openrouter.ai:443`.
+`RUN_LIVE_AI=1` alone does not open the ordinary test process.
+
 ```sh
 bin/vite build --mode=test              # build once before parallel tests
 bin/rails test                          # PARALLEL_WORKERS=1 for a single process
@@ -119,7 +128,7 @@ The live suite in `test/live/provider_dogfood_test.rb` is opt-in and skipped by
 default. It needs a configured provider (OpenRouter by default):
 
 ```sh
-bin/dogfood           # six free-model flow checks; manual items are reported separately
+bin/dogfood           # seven free-model flow checks; manual items are reported separately
 # Only with deliberate fee-bearing acceptance and explicit model selection:
 bin/dogfood --paid
 ```
@@ -136,19 +145,46 @@ are disabled, requests time out after 60 seconds, outputs are capped at 2,048
 tokens, and the process stops allowing calls after 24 POST requests. These
 test-only limits do not alter the interactive workbench.
 
-The six automated checks cover streaming, structured output, tool approval
+The seven automated checks cover streaming, structured output, tool approval
 and continuation, embeddings/semantic/hybrid/rerank, two-model comparison
-with all intended judgments, and a saved Agent using a local tool. Assertions
+with all intended judgments, a saved Agent using a local tool, and free TTS. Assertions
 check integration and durable records, without rating answer/retrieval quality.
 Missing models and fee-bearing capabilities stay visible as manual skips.
-Both `LIVE_DOGFOOD` and `LIVE_DOGFOOD_PAID` require the exact value `1`.
+The harness also requires `RUN_LIVE_AI=1` and `AI_TEST_PROFILE=free` (or
+`integration` with separate paid authorization). `bin/dogfood` sets them in
+its subprocess. All enable flags require the exact value `1`. Integration
+also rejects client fallback lists and configures no provider fallback; it
+does not impose a zero-price ceiling on authorized paid calls.
 
-Local TTS is pending the owner's API details; no cloud speech call runs as a
-substitute. Hosted web search, transcription and image generation remain
+Free TTS uses the explicit `fish-audio/s2.1-pro-free:free` model and speech
+catalog, checks zero prices, limits text to 120 characters and permits MP3
+without provider extras or a custom context. Speech does not inherit chat's
+routing/price parameters; the catalog check is a client gate, not a provider
+invoice or guarantee against later pricing changes. Voice identifiers are
+model-specific; the accepted Fish request omitted voice and used its default.
+
+```sh
+bin/dogfood --include test_openrouter_free_speech
+RUN_LIVE_AI=1 AI_TEST_PROFILE=free RAILS_ENV=test \
+  bundle exec ruby script/diagnostics/openrouter_free_tts.rb
+```
+
+Each command uses one short synthesis POST. The raw probe independently
+checks HTTP MIME and MP3 bytes and saves an ignored local audio/report file;
+the RubyLLM scenario verifies the Speech object, Run, attachment, hash and
+playback controls. Neither evaluates voice quality. Missing usage/cost remains
+unknown. RubyLLM's MIME is format-derived, distinct from raw HTTP MIME.
+
+Local TTS remains pending the owner's API details and adapter; the OpenRouter
+acceptance is independent and does not certify that future local service.
+Hosted web search, transcription and image generation remain
 manual unless deliberately enabled. Transcription also requires a short local
 `DOGFOOD_TRANSCRIPTION_FILE`. The harness does not start a TTS service.
 
-Runs use the test database and roll back. Cost/tokens in the report cover Run
+Reports include profile, capabilities, duration and HTTP status/error metadata;
+request IDs not exposed by RubyLLM remain unknown. They never retain request
+headers, bodies or raw responses. Runs use the test database and roll back.
+Cost/tokens in the report cover Run
 Attempts; embedding/query/rerank usage is still unowned and is labelled
 unknown, never inferred as zero or summed from per-chunk copies of batch
 usage. A zero known subtotal is not a complete invoice. Free model availability

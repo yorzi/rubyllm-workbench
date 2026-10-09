@@ -1,6 +1,7 @@
 require "test_helper"
 require_relative "../support/dogfood_report"
 require_relative "../support/live_acceptance_policy"
+require_relative "../../script/diagnostics/support/openrouter_speech_probe"
 
 # Opt-in live provider acceptance. Every scenario drives the same controllers,
 # jobs and services as the application, against a real provider, and asserts
@@ -24,6 +25,7 @@ class ProviderDogfoodTest < ActionDispatch::IntegrationTest
     agent: ENV.fetch("DOGFOOD_AGENT_MODEL", ENV.fetch("DOGFOOD_CHAT_MODEL", "liquid/lfm-2.5-2.6b:free")),
     embedding: ENV.fetch("DOGFOOD_EMBEDDING_MODEL", "liquid/lfm-2.5-embedding-350m:free"),
     rerank: ENV.fetch("DOGFOOD_RERANK_MODEL", "nvidia/llama-nemotron-rerank-vl-1b-v2:free"),
+    speech: ENV.fetch("DOGFOOD_SPEECH_MODEL", OpenRouterSpeechProbe::DEFAULT_MODEL),
     transcription: ENV.fetch("DOGFOOD_TRANSCRIPTION_MODEL", "mistralai/voxtral-mini-3b-2507"),
     image: ENV.fetch("DOGFOOD_IMAGE_MODEL", "black-forest-labs/flux.2-klein-4b")
   }.freeze
@@ -35,12 +37,17 @@ class ProviderDogfoodTest < ActionDispatch::IntegrationTest
     "evaluation_comparison_with_judge" => [ :structured, :structured_alt ],
     "saved_agent_with_local_tool" => [ :agent ],
     "agent_with_hosted_web_search" => [ :agent ],
+    "openrouter_free_speech" => [ :speech ],
     "transcription" => [ :chat, :transcription ],
     "image_generation" => [ :chat, :image ]
   }.freeze
 
   setup do
     skip "set LIVE_DOGFOOD=1 to run live provider dogfood" unless ENV["LIVE_DOGFOOD"] == "1"
+    expected_profile = ENV["LIVE_DOGFOOD_PAID"] == "1" ? "integration" : "free"
+    unless ENV["RUN_LIVE_AI"] == "1" && ENV["AI_TEST_PROFILE"] == expected_profile
+      manual_skip "Use bin/dogfood or explicitly set RUN_LIVE_AI=1 and AI_TEST_PROFILE=#{expected_profile}."
+    end
     request_models!(*SCENARIO_MODELS.fetch(name.delete_prefix("test_"), []))
     @live_policy = LiveAcceptancePolicy.new(provider: PROVIDER, models: MODELS)
     @live_policy.configure!
@@ -48,6 +55,10 @@ class ProviderDogfoodTest < ActionDispatch::IntegrationTest
     @project = Project.create!(name: "Dogfood #{name.delete_prefix('test_').tr('_', ' ')}", description: "Live provider dogfood.")
   rescue LiveAcceptancePolicy::Unavailable => error
     manual_skip(error.message)
+  end
+
+  teardown do
+    LiveAcceptancePolicy.active = nil if LiveAcceptancePolicy.active == @live_policy
   end
 
   test "chat_streaming" do
@@ -204,8 +215,54 @@ class ProviderDogfoodTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "openrouter_free_speech" do
+    require_models!(:speech)
+    # A saved assistant fixture avoids an unrelated chat inference request.
+    chat = create_chat(MODELS[:chat])
+    message = chat.messages.create!(role: "assistant", content: OpenRouterSpeechProbe::TEXT)
+    observed_speech = nil
+    statuses = []
+    speech_listener = ->(*args) { observed_speech = args.last[:result] }
+    request_listener = lambda do |*args|
+      payload = args.last
+      statuses << payload[:status] if payload[:method].to_s == "post"
+    end
+
+    ActiveSupport::Notifications.subscribed(speech_listener, "speech.ruby_llm") do
+      ActiveSupport::Notifications.subscribed(request_listener, "request.ruby_llm") do
+        perform_enqueued_jobs do
+          post project_chat_message_speech_run_path(@project, chat, message), params: {
+            speech_run: { model_reference: "#{PROVIDER}|#{MODELS[:speech]}", voice: ENV["DOGFOOD_SPEECH_VOICE"] }
+          }
+        end
+      end
+    end
+
+    assert_response :see_other
+    run = track_run(chat.runs.where(operation: "speech").order(:id).last)
+    assert run&.succeeded?, run_failure(run)
+    assert_instance_of RubyLLM::Speech, observed_speech
+    assert_equal MODELS[:speech], observed_speech.model
+    assert_equal "mp3", observed_speech.format
+    assert_equal [ 200 ], statuses, "expected exactly one successful speech POST"
+    artifact = run.artifacts.find_by!(kind: "audio")
+    audio = artifact.audio_file
+    assert audio.attached?
+    data = audio.download.b
+    assert OpenRouterSpeechProbe.validate_mp3!(data:, mime_type: audio.content_type)
+    assert_equal observed_speech.to_blob, data
+    assert_equal Digest::SHA256.hexdigest(data), artifact.metadata_json.fetch("sha256")
+
+    get run_path(run)
+    assert_response :success
+    assert_select "audio[controls]"
+    assert_select "a", text: "Download"
+    note "ruby_llm_speech_object=true http_status=200 mp3_signature=true attachment=#{data.bytesize}B playback_controls=true"
+    note "MIME here is RubyLLM-derived; raw REST probe records the independent HTTP MIME. Audio quality/listening remains manual."
+  end
+
   test "local_speech" do
-    manual_skip "Local TTS acceptance is pending the local provider adapter and API configuration. Cloud TTS is excluded."
+    manual_skip "Local TTS acceptance is pending the local provider adapter and API configuration."
   end
 
   test "transcription" do

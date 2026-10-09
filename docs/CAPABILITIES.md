@@ -39,7 +39,7 @@ region will accept the request.
 | Human reviews | Completed case outputs; ratings from a fixed allowlist. | Append-only reviews and per-criterion ratings. | Not applicable (no provider). |
 | Case attachments | Up to 5 files per case, 50 per revision, 10 MB each, 50 MB per revision. | Format prechecks (PDF header, JPEG/PNG signatures, JSON, CSV, UTF-8 text), revision ownership, purge on Project deletion. Excluded from every provider prompt. | Not applicable. The checks do not fully decode files or scan for malware; there is no lifetime storage cap. |
 | Provider Batch evaluation | Model declares `structured_output` and `batch`, and the provider reports `batches?`; one provider per execution. | Submission, refresh, ordered reconciliation, malformed-index rejection. | Not tested. No live provider Batch compatibility is claimed. |
-| Speech generation (experimental) | Model declares `speech_generation`; optional provider voice identifier. | Audio Artifacts, storage failure, recovery, cancellation. | Owner will supply local TTS/API details; adapter and live acceptance pending. Historical 2.0 cloud TTS is not local TTS evidence. No cloud substitute called on 2026-10-09. |
+| Speech generation (experimental) | Model declares `speech_generation`; optional provider voice identifier. | Audio Artifacts, storage failure, recovery, cancellation. | Passed on 2.1, 2026-10-09: free Fish raw REST and RubyLLM/Rails paths independently accepted, one POST each. MP3/attachment/playback controls verified; quality/listening remains manual. Local TTS adapter and acceptance still pending owner API details. |
 | Audio transcription (experimental) | Model declares `transcription`. | Source-audio and transcript Artifacts, blank-transcript handling. | Manual on 2.1; historical 2.0 success used `mistralai/voxtral-mini-3b-2507`. |
 | Image generation (experimental) | Model declares `image_generation`. | Image Artifacts, storage failure, late-response fencing. | Manual on 2.1; historical 2.0 success used `black-forest-labs/flux.2-klein-4b`, reported $0.014. |
 | Video generation (experimental) | Model type is `video` with video output. | Submission, polling, provider job reference in the timeline. | Not tested. Workbench cannot durably restore a VideoJob or link its 2.1 job-ledger cost to the Attempt yet. |
@@ -47,6 +47,36 @@ region will accept the request.
 | Upstream gap reports (experimental) | Manual classification of a Run. | Append-only candidates, redacted Markdown issue drafts. | Not applicable. Drafts need a manual privacy review. |
 
 ## Live dogfood record
+
+### 2026-10-09 — free TTS, independent REST and RubyLLM paths
+
+Requested model: `fish-audio/s2.1-pro-free:free`; input: a fixed 22-character
+synthetic phrase. Both commands rechecked the current speech catalog's zero
+prices, disabled retries and used no paid fallback. No voice was supplied;
+Fish's provider default accepted the request. This does not establish a
+portable default voice for other models.
+
+- Raw REST: HTTP 200, `audio/mpeg`, MP3 signature, 27,166 bytes. `ffprobe`
+  decoded it as MP3, 44,100 Hz mono, 1.697875 seconds. The report records the
+  generation ID and SHA256; the adapter was not involved.
+- RubyLLM/Rails: one successful POST, `RubyLLM::Speech`, successful Speech
+  Run, attached audio Artifact (31,346 bytes), matching SHA256 and inspector
+  playback/download controls. 16 assertions passed; test records rolled back.
+  This is rendered-control evidence, not a human listening or browser autoplay
+  test. The raw and adapter audio bytes need not be identical.
+- Total live synthesis: **2 POST requests**, both using the verified free ID.
+  The sandbox-only attempt failed DNS before any synthesis POST and is kept
+  separate from provider compatibility evidence.
+- Neither speech response supplied billed usage/cost or independently exposed
+  the actual upstream/model. Cost and tokens remain **unknown**; zero catalog
+  prices and the displayed known-cost subtotal do not establish an invoice.
+  The report correction now preserves missing tokens as unknown rather than 0.
+- Ignored local reports: `tmp/dogfood/20261009T053308Z-raw-tts.json` and
+  `tmp/dogfood/20261009T053410Z.jsonl`; the raw MP3 stays beside its report.
+
+This accepts RubyLLM → OpenRouter → the selected Fish route on this date.
+It does not certify the planned local TTS service, native Fish provider,
+voice quality or future capacity. No task-owned service was started.
 
 ### 2026-10-09 — RubyLLM 2.1, free integration acceptance
 
@@ -159,6 +189,23 @@ verification of the released fixes.
 `test/services/ai/ruby_llm_internals_test.rb` fails when one moves.
 
 ## Verification snapshot
+
+2026-10-09 shared AI policy and free TTS slice, pinned versions, macOS arm64:
+
+| Check | Result |
+| --- | --- |
+| Rails suite | 425 runs, 3,668 assertions, 0 failures/errors, 11 default opt-in live skips |
+| Free TTS | Two independent successful synthesis POSTs (raw REST and RubyLLM/Rails); billed tokens/cost unknown; see the dated record above |
+| Selenium system suite | 4 runs, 48 assertions, 0 failures/errors; WebMock permits the temporary loopback Rails service, which exited after testing |
+| Style / autoload | 310 Ruby files clean; Zeitwerk passed; guide's 8 Ruby snippets parse and its contributor links resolve |
+| Static security / gem advisory check | Brakeman 8.1.0 offline scan: 0 warnings/errors; installed-gem audit against the local advisory database: no vulnerabilities |
+| Latest scanner check | `bin/brakeman --ensure-latest` could not resolve its remote release metadata in the sandbox; the direct local scan passed, without establishing newest scanner eligibility |
+| External scope | No current hosted CI, Linux/container runtime or deployment verification; no paid request; no task-owned service remains |
+
+WebMock is a test-only dependency. No product UI or provider defaults changed;
+real acceptance uses explicit models. Local TTS and installation-level API key
+budget settings remain owner follow-up. These tests do not establish model or
+voice quality. No RubyLLM/Rails gem defect was confirmed in this slice.
 
 2026-10-09 free acceptance and integrity corrections, pinned versions and
 macOS arm64:

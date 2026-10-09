@@ -12,12 +12,32 @@ module DogfoodReport
     File.open(path, "a") { |file| file.puts(entry.to_json) }
   end
 
+  def self.token_total(values)
+    return if values.empty? || values.any?(&:nil?)
+    values.sum
+  end
+
+  def self.http_evidence(payload, duration_ms:)
+    error_class = payload[:exception_object]&.class&.name || Array(payload[:exception]).first
+    {
+      provider: payload[:provider], method: payload[:method].to_s,
+      http_status: payload[:status], duration_ms: duration_ms.round(2),
+      # RubyLLM 2.1 request notifications expose status, but no response headers.
+      request_id: nil, error_class: error_class
+    }
+  end
+
   module TestHelpers
     def before_setup
       @dogfood_runs = []
       @dogfood_notes = []
       @dogfood_requested_models = []
       @dogfood_untracked_cost_operations = []
+      @dogfood_started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      @dogfood_http_requests = []
+      @dogfood_subscription = ActiveSupport::Notifications.subscribe("request.ruby_llm") do |*, started, finished, _id, payload|
+        @dogfood_http_requests << DogfoodReport.http_evidence(payload, duration_ms: (finished - started) * 1_000)
+      end
       super
     end
 
@@ -33,6 +53,9 @@ module DogfoodReport
         unknown_cost_attempts = attempts.count { |attempt| attempt.cost.nil? }
         DogfoodReport.append(
           scenario: name.delete_prefix("test_"),
+          profile: ENV.fetch("AI_TEST_PROFILE", "mock"),
+          capabilities: runs.map(&:operation).uniq | @dogfood_untracked_cost_operations,
+          duration_ms: ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - @dogfood_started_at) * 1_000).round(2),
           result: dogfood_result,
           failure: skipped? ? nil : failure&.class&.name,
           skip_reason: @dogfood_skip_reason,
@@ -41,8 +64,9 @@ module DogfoodReport
           run_ids: runs.map(&:id),
           run_statuses: runs.map(&:status).tally,
           http_post_requests: @live_policy&.request_count,
-          input_tokens: attempts.empty? ? nil : attempts.sum { |attempt| attempt.input_tokens.to_i },
-          output_tokens: attempts.empty? ? nil : attempts.sum { |attempt| attempt.output_tokens.to_i },
+          http_requests: @dogfood_http_requests,
+          input_tokens: DogfoodReport.token_total(attempts.map(&:input_tokens)),
+          output_tokens: DogfoodReport.token_total(attempts.map(&:output_tokens)),
           token_coverage: "run_attempts_only",
           reported_cost: sum_known_cost(attempts.filter_map(&:reported_cost)),
           recorded_cost: sum_known_cost(attempts.filter_map(&:recorded_cost)),
@@ -57,6 +81,7 @@ module DogfoodReport
         )
       end
     ensure
+      ActiveSupport::Notifications.unsubscribe(@dogfood_subscription) if @dogfood_subscription
       super
     end
 

@@ -19,6 +19,8 @@ FileUtils.mkdir_p(File.dirname(report))
 env = {
   "LIVE_DOGFOOD" => "1",
   "LIVE_DOGFOOD_PAID" => paid ? "1" : nil,
+  "RUN_LIVE_AI" => "1",
+  "AI_TEST_PROFILE" => paid ? "integration" : "free",
   "DOGFOOD_REPORT" => report,
   "PARALLEL_WORKERS" => "1"
 }

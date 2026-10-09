@@ -52,6 +52,11 @@ the deferred capability list are in [OPERATIONS.md](docs/OPERATIONS.md#remaining
 - [x] Run bounded free acceptance on 2.1 with explicit models; preserve five
       passed flows, partial comparison and uncalled manual capabilities in
       the evidence matrix. Retain 2.0 evidence as history.
+- [x] Add shared AI contributor guidance, default HTTP isolation, safe live
+      profiles and independent free TTS raw/RubyLLM flow acceptance. Keep
+      missing costs/tokens unknown; local TTS remains a separate future adapter.
+- [ ] Confirm the installation's independent Workbench key and monthly limit
+      in OpenRouter Dashboard; repository guidance does not prove account setup.
 - [ ] Complete the full two-model/one-case comparison when free capacity
       permits it. Keep hosted search/transcription/image as owner acceptance,
       and local TTS pending API details and adapter work.

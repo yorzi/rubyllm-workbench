@@ -1,4 +1,6 @@
 ENV["RAILS_ENV"] ||= "test"
+require_relative "support/ai_network_policy"
+AiNetworkPolicy.configure!
 require_relative "../config/environment"
 require "rails/test_help"
 require_relative "support/workbench_test_helpers"
@@ -7,6 +9,7 @@ require_relative "support/fake_embedding_client"
 # An existing partial Active Record model-registry store must not make tests
 # depend on which provider/model a previous test happened to persist first.
 RubyLLM.models.load_from_json
+RubyLLM.config.max_retries = 0
 
 module ActiveSupport
   class TestCase

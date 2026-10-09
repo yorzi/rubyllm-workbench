@@ -5,6 +5,7 @@ class LiveAcceptancePolicyTest < ActiveSupport::TestCase
   FREE_MODEL = "fixture/model:free".freeze
   ZERO_PRICES = { "prompt" => "0", "completion" => "0" }.freeze
   MethodHandle = Data.define(:super_method)
+  RegistryModel = Data.define(:capabilities)
 
   class OfflineOperation
     attr_reader :calls
@@ -40,10 +41,10 @@ class LiveAcceptancePolicyTest < ActiveSupport::TestCase
     end
     ENV.delete("LIVE_DOGFOOD_PAID")
     LiveAcceptancePolicy.active = nil
-    @catalog = [ { "id" => FREE_MODEL, "pricing" => ZERO_PRICES.dup } ]
+    @catalog = [ { "id" => FREE_MODEL, "pricing" => ZERO_PRICES.dup, "architecture" => { "output_modalities" => [ "speech" ] } } ]
     @catalog_paths = []
     @registry = Object.new
-    @registry.define_singleton_method(:find) { |_id, provider:| provider }
+    @registry.define_singleton_method(:find) { |_id, provider:| RegistryModel.new(capabilities: [ "speech_generation" ]) }
   end
 
   teardown do
@@ -97,6 +98,45 @@ class LiveAcceptancePolicyTest < ActiveSupport::TestCase
     assert_raises(LiveAcceptancePolicy::GuardViolation) { policy.guard_chat!({ model: "fixture/other:free" }) }
     assert_raises(LiveAcceptancePolicy::GuardViolation) { policy.guard_chat!({}) }
     assert_nothing_raised { policy.guard_chat!({ "model" => FREE_MODEL }) }
+  end
+
+  test "speech requires both registry capability and current speech catalog output" do
+    policy = build_policy(models: { speech: FREE_MODEL })
+    check(policy, :speech)
+    assert_equal [ "/api/v1/models?output_modalities=speech" ], @catalog_paths
+
+    @catalog.first["architecture"]["output_modalities"] = [ "text" ]
+    assert_raises(LiveAcceptancePolicy::Unavailable) { check(build_policy(models: { speech: FREE_MODEL }), :speech) }
+    with_stub(@registry, :find, ->(*, **) { RegistryModel.new(capabilities: []) }) do
+      assert_raises(LiveAcceptancePolicy::Unavailable) { check(build_policy(models: { speech: FREE_MODEL }), :speech) }
+    end
+  end
+
+  test "free speech uses only a checked speech model with bounded text and no routing extras" do
+    operation = OfflineOperation.new
+    policy = build_policy(models: { speech: FREE_MODEL })
+    check(policy, :speech)
+    with_offline_operation(operation) do
+      result = policy.one_shot(:speak, "Short test.", model: FREE_MODEL, provider: :openrouter, voice: nil, format: nil)
+      assert_equal :offline_result, result
+      assert_raises(LiveAcceptancePolicy::GuardViolation) do
+        checked_policy.one_shot(:speak, "Short test.", model: FREE_MODEL, provider: :openrouter)
+      end
+      [ "", "x" * (LiveAcceptancePolicy::MAX_SPEECH_CHARACTERS + 1), [ { text: "Short test." } ] ].each do |input|
+        assert_raises(LiveAcceptancePolicy::GuardViolation) { policy.one_shot(:speak, input, model: FREE_MODEL, provider: :openrouter) }
+      end
+      [ { format: "pcm" }, { context: Object.new }, { provider_options: { input: "overridden" } },
+        { provider_options: { model: "fixture/paid" } }, { provider_options: { provider: { allow_fallbacks: true } } } ].each do |options|
+        assert_raises(LiveAcceptancePolicy::GuardViolation) do
+          policy.one_shot(:speak, "Short test.", model: FREE_MODEL, provider: :openrouter, **options)
+        end
+      end
+      assert_raises(LiveAcceptancePolicy::GuardViolation) do
+        policy.one_shot(:speak, "Short test.", model: FREE_MODEL, provider: :openrouter) { }
+      end
+    end
+    assert_equal 1, operation.calls.size
+    refute operation.calls.first.fetch(:options).key?(:provider_options), "speech must not borrow chat routing parameters"
   end
 
   test "hosted tools and model fallback lists fail before a request" do
@@ -211,7 +251,7 @@ class LiveAcceptancePolicyTest < ActiveSupport::TestCase
     assert_raises(LiveAcceptancePolicy::GuardViolation) { budget.instrument("request.ruby_llm", { method: :post }) { } }
   end
 
-  test "only the exact paid flag permits paid models and bypasses free routing constraints" do
+  test "only the exact paid flag permits paid models without adding zero-price constraints" do
     [ nil, "", "0", "false", "true", "yes" ].each do |flag|
       ENV["LIVE_DOGFOOD_PAID"] = flag
       assert_raises(LiveAcceptancePolicy::Unavailable) { check(build_policy(models: { chat: "fixture/paid" }), :chat) }
@@ -220,10 +260,90 @@ class LiveAcceptancePolicyTest < ActiveSupport::TestCase
     policy = build_policy(models: { chat: "fixture/paid" })
     check(policy, :chat)
     assert_empty @catalog_paths, "paid authorization should not claim zero-price verification"
-    payload = { model: "fixture/paid", tools: [ { type: "web_search" } ], models: [ "fixture/other" ] }
-    original = payload.deep_dup
+    payload = { model: "fixture/paid", "model" => "fixture/other", tools: [ { type: "web_search" } ],
+      plugins: [ { id: "web", enabled: true } ], max_tokens: 99_999,
+      provider: { allow_fallbacks: true, "allow_fallbacks" => true, max_price: { prompt: 0.01 } },
+      "provider" => { "allow_fallbacks" => true } }
     assert_nothing_raised { policy.guard_chat!(payload) }
-    assert_equal original, payload
+    serialized = JSON.parse(JSON.generate(payload))
+    assert_equal "fixture/paid", serialized.fetch("model")
+    assert_equal [ { "type" => "web_search" } ], serialized.fetch("tools")
+    assert_equal [ { "id" => "web", "enabled" => true } ], serialized.fetch("plugins")
+    assert_equal 99_999, serialized.fetch("max_tokens"), "this change must not introduce a paid output-budget policy"
+    assert_equal false, serialized.dig("provider", "allow_fallbacks")
+    assert_equal({ "prompt" => 0.01 }, serialized.dig("provider", "max_price"))
+    %w[model provider].each do |key|
+      assert_equal 1, payload.keys.count { |candidate| candidate.to_s == key }
+    end
+  end
+
+  test "paid chat still rejects unchecked models mismatched providers and model fallback lists" do
+    ENV["LIVE_DOGFOOD_PAID"] = "1"
+    policy = build_policy(models: { chat: "fixture/paid" })
+    check(policy, :chat)
+    assert_raises(LiveAcceptancePolicy::GuardViolation) { policy.guard_chat!({ model: "fixture/other" }) }
+    assert_raises(LiveAcceptancePolicy::GuardViolation) { policy.guard_chat!({ model: "fixture/paid" }, provider: "openai") }
+    [ { models: [ "fixture/other" ] }, { "models" => [] } ].each do |options|
+      assert_raises(LiveAcceptancePolicy::GuardViolation) { policy.guard_chat!({ model: "fixture/paid" }.merge(options)) }
+    end
+  end
+
+  test "paid one-shot keeps checked model provider and routing while permitting deliberate hosted extras" do
+    ENV["LIVE_DOGFOOD_PAID"] = "1"
+    policy = build_policy(models: { embedding: "fixture/paid" })
+    check(policy, :embedding)
+    operation = OfflineOperation.new
+    with_offline_operation(operation) do
+      assert_raises(LiveAcceptancePolicy::GuardViolation) do
+        policy.one_shot(:embed, "fixture", model: "fixture/other", provider: :openrouter)
+      end
+      assert_raises(LiveAcceptancePolicy::GuardViolation) do
+        policy.one_shot(:embed, "fixture", model: "fixture/paid", provider: :openai)
+      end
+      [ { model: "fixture/other" }, { "model" => "fixture/other" },
+        { models: [ "fixture/other" ] }, { "models" => [] } ].each do |provider_options|
+        assert_raises(LiveAcceptancePolicy::GuardViolation) do
+          policy.one_shot(:embed, "fixture", model: "fixture/paid", provider: :openrouter, provider_options:)
+        end
+      end
+      assert_equal :offline_result, policy.one_shot(:embed, "fixture", model: "fixture/paid", provider: :openrouter,
+        provider_options: { encoding_format: "float", plugins: [ { id: "web" } ],
+          provider: { allow_fallbacks: true, "allow_fallbacks" => true, order: [ "fixture-provider" ] },
+          "provider" => { "allow_fallbacks" => true } })
+    end
+    assert_equal 1, operation.calls.size
+    options = operation.calls.first.fetch(:options).fetch(:provider_options)
+    serialized = JSON.parse(JSON.generate(options))
+    assert_equal "float", serialized.fetch("encoding_format")
+    assert_equal [ { "id" => "web" } ], serialized.fetch("plugins")
+    assert_equal false, serialized.dig("provider", "allow_fallbacks")
+    assert_equal [ "fixture-provider" ], serialized.dig("provider", "order")
+    refute serialized.fetch("provider").key?("max_price"), "paid routing must not gain a zero-price ceiling"
+    assert_equal 1, options.keys.count { |candidate| candidate.to_s == "provider" }
+  end
+
+  test "paid speech checks exact model provider and rejects extras without sending chat routing fields" do
+    ENV["LIVE_DOGFOOD_PAID"] = "1"
+    policy = build_policy(models: { speech: "fixture/paid-speech" })
+    check(policy, :speech)
+    operation = OfflineOperation.new
+    with_offline_operation(operation) do
+      assert_raises(LiveAcceptancePolicy::GuardViolation) do
+        policy.one_shot(:speak, "fixture", model: "fixture/other", provider: :openrouter)
+      end
+      assert_raises(LiveAcceptancePolicy::GuardViolation) do
+        policy.one_shot(:speak, "fixture", model: "fixture/paid-speech", provider: :openai)
+      end
+      [ { provider_options: { models: [ "fixture/other" ] } }, { provider_options: { provider: { allow_fallbacks: true } } },
+        { context: Object.new } ].each do |options|
+        assert_raises(LiveAcceptancePolicy::GuardViolation) do
+          policy.one_shot(:speak, "fixture", model: "fixture/paid-speech", provider: :openrouter, **options)
+        end
+      end
+      assert_equal :offline_result, policy.one_shot(:speak, "x" * 150, model: "fixture/paid-speech", provider: :openrouter, format: "pcm")
+    end
+    assert_equal 1, operation.calls.size
+    refute operation.calls.first.fetch(:options).key?(:provider_options)
   end
 
   private

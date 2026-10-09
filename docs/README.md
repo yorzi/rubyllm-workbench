@@ -4,7 +4,7 @@ This set explains the workbench's current behavior, evidence, limits and
 planned growth. Everything needed to understand and run it is in this
 checkout.
 
-Updated: 2026-10-08
+Updated: 2026-10-09
 
 ## If you have five minutes
 
@@ -29,6 +29,8 @@ maps the synthetic tour to engineering decisions, source and verification.
 | `CAPABILITIES.md` | Which gates admit each operation, and what is verified locally or live? |
 | `ARCHITECTURE.md` | How do services, jobs, records and states connect? |
 | `OPERATIONS.md` | How do I run, verify and troubleshoot it? |
+| `AI_USAGE_GUIDE.md` | How do contributors configure AI, isolate tests and run authorized low-cost acceptance? (Chinese working guide) |
+| `UPSTREAM_ISSUES.md` | Which RubyLLM/Rails findings are confirmed, excluded or still awaiting reproduction? |
 | `LEARNING.md` | How does the in-page, source-anchored explanation layer work? |
 | `SHOWCASE.md` | What engineering skills can a visitor inspect in ten minutes? |
 | `RELEASING.md` | What still needs verification and authorization before publication? |
