@@ -97,6 +97,21 @@ class Ai::Knowledge::SearchTest < ActiveSupport::TestCase
     end
   end
 
+  test "query embedding retains the collection provider instead of resolving another provider" do
+    with_provider_configuration("openrouter") do
+      add_item(title: "Retrieval notes", text: "sqlite retrieval evidence")
+      Ai::Knowledge::Embedder.call(collection: @collection, model_id: MODEL_ID, provider: "openrouter", client: FakeEmbeddingClient.new)
+      @collection.update!(embedding_provider: "openai")
+      client = FakeEmbeddingClient.new
+
+      outcome = Ai::Knowledge::Search.call(collection: @collection, query: "sqlite", mode: "semantic", client: client)
+
+      assert_equal "lexical", outcome.mode
+      assert_includes outcome.degraded_reason, "not in the RubyLLM catalog"
+      assert_empty client.calls
+    end
+  end
+
   test "hybrid mode exposes both signals and unknown modes fall back to lexical" do
     with_provider_configuration("openrouter") do
       add_item(title: "Retrieval notes", text: ("sqlite retrieval " * 40) + ("sqlite alone " * 40))

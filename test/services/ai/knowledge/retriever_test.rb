@@ -128,6 +128,37 @@ class Ai::Knowledge::RetrieverTest < ActiveSupport::TestCase
     assert_equal expected - 1, results.length
   end
 
+  test "partial same-model provider replacement keeps old provider vectors out of semantic results" do
+    collection = create_project(name: "Provider replacement project").knowledge_collections.create!(
+      name: "Notes", embedding_model_id: "shared-embed", embedding_provider: "openai", embedding_status: "ready"
+    )
+    embeddings = %w[Replaced Retained].map do |title|
+      item = collection.knowledge_items.create!(title: title, content_text: "#{title} sqlite evidence.")
+      Ai::Knowledge::Ingestor.call(item)
+      chunk = item.knowledge_chunks.first
+      chunk.knowledge_embeddings.create!(provider: "openai", model_id: "shared-embed", dimensions: 2,
+        vector: Ai::Knowledge::VectorStore.default.encode([ 1.0, 0.0 ]), content_checksum: chunk.content_checksum)
+    end
+
+    # A successful replacement changes one existing row; a failed chunk keeps
+    # its previous ready vector, exactly as partial embedding does.
+    embeddings.first.update!(provider: "openrouter", vector: Ai::Knowledge::VectorStore.default.encode([ 0.0, 1.0 ]))
+    collection.update!(embedding_provider: "openrouter", embedding_status: "partial")
+
+    results = Ai::Knowledge::Retriever.search(collection: collection, query: "sqlite", mode: "semantic",
+      query_vector: [ 1.0, 0.0 ], model_id: "shared-embed", limit: 1)
+
+    assert_equal 2, collection.knowledge_embeddings.ready.count
+    assert_equal 1, collection.embedded_chunk_count
+    assert_equal [ embeddings.first.knowledge_chunk_id ], results.map { |result| result.chunk.id }
+    assert_in_delta 0.0, results.first.similarity, 1e-6
+
+    old_provider_results = Ai::Knowledge::Retriever.search(collection: collection, query: "sqlite", mode: "semantic",
+      query_vector: [ 1.0, 0.0 ], model_id: "shared-embed", provider: "openai", limit: 1)
+    assert_equal [ embeddings.last.knowledge_chunk_id ], old_provider_results.map { |result| result.chunk.id }
+    assert_in_delta 1.0, old_provider_results.first.similarity, 1e-6
+  end
+
   private
 
   def semantic_fixture

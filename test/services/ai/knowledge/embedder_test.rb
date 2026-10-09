@@ -131,4 +131,33 @@ class Ai::Knowledge::EmbedderTest < ActiveSupport::TestCase
       assert_equal [ 1.0, 1.0, 0.0, 0.0, 0.0, 0.0 ], vector
     end
   end
+
+  test "explicit provider is respected for batch and query embeddings" do
+    with_provider_configuration("openrouter") do
+      add_item(title: "Retrieval notes", text: "SQLite retrieval evidence.")
+      client = FakeEmbeddingClient.new
+
+      assert_raises(Ai::Knowledge::Embedder::ConfigurationError) do
+        Ai::Knowledge::Embedder.call(collection: @collection, model_id: MODEL_ID, provider: "openai", client: client)
+      end
+      assert_raises(Ai::Knowledge::Embedder::ConfigurationError) do
+        Ai::Knowledge::Embedder.embed_text("query", model_id: MODEL_ID, provider: "openai", client: client)
+      end
+      assert_empty client.calls
+      assert_equal "none", @collection.reload.embedding_status
+    end
+  end
+
+  test "catalog disambiguates a shared model identifier by provider" do
+    with_provider_configuration("openrouter") do
+      models = %w[openai openrouter].map do |provider|
+        RubyLLM::Model.new(id: "shared-embedding", name: "Shared embedding", provider: provider,
+          modalities: { input: [ "text" ], output: [ "embeddings" ] })
+      end
+      availability = Ai::Knowledge::EmbeddingCatalog.availability("shared-embedding", provider: "openrouter", models: models)
+
+      assert availability.available
+      assert_equal "openrouter", availability.entry.provider
+    end
+  end
 end

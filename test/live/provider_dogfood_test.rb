@@ -1,12 +1,13 @@
 require "test_helper"
 require_relative "../support/dogfood_report"
+require_relative "../support/live_acceptance_policy"
 
 # Opt-in live provider acceptance. Every scenario drives the same controllers,
 # jobs and services as the application, against a real provider, and asserts
 # on the durable records it leaves behind.
 #
 #   LIVE_DOGFOOD=1        free-model scenarios
-#   LIVE_DOGFOOD_PAID=1   also run scenarios that cost money (a few cents total)
+#   LIVE_DOGFOOD_PAID=1   explicitly allow paid/manual scenarios
 #
 # Prefer `bin/dogfood`, which runs this file serially and prints a summary.
 # Model choices can be overridden with the DOGFOOD_*_MODEL variables below.
@@ -16,27 +17,41 @@ class ProviderDogfoodTest < ActionDispatch::IntegrationTest
 
   PROVIDER = ENV.fetch("DOGFOOD_PROVIDER", "openrouter")
   MODELS = {
-    chat: ENV.fetch("DOGFOOD_CHAT_MODEL", "nvidia/nemotron-3-super-120b-a12b:free"),
-    structured: ENV.fetch("DOGFOOD_STRUCTURED_MODEL", "nvidia/nemotron-3-super-120b-a12b:free"),
-    structured_alt: ENV.fetch("DOGFOOD_STRUCTURED_ALT_MODEL", "dots-studio/dots-3-note-preview:free"),
-    tools: ENV.fetch("DOGFOOD_TOOLS_MODEL", "nvidia/nemotron-3-super-120b-a12b:free"),
-    agent: ENV.fetch("DOGFOOD_AGENT_MODEL", "openai/gpt-5-nano"),
+    chat: ENV.fetch("DOGFOOD_CHAT_MODEL", "liquid/lfm-2.5-2.6b:free"),
+    structured: ENV.fetch("DOGFOOD_STRUCTURED_MODEL", "liquid/lfm-2.5-2.6b:free"),
+    structured_alt: ENV.fetch("DOGFOOD_STRUCTURED_ALT_MODEL", "nvidia/nemotron-3-super-120b-a12b:free"),
+    tools: ENV.fetch("DOGFOOD_TOOLS_MODEL", "liquid/lfm-2.5-2.6b:free"),
+    agent: ENV.fetch("DOGFOOD_AGENT_MODEL", ENV.fetch("DOGFOOD_CHAT_MODEL", "liquid/lfm-2.5-2.6b:free")),
     embedding: ENV.fetch("DOGFOOD_EMBEDDING_MODEL", "liquid/lfm-2.5-embedding-350m:free"),
     rerank: ENV.fetch("DOGFOOD_RERANK_MODEL", "nvidia/llama-nemotron-rerank-vl-1b-v2:free"),
-    speech: ENV.fetch("DOGFOOD_SPEECH_MODEL", "deepgram/flux-tts:free"),
-    speech_voice: ENV.fetch("DOGFOOD_SPEECH_VOICE", "flux-bree-en"),
     transcription: ENV.fetch("DOGFOOD_TRANSCRIPTION_MODEL", "mistralai/voxtral-mini-3b-2507"),
     image: ENV.fetch("DOGFOOD_IMAGE_MODEL", "black-forest-labs/flux.2-klein-4b")
   }.freeze
+  SCENARIO_MODELS = {
+    "chat_streaming" => [ :chat ],
+    "structured_output" => [ :structured ],
+    "tool_approval_continuation" => [ :tools ],
+    "knowledge_embedding_and_rerank" => [ :embedding, :rerank ],
+    "evaluation_comparison_with_judge" => [ :structured, :structured_alt ],
+    "saved_agent_with_local_tool" => [ :agent ],
+    "agent_with_hosted_web_search" => [ :agent ],
+    "transcription" => [ :chat, :transcription ],
+    "image_generation" => [ :chat, :image ]
+  }.freeze
 
   setup do
-    skip "set LIVE_DOGFOOD=1 to run live provider dogfood" if ENV["LIVE_DOGFOOD"].blank?
-    skip "#{PROVIDER} is not configured" unless RubyLLM::Provider.resolve(PROVIDER).configured?(RubyLLM.config)
+    skip "set LIVE_DOGFOOD=1 to run live provider dogfood" unless ENV["LIVE_DOGFOOD"] == "1"
+    request_models!(*SCENARIO_MODELS.fetch(name.delete_prefix("test_"), []))
+    @live_policy = LiveAcceptancePolicy.new(provider: PROVIDER, models: MODELS)
+    @live_policy.configure!
 
     @project = Project.create!(name: "Dogfood #{name.delete_prefix('test_').tr('_', ' ')}", description: "Live provider dogfood.")
+  rescue LiveAcceptancePolicy::Unavailable => error
+    manual_skip(error.message)
   end
 
   test "chat_streaming" do
+    require_models!(:chat)
     chat = create_chat(MODELS[:chat])
 
     run = post_message(chat, "Reply with exactly the words: workbench dogfood ok")
@@ -45,15 +60,17 @@ class ProviderDogfoodTest < ActionDispatch::IntegrationTest
     reply = chat.messages.where(role: "assistant").order(:id).last
     assert reply&.content.present?, "no assistant reply was persisted"
     assert run.attempts.first.time_to_first_output_ms.present?, "streaming did not record time to first output"
-    note "reply=#{reply.content.squish.truncate(60)}"
+    note "assistant_message_persisted=true streaming_first_output_recorded=true"
   end
 
   test "structured_output" do
+    require_models!(:structured)
     chat = create_chat(MODELS[:structured])
     experiment = @project.experiments.create!(
       name: "Structured dogfood",
       input_prompt: 'Return summary "live smoke" and confidence 0.5.',
-      schema_json: JSON.parse(Ai::SchemaDefinition.default_json)
+      schema_json: JSON.parse(Ai::SchemaDefinition.default_json),
+      generation_options_json: { "max_output_tokens" => 1024 }
     )
     model = registry_model(MODELS[:structured])
     run = track_run(chat.runs.create!(
@@ -80,6 +97,7 @@ class ProviderDogfoodTest < ActionDispatch::IntegrationTest
   end
 
   test "tool_approval_continuation" do
+    require_models!(:tools)
     chat = create_chat(MODELS[:tools])
 
     run = post_message(chat, <<~PROMPT)
@@ -102,6 +120,7 @@ class ProviderDogfoodTest < ActionDispatch::IntegrationTest
   end
 
   test "knowledge_embedding_and_rerank" do
+    require_models!(:embedding, :rerank)
     collection = @project.knowledge_collections.create!(name: "Dogfood corpus")
     {
       "Solid Queue" => "Solid Queue is a database-backed Active Job backend that runs recurring tasks and workers.",
@@ -113,32 +132,36 @@ class ProviderDogfoodTest < ActionDispatch::IntegrationTest
     end
     assert_equal 3, collection.knowledge_chunks.count
 
+    untracked_cost_operations("embedding")
     summary = Ai::Knowledge::Embedder.call(collection:, model_id: MODELS[:embedding], provider: PROVIDER)
     assert_equal "ready", summary.status, summary.error.to_s
     note "embedded=#{summary.embedded} dims=#{summary.dimensions}"
 
     semantic = Ai::Knowledge::Search.call(collection: collection.reload, query: "background job processing in Rails", mode: "semantic")
     assert_equal "semantic", semantic.mode, semantic.degraded_reason.to_s
-    note "semantic_top=#{semantic.results.first&.chunk&.knowledge_item&.title}"
+    note "semantic_results=#{semantic.results.size}"
 
+    untracked_cost_operations("rerank")
     reranked = Ai::Knowledge::Search.call(
       collection:, query: "background job processing in Rails", mode: "hybrid",
       rerank: true, rerank_model_id: MODELS[:rerank]
     )
     assert reranked.rerank_applied, reranked.rerank_note.to_s
-    note "rerank_top=#{reranked.results.first&.chunk&.knowledge_item&.title}"
+    note "rerank_results=#{reranked.results.size} rerank_applied=true"
   end
 
   test "evaluation_comparison_with_judge" do
+    require_models!(:structured, :structured_alt)
     experiment = @project.experiments.create!(
       name: "Evaluation dogfood",
       input_prompt: "Summarize the input in at most five words and give your confidence from 0 to 1.",
-      schema_json: JSON.parse(Ai::SchemaDefinition.default_json)
+      schema_json: JSON.parse(Ai::SchemaDefinition.default_json),
+      generation_options_json: { "max_output_tokens" => 2048 }
     )
     rubric = [ { "key" => "faithful", "description" => "The summary reflects the input without inventing facts." } ]
     dataset = @project.evaluation_datasets.create!(name: "Dogfood cases")
     dataset.create_revision!(
-      [ "Rails ships Solid Queue by default.", "SQLite works well for single-user apps.", "Turbo updates pages without full reloads." ]
+      [ "Rails ships Solid Queue by default." ]
         .each_with_index.map do |prompt, index|
           { "key" => "case-#{index + 1}", "input" => { "prompt" => prompt }, "expected_output" => { "summary" => prompt, "confidence" => 1 }, "rubric" => rubric }
         end
@@ -154,60 +177,97 @@ class ProviderDogfoodTest < ActionDispatch::IntegrationTest
     comparison = dataset.evaluation_comparisons.order(:id).last
     assert comparison, flash[:alert].to_s
     results = comparison.evaluation_executions.flat_map(&:evaluation_case_results)
-    assert_equal 6, results.size
+    assert_equal 2, results.size
     results.each { |result| track_run(result.run) if result.run }
     results.filter_map(&:evaluation_case_judgment).each { |judgment| track_run(judgment.run) }
 
     comparison.evaluation_executions.each do |execution|
       execution.reload
       rows = execution.evaluation_case_results
-      note "#{execution.model_id}: status=#{execution.status} received=#{rows.count(&:transport_status_received?)}/3 valid=#{rows.count(&:schema_status_valid?)}/3"
+      note "#{execution.model_id}: status=#{execution.status} received=#{rows.count(&:transport_status_received?)}/1 valid=#{rows.count(&:schema_status_valid?)}/1"
     end
-    assert results.all? { |result| %w[completed failed].include?(result.reload.status) }, "cases left unfinished"
-    assert results.any?(&:schema_status_valid?), "no model produced a schema-valid answer"
+    results.each do |result|
+      result.reload
+      attempt = result.run&.attempts&.order(:sequence)&.last
+      note "case_model=#{result.evaluation_execution.model_id} schema=#{result.schema_status} finish=#{attempt&.finish_reason} error=#{attempt&.error_class}"
+      assert result.completed?, "case #{result.case_key} did not complete: #{result.status}; #{run_failure(result.run)}"
+      assert result.transport_status_received?, "case #{result.case_key} did not receive a response"
+      assert result.schema_status_valid?, "case #{result.case_key} did not receive schema-valid output"
+      assert result.run.succeeded?, run_failure(result.run)
+    end
     judgments = results.filter_map(&:evaluation_case_judgment)
+    assert_equal 2, judgments.size, "each completed case must have an intended judgment"
     note "judgments=#{judgments.map(&:status).tally}"
-    assert judgments.any? { |judgment| judgment.status == "completed" }, "no rubric judgment completed"
+    judgments.each do |judgment|
+      assert_equal "completed", judgment.reload.status
+      assert judgment.run.succeeded?, run_failure(judgment.run)
+    end
   end
 
-  test "speech_and_transcription_round_trip" do
-    speech_model = registry_model(MODELS[:speech])
-    chat = create_chat(MODELS[:chat])
-    message = chat.messages.create!(role: "assistant", content: "The workbench records every provider call.")
+  test "local_speech" do
+    manual_skip "Local TTS acceptance is pending the local provider adapter and API configuration. Cloud TTS is excluded."
+  end
 
-    perform_enqueued_jobs do
-      post project_chat_message_speech_run_path(@project, chat, message),
-        params: { speech_run: { model_reference: "#{speech_model.provider}|#{speech_model.id}", voice: MODELS[:speech_voice] } }
-    end
-    speech_run = track_run(chat.runs.where(operation: "speech").order(:id).last)
-    assert speech_run&.succeeded?, run_failure(speech_run)
-    audio = speech_run.artifacts.find_by!(kind: "audio").audio_file
-    assert audio.attached?
-    note "audio=#{audio.content_type} #{audio.byte_size}B"
-
+  test "transcription" do
+    request_models!(:chat, :transcription)
     skip_unless_paid
-    extension = Rack::Mime::MIME_TYPES.invert[audio.content_type] || ".mp3"
-    Tempfile.create([ "dogfood-speech", extension ], binmode: true) do |file|
-      file.write(audio.download)
-      file.rewind
-      perform_enqueued_jobs do
-        post project_chat_transcription_runs_path(@project, chat), params: {
-          transcription_run: {
-            audio_file: Rack::Test::UploadedFile.new(file.path, audio.content_type),
-            model_reference: "#{PROVIDER}|#{MODELS[:transcription]}"
-          }
+    require_models!(:chat, :transcription)
+    fixture_path = ENV["DOGFOOD_TRANSCRIPTION_FILE"].to_s
+    manual_skip "Transcription requires a short local DOGFOOD_TRANSCRIPTION_FILE for manual acceptance." unless File.file?(fixture_path)
+    chat = create_chat(MODELS[:chat])
+    content_type = Rack::Mime.mime_type(File.extname(fixture_path), "application/octet-stream")
+    perform_enqueued_jobs do
+      post project_chat_transcription_runs_path(@project, chat), params: {
+        transcription_run: {
+          audio_file: Rack::Test::UploadedFile.new(fixture_path, content_type),
+          model_reference: "#{PROVIDER}|#{MODELS[:transcription]}"
         }
-      end
+      }
     end
     transcription_run = track_run(chat.runs.where(operation: "transcription").order(:id).last)
     assert transcription_run&.succeeded?, run_failure(transcription_run)
     transcript = transcription_run.artifacts.find_by!(kind: "transcript").content_text
-    note "transcript=#{transcript.squish.truncate(80)}"
-    assert_match(/workbench|provider/i, transcript)
+    assert transcript.present?, "no transcript was persisted"
+    note "transcript_persisted=true"
+  end
+
+  test "saved_agent_with_local_tool" do
+    require_models!(:agent)
+    Ai::ToolRegistry.sync_project!(@project)
+    model = registry_model(MODELS[:agent])
+    definition = @project.agent_definitions.create!(
+      name: "Local tool dogfood",
+      provider: model.provider,
+      model_id: model.id,
+      instructions: "Call project_snapshot once, then return a short final answer. Do not call any other tools.",
+      tool_keys: [ "project_snapshot" ],
+      provider_tools: [],
+      options: { max_output_tokens: 2048 }
+    )
+    run = track_run(Ai::AgentRunExecutor.enqueue(
+      agent_definition: definition,
+      prompt: "Call project_snapshot to inspect this project's non-secret summary, then confirm that the tool completed.",
+      requested_by: "dogfood"
+    ))
+    delivery = run.agent_run_deliveries.find_by!(intent: "execute")
+    perform_enqueued_jobs { AgentRunJob.perform_later(*delivery.job_arguments) }
+
+    run.reload
+    assert run.succeeded?, run_failure(run)
+    assert run.tool_invocations.find_by!(tool_key: "project_snapshot").succeeded?
+    report = run.artifacts.where(kind: "report").find do |artifact|
+      artifact.metadata_json["report_type"] == Ai::AgentResearchReportRecorder::REPORT_TYPE
+    end
+    assert report, "no Agent report Artifact was persisted"
+    assert report.content_text.present?, "Agent report has no final answer"
+    assert_empty run.input_snapshot.fetch("provider_tools")
+    note "local_tool_completed=true report_persisted=true steps=#{run.result_summary['agent_step_count']}"
   end
 
   test "agent_with_hosted_web_search" do
+    request_models!(:agent)
     skip_unless_paid
+    require_models!(:agent)
     Ai::ToolRegistry.sync_project!(@project)
     model = registry_model(MODELS[:agent])
     definition = @project.agent_definitions.create!(
@@ -217,7 +277,7 @@ class ProviderDogfoodTest < ActionDispatch::IntegrationTest
       instructions: "Use the available tools as requested, then answer concisely with source citations.",
       tool_keys: [ "project_snapshot" ],
       provider_tools: [ "web_search" ],
-      options: { max_output_tokens: 4096 }
+      options: { max_output_tokens: 2048 }
     )
     run = track_run(Ai::AgentRunExecutor.enqueue(agent_definition: definition, prompt: <<~PROMPT))
       First call project_snapshot to inspect this project's non-secret summary.
@@ -231,7 +291,6 @@ class ProviderDogfoodTest < ActionDispatch::IntegrationTest
     run.reload
     run.chat.messages.order(:id).each do |message|
       note "#{message.role}: tools=#{message.ruby_llm_tool_calls.map(&:name).join(',')} server_tools=#{Array(message.server_tool_calls).size} citations=#{message.citations.size}"
-      note "answer=#{message.content.to_s.squish.truncate(160)}" if message.role == "assistant" && message.content.present?
     end
     note "finish_reasons=#{run.attempts.order(:sequence).pluck(:finish_reason).join(',')}"
     assert run.succeeded?, run_failure(run)
@@ -245,7 +304,9 @@ class ProviderDogfoodTest < ActionDispatch::IntegrationTest
   end
 
   test "image_generation" do
+    request_models!(:chat, :image)
     skip_unless_paid
+    require_models!(:chat, :image)
     chat = create_chat(MODELS[:chat])
 
     perform_enqueued_jobs do
@@ -265,7 +326,23 @@ class ProviderDogfoodTest < ActionDispatch::IntegrationTest
   private
 
   def skip_unless_paid
-    skip "set LIVE_DOGFOOD_PAID=1 to run paid scenarios" if ENV["LIVE_DOGFOOD_PAID"].blank?
+    manual_skip "This paid capability needs manual acceptance with LIVE_DOGFOOD_PAID=1." unless ENV["LIVE_DOGFOOD_PAID"] == "1"
+  end
+
+  def request_models!(*keys)
+    keys.each { |key| request_model("#{PROVIDER}/#{MODELS.fetch(key)}") }
+  end
+
+  def require_models!(*keys)
+    request_models!(*keys)
+    @live_policy.check!(*keys)
+  rescue LiveAcceptancePolicy::Unavailable => error
+    manual_skip(error.message)
+  end
+
+  def manual_skip(reason)
+    @dogfood_skip_reason = Ai::ErrorText.safe(reason.to_s, limit: 300)
+    skip "Manual acceptance: #{@dogfood_skip_reason}"
   end
 
   def registry_model(model_id)

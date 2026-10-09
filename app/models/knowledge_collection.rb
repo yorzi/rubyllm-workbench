@@ -12,10 +12,14 @@ class KnowledgeCollection < ApplicationRecord
 
   scope :recent, -> { order(updated_at: :desc, id: :desc) }
 
-  def embedded_chunk_count(model_id: embedding_model_id)
+  def embedded_chunk_count(model_id: embedding_model_id, provider: nil)
     return 0 if model_id.blank?
 
-    knowledge_embeddings.ready.for_model(model_id).count
+    provider = provider.presence
+    provider ||= embedding_provider if model_id.to_s == embedding_model_id
+    embeddings = knowledge_embeddings.ready.for_model(model_id)
+    embeddings = embeddings.where(provider: provider.to_s) if provider.present?
+    embeddings.count
   end
 
   def chunk_count
@@ -26,8 +30,8 @@ class KnowledgeCollection < ApplicationRecord
     embedding_status == "ready"
   end
 
-  def semantic_searchable?(model_id: embedding_model_id)
-    model_id.present? && embedded_chunk_count(model_id: model_id).positive?
+  def semantic_searchable?(model_id: embedding_model_id, provider: nil)
+    model_id.present? && embedded_chunk_count(model_id: model_id, provider: provider).positive?
   end
 
   def embedding_label

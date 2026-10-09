@@ -1,6 +1,6 @@
 # Capability matrix
 
-Updated: 2026-10-08 · Rails 8.1.4 · RubyLLM 2.1.0
+Updated: 2026-10-09 · Rails 8.1.4 · RubyLLM 2.1.0
 
 This is the single place where Workbench records **what each operation
 admits** and **what evidence exists for it**. Other documents link here rather
@@ -13,10 +13,9 @@ Two kinds of evidence are kept apart:
   compatibility.
 - **Live**: a real provider request, recorded with its date, model and cost.
 
-The live rows below describe the historical **RubyLLM 2.0.0** run. They have
-not been revalidated on 2.1.0. Current local upgrade evidence is in the
-verification snapshot; new framework APIs do not automatically add Workbench
-features or provider acceptance.
+Current 2.1.0 flow acceptance is dated 2026-10-09 below. Rows explicitly marked
+historical retain the RubyLLM 2.0.0 record. New framework APIs do not
+automatically add Workbench features or provider acceptance.
 
 RubyLLM registry metadata is only an admission hint. A model appearing in a
 picker means its registry entry passes the rule below and its provider is
@@ -25,29 +24,81 @@ region will accept the request.
 
 ## Operations
 
-| Operation | Admission rule | Local evidence | Live evidence (2026-09-28 unless noted) |
+| Operation | Admission rule | Local evidence | Live evidence (version/date stated) |
 | --- | --- | --- | --- |
-| Chat (streaming) | Any configured chat model in the RubyLLM registry. | Run/Attempt lifecycle, streaming, frozen context, drift rejection, queue rejection, cancellation. | Passed: `nvidia/nemotron-3-super-120b-a12b:free`. |
-| Structured output | Configured model declaring `structured_output`; batch-suffixed models excluded. | Schema validation, JSON Artifacts, comparison executions. | Passed: `nvidia/nemotron-3-super-120b-a12b:free`. A valid exact JSON match does not measure semantic quality. |
-| Local tools with approval | Tool enabled for the Project. Saved Agents with local tools require the exact provider/model registry entry to explicitly declare `function_calling`, checked on save, on enqueue and on every worker restore. | Approval, denial, expiry, cancellation, failed-Run closure, unknown remote outcomes, parallel-call policy. | Passed: `save_run_note` approval and continuation on `nvidia/nemotron-3-super-120b-a12b:free` and `openai/gpt-5-nano`. Parallel tool calls not tested live. |
+| Chat (streaming) | Any configured chat model in the RubyLLM registry. | Run/Attempt lifecycle, streaming, frozen context, drift rejection, queue rejection, cancellation. | Passed on 2.1, 2026-10-09: `liquid/lfm-2.5-2.6b:free`, persisted reply and first-output timing. |
+| Structured output | Configured model declaring `structured_output`; batch-suffixed models excluded. | Schema validation, JSON Artifacts, comparison executions. | Passed on 2.1, 2026-10-09: `liquid/lfm-2.5-2.6b:free`, valid schema and JSON Artifact. No quality claim. |
+| Local tools with approval | Tool enabled for the Project. Saved Agents with local tools require the exact provider/model registry entry to explicitly declare `function_calling`, checked on save, on enqueue and on every worker restore. | Approval, denial, expiry, cancellation, failed-Run closure, unknown remote outcomes, parallel-call policy. | Passed on 2.1, 2026-10-09: `save_run_note` approval, continuation and report on `liquid/lfm-2.5-2.6b:free`. Parallel calls remain manual. |
 | Provider web search | `web_search` is an allowlisted RubyLLM provider tool. There is no reliable Workbench model-level web-search capability gate; the provider may reject the tool or the model may not use it. | Snapshotting, citations, usage-only tool accounting; native 2.1 streaming regression. | Passed on 2.0 in an Agent Run on `openai/gpt-5-nano`: search counted, citation stored, using the then-required patch. 2.1 live check pending. |
-| Saved Agents | As for local tools; provider tools are outside the local-tool gate. | Durable outbox, execution lease and generation fencing, crash/replay drill, cancellation race, empty-answer guard, research report. | Passed: two-step Agent (`project_snapshot`, then a searched, cited answer) on `openai/gpt-5-nano`. |
-| Knowledge embeddings | RubyLLM embedding-model registry plus provider configuration. | Chunking, checksums, stale-vector skipping, vector adapters, lexical/semantic/hybrid retrieval, explicit degradation. | Passed: `liquid/lfm-2.5-embedding-350m:free`, 1,024 dimensions. Cross-provider vectors and retrieval quality are not established. |
-| Knowledge rerank | Registry model whose output modality includes `rerank`, plus configuration. | Pre/post rank kept alongside unchanged retrieval evidence. | Passed: `nvidia/llama-nemotron-rerank-vl-1b-v2:free`. A 2026-09-17 run once promoted an off-topic chunk; rerank scores need human review. |
+| Saved Agents | As for local tools; provider tools are outside the local-tool gate. | Durable outbox, execution lease and generation fencing, crash/replay drill, cancellation race, empty-answer guard, research report. | Passed on 2.1, 2026-10-09: two-step Agent (`project_snapshot`, final answer/report) on `liquid/lfm-2.5-2.6b:free`. Hosted search remains historical 2.0 evidence. |
+| Knowledge embeddings | RubyLLM embedding-model registry plus provider configuration. | Chunking, checksums, stale-vector skipping, vector adapters, lexical/semantic/hybrid retrieval, explicit degradation, selected-provider preservation. | Passed on 2.1, 2026-10-09: `liquid/lfm-2.5-embedding-350m:free`, 3 chunks, 1,024 dimensions, semantic and hybrid requests. No retrieval-quality claim. |
+| Knowledge rerank | Registry model whose output modality includes `rerank`, plus configuration. | Pre/post rank kept alongside unchanged retrieval evidence. | Passed on 2.1, 2026-10-09: `nvidia/llama-nemotron-rerank-vl-1b-v2:free`, applied ranking with 3 results. No ranking-quality claim. |
 | Document OCR | Model declares `ocr` and its provider is configured. | Local extraction and provenance Artifacts. | Not tested: no OCR model is available through OpenRouter's registry entries. |
-| Evaluation comparison | 2-5 configured models declaring `structured_output`. | Frozen revision and Experiment snapshot, per-case Runs, outcome metrics, queue rejection, recovery. | Passed: 2 models x 3 cases (`nvidia/nemotron-3-super-120b-a12b:free`, `dots-studio/dots-3-note-preview:free`). |
-| Rubric judge (experimental) | Optional; runs only after a successful case output. | Prompt isolation (expected output, tags and attachments are never sent), separate Run/Attempt/cost, recovery, late-response fencing. | Passed: judgments completed on the comparison above. Uncalibrated; never changes exact-match results. |
+| Evaluation comparison | 2-5 configured models declaring `structured_output`. | Frozen revision and Experiment snapshot, per-case Runs, outcome metrics, queue rejection, recovery. | Partial on 2.1, 2026-10-09: Liquid and Nvidia each returned valid case output in separate invocations; no complete two-model/one-case invocation passed. Dots schema failure, Apodex provider error and Liquid rate limiting remain visible. Historical 2.0 comparison is below. |
+| Rubric judge (experimental) | Optional; runs only after a successful case output. | Prompt isolation (expected output, tags and attachments are never sent), separate Run/Attempt/cost, recovery, late-response fencing. | Partial on 2.1, 2026-10-09: Liquid judgments completed for successful Liquid/Nvidia outputs; the complete intended pair is still pending. Uncalibrated; never changes exact-match results. |
 | Human reviews | Completed case outputs; ratings from a fixed allowlist. | Append-only reviews and per-criterion ratings. | Not applicable (no provider). |
 | Case attachments | Up to 5 files per case, 50 per revision, 10 MB each, 50 MB per revision. | Format prechecks (PDF header, JPEG/PNG signatures, JSON, CSV, UTF-8 text), revision ownership, purge on Project deletion. Excluded from every provider prompt. | Not applicable. The checks do not fully decode files or scan for malware; there is no lifetime storage cap. |
 | Provider Batch evaluation | Model declares `structured_output` and `batch`, and the provider reports `batches?`; one provider per execution. | Submission, refresh, ordered reconciliation, malformed-index rejection. | Not tested. No live provider Batch compatibility is claimed. |
-| Speech generation (experimental) | Model declares `speech_generation`; optional provider voice identifier. | Audio Artifacts, storage failure, recovery, cancellation. | Passed: `deepgram/flux-tts:free` with voice `flux-bree-en`. |
-| Audio transcription (experimental) | Model declares `transcription`. | Source-audio and transcript Artifacts, blank-transcript handling. | Passed: `mistralai/voxtral-mini-3b-2507` transcribed the speech output word for word. |
-| Image generation (experimental) | Model declares `image_generation`. | Image Artifacts, storage failure, late-response fencing. | Passed: `black-forest-labs/flux.2-klein-4b`, reported cost $0.014. |
+| Speech generation (experimental) | Model declares `speech_generation`; optional provider voice identifier. | Audio Artifacts, storage failure, recovery, cancellation. | Owner will supply local TTS/API details; adapter and live acceptance pending. Historical 2.0 cloud TTS is not local TTS evidence. No cloud substitute called on 2026-10-09. |
+| Audio transcription (experimental) | Model declares `transcription`. | Source-audio and transcript Artifacts, blank-transcript handling. | Manual on 2.1; historical 2.0 success used `mistralai/voxtral-mini-3b-2507`. |
+| Image generation (experimental) | Model declares `image_generation`. | Image Artifacts, storage failure, late-response fencing. | Manual on 2.1; historical 2.0 success used `black-forest-labs/flux.2-klein-4b`, reported $0.014. |
 | Video generation (experimental) | Model type is `video` with video output. | Submission, polling, provider job reference in the timeline. | Not tested. Workbench cannot durably restore a VideoJob or link its 2.1 job-ledger cost to the Attempt yet. |
 | Run reproduction and event export | Explicit per-Run download; no provider request. | Schema v2 budgets (512 KiB, 100,000 characters, latest 100 messages, bounded nesting), redaction, omission reporting. | Not applicable. Redaction is best-effort; review a real Run's export before sharing it. |
 | Upstream gap reports (experimental) | Manual classification of a Run. | Append-only candidates, redacted Markdown issue drafts. | Not applicable. Drafts need a manual privacy review. |
 
 ## Live dogfood record
+
+### 2026-10-09 — RubyLLM 2.1, free integration acceptance
+
+Five core scenarios passed in the initial serial run: streaming, structured
+output, tool approval/continuation, Knowledge embedding/retrieval/rerank and a
+saved Agent with a local tool. The sixth, a two-model/one-case comparison with
+two intended judgments, remains partial after bounded diagnostics. Successful
+case outputs and judgments across different invocations do not make that
+comparison pass. Four separate scenarios were intentionally not called:
+hosted search, transcription, image and pending local TTS.
+
+Five harness invocations admitted **23 POST requests** in total (13, 2, 2, 3,
+3). Selected IDs were explicit OpenRouter `:free` entries with zero known
+catalog prices. Known Run ledger costs sum to **$0**; this is recorded ledger
+evidence, not a provider invoice. One-shot embedding/query/rerank cost and
+token coverage remain unknown and are excluded from that subtotal. There
+were no paid fallback or cloud TTS requests. Reports are local ignored files
+under `tmp/dogfood/20261009*.jsonl`; they contain transient test Run IDs, and
+transactions roll back rather than adding live examples to the demo.
+
+Corrections made during this acceptance:
+
+- Embedding catalog checks and query embedding now preserve the selected
+  provider instead of resolving a same-ID model under another provider.
+- Retrieval counts/candidates exclude another provider's same-ID vectors
+  after partial re-embedding. The optional native SQLite partition is rebuilt
+  from fresh candidates, so same-count vector replacement and filtering before
+  top-k do not reuse stale rows. This correction has local regression evidence;
+  the live Knowledge check used the default application-cosine adapter.
+- Rails notification exceptions now record failed provider lifecycle events.
+  Rejected requests previously could be labelled succeeded/received; a real
+  notification-bus regression verifies failure classification without an API.
+- The suite requires every scheduled case and intended judgment to complete;
+  partial output no longer passes a comparison. Quality/exact-match scores
+  are outside this integration acceptance.
+- Cost reports separate unknown one-shot usage from known Run costs, include
+  early-failed Runs and requested models, and save failure classes rather than
+  generated content. Free gates, output caps and request ceilings have offline
+  regressions.
+
+Dots returned schema-invalid output under the small budget; Apodex returned a
+provider error. A trial reasoning-disable parameter was rejected because the
+Liquid endpoint mandates reasoning; that harness setting was removed. The
+last comparison recorded a Liquid rate limit and a successful Nvidia case
+plus judgment. Automatic retries stay off. Follow the
+[manual acceptance list](OPERATIONS.md#remaining-manual-acceptance) when free
+capacity is available; no model or retrieval quality is certified.
+Framework findings and contribution candidates are tracked separately in
+[UPSTREAM_ISSUES.md](UPSTREAM_ISSUES.md); application defects and provider
+failures do not count as upstream bugs.
+
+### Historical 2026-09-28 — RubyLLM 2.0
 
 Historical record: Rails 8.1.4, RubyLLM 2.0.0. No live provider request was
 made during the 2026-10-08 upgrade review.
@@ -108,6 +159,22 @@ verification of the released fixes.
 `test/services/ai/ruby_llm_internals_test.rb` fails when one moves.
 
 ## Verification snapshot
+
+2026-10-09 free acceptance and integrity corrections, pinned versions and
+macOS arm64:
+
+| Check | Result |
+| --- | --- |
+| Rails suite | 405 runs, 3,495 assertions, 0 failures/errors, 10 opt-in live skips |
+| Free live scope | Five core flows passed; full comparison remains partial; 23 POSTs across five bounded invocations; four intentionally uncalled scenarios |
+| Provider/notification/native-index regressions | Selected-provider filtering and real Rails exception notifications passed; native index maintenance exercised with real SQLite and a Ruby scan probe, not a native binary |
+| Public thinking-disable probe | RubyLLM 2.1 `Chat#render` correctly emits `reasoning.enabled=false`; no network/database/provider call; candidate excluded |
+| Style/autoload/static security | RuboCop: 303 files clean; Zeitwerk passed; Brakeman 8.1.0: 0 warnings/errors |
+| External scope | No hosted CI, Docker runtime or deployment verification; Docker daemon socket unavailable; no service started for this acceptance |
+
+No UI/assets/dependency changes were made in this slice. The browser/build
+checks below belong to the earlier demo slice. Native runtime, fee-bearing
+capabilities and full comparison remain explicit acceptance gaps.
 
 2026-10-09 read-only demo development, same pinned versions and macOS arm64:
 

@@ -1,6 +1,40 @@
 require "test_helper"
 
 class Ai::Knowledge::VectorStoreSqliteExtensionTest < ActiveSupport::TestCase
+  # Exercise real SQLite index maintenance without claiming coverage of the
+  # optional native binary. The scan probe reads the derived table and applies
+  # the same cosine ordering/limit in Ruby.
+  class SqliteIndexProbe < Ai::Knowledge::VectorStore::SqliteExtension
+    def available?
+      true
+    end
+
+    def index_rows(collection:, model_id:, dimension: 2)
+      table = connection.quote_table_name(index_table(dimension))
+      execute_sql("SELECT knowledge_embedding_id, vector FROM #{table} WHERE knowledge_collection_id = ? AND model_id = ?",
+        [ collection.id, model_id ]).map do |row|
+        row.is_a?(Hash) ? row : { "knowledge_embedding_id" => row[0], "vector" => row[1] }
+      end
+    end
+
+    private
+
+    def initialize_column!(_table, _dimension)
+      # vector_init requires the optional extension.
+    end
+
+    def scan(table:, query_vector:, collection_id:, model_id:, limit:)
+      quoted_table = connection.quote_table_name(table)
+      rows = execute_sql("SELECT knowledge_embedding_id, vector FROM #{quoted_table} WHERE knowledge_collection_id = ? AND model_id = ?",
+        [ collection_id, model_id ]).map do |row|
+        row.is_a?(Hash) ? row : { "knowledge_embedding_id" => row[0], "vector" => row[1] }
+      end
+      rows.map do |row|
+        { "knowledge_embedding_id" => row.fetch("knowledge_embedding_id"), "distance" => 1.0 - cosine(query_vector, decode(row.fetch("vector"))) }
+      end.sort_by { |row| [ row.fetch("distance"), row.fetch("knowledge_embedding_id") ] }.first(limit)
+    end
+  end
+
   setup do
     @adapter = Ai::Knowledge::VectorStore.adapter_for("sqlite_vector_extension")
   end
@@ -75,5 +109,53 @@ class Ai::Knowledge::VectorStoreSqliteExtensionTest < ActiveSupport::TestCase
     assert_equal "sqlite_application_cosine", outcome.adapter_key
     assert_includes outcome.adapter_note, "sqlite_vector_extension unavailable"
     assert_equal 1, outcome.results.length
+  end
+
+  test "native derived partition contains only supplied fresh provider candidates before applying the limit" do
+    adapter = SqliteIndexProbe.new
+    collection = create_project(name: "Native provider partition project").knowledge_collections.create!(name: "Notes")
+    excluded = create_embedding(collection, title: "Old provider", provider: "openai", vector: [ 1.0, 0.0 ])
+    selected = create_embedding(collection, title: "Selected provider", provider: "openrouter", vector: [ 0.0, 1.0 ])
+    stale = create_embedding(collection, title: "Stale source", provider: "openrouter", vector: [ 1.0, 0.0 ])
+    stale.update!(content_checksum: "old-checksum")
+
+    # Populate the previous partition first, then ask for the filtered candidate.
+    adapter.rank(query_vector: [ 1.0, 0.0 ], candidates: [ excluded, selected, stale ], limit: 1,
+      collection: collection, model_id: "shared-embed")
+    ranked = adapter.rank(query_vector: [ 1.0, 0.0 ], candidates: [ selected ], limit: 1,
+      collection: collection, model_id: "shared-embed")
+
+    assert_equal [ selected.id ], adapter.index_rows(collection: collection, model_id: "shared-embed").map { |row| row.fetch("knowledge_embedding_id") }
+    assert_equal [ selected.id ], ranked.map { |embedding, _| embedding.id }
+    assert_in_delta 0.0, ranked.first.last, 1e-6
+  end
+
+  test "native derived partition refreshes replaced vectors even when source count and ids are unchanged" do
+    adapter = SqliteIndexProbe.new
+    collection = create_project(name: "Native vector replacement project").knowledge_collections.create!(name: "Notes")
+    first = create_embedding(collection, title: "First", provider: "openrouter", vector: [ 1.0, 0.0 ])
+    second = create_embedding(collection, title: "Second", provider: "openrouter", vector: [ 0.0, 1.0 ])
+
+    before = adapter.rank(query_vector: [ 1.0, 0.0 ], candidates: [ first, second ], limit: 1,
+      collection: collection, model_id: "shared-embed")
+    first.update!(vector: adapter.encode([ 0.0, 1.0 ]))
+    second.update!(vector: adapter.encode([ 1.0, 0.0 ]))
+    after = adapter.rank(query_vector: [ 1.0, 0.0 ], candidates: [ first.reload, second.reload ], limit: 1,
+      collection: collection, model_id: "shared-embed")
+
+    assert_equal [ first.id ], before.map { |embedding, _| embedding.id }
+    assert_equal [ second.id ], after.map { |embedding, _| embedding.id }
+    assert_equal [ first.id, second.id ].sort, adapter.index_rows(collection: collection, model_id: "shared-embed").map { |row| row.fetch("knowledge_embedding_id") }.sort
+    assert_in_delta 1.0, after.first.last, 1e-6
+  end
+
+  private
+
+  def create_embedding(collection, title:, provider:, vector:)
+    item = collection.knowledge_items.create!(title: title, content_text: "#{title} vector evidence.")
+    Ai::Knowledge::Ingestor.call(item)
+    chunk = item.knowledge_chunks.first
+    chunk.knowledge_embeddings.create!(provider: provider, model_id: "shared-embed", dimensions: vector.length,
+      vector: @adapter.encode(vector), content_checksum: chunk.content_checksum)
   end
 end

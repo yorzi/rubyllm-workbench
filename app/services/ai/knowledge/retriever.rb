@@ -8,17 +8,19 @@ module Ai
 
       attr_reader :stale_count
 
-      def self.search(collection:, query:, limit: DEFAULT_LIMIT, mode: "lexical", query_vector: nil, model_id: nil)
-        new(collection:, query:, limit:, mode:, query_vector:, model_id:).search
+      def self.search(collection:, query:, limit: DEFAULT_LIMIT, mode: "lexical", query_vector: nil, model_id: nil, provider: nil)
+        new(collection:, query:, limit:, mode:, query_vector:, model_id:, provider:).search
       end
 
-      def initialize(collection:, query:, limit:, mode:, query_vector:, model_id:)
+      def initialize(collection:, query:, limit:, mode:, query_vector:, model_id:, provider: nil)
         @collection = collection
         @query = query.to_s
         @limit = [ limit.to_i, 1 ].max.clamp(1, MAX_LIMIT)
         @mode = MODES.include?(mode.to_s) ? mode.to_s : "lexical"
         @query_vector = Array(query_vector)
         @model_id = model_id.presence
+        @provider = provider.presence
+        @provider ||= collection.embedding_provider.presence if @model_id == collection.embedding_model_id
         @stale_count = 0
       end
 
@@ -129,10 +131,13 @@ module Ai
       end
 
       def embedding_candidates
-        KnowledgeEmbedding.ready
+        embeddings = KnowledgeEmbedding.ready
           .for_model(@model_id)
           .joins(knowledge_chunk: :knowledge_item)
           .where(knowledge_items: { ingestion_status: "ready", knowledge_collection_id: @collection.id })
+        embeddings = embeddings.where(provider: @provider.to_s) if @provider.present?
+
+        embeddings
           .includes(:knowledge_chunk)
           .to_a
           .select { |embedding| fresh?(embedding) }

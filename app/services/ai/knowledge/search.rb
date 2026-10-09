@@ -44,6 +44,7 @@ module Ai
         @limit = limit
         @requested_mode = MODES.include?(mode.to_s) ? mode.to_s : "lexical"
         @embedding_model_id = embedding_model_id.presence || collection.embedding_model_id.presence
+        @embedding_provider = collection.embedding_provider.presence if @embedding_model_id == collection.embedding_model_id
         @rerank = rerank.to_s.in?(%w[1 true]) || rerank == true
         @rerank_model_id = rerank_model_id.presence
         @client = client
@@ -60,7 +61,8 @@ module Ai
           limit: @limit,
           mode: resolution[:mode],
           query_vector: resolution[:query_vector],
-          model_id: @embedding_model_id
+          model_id: @embedding_model_id,
+          provider: @embedding_provider
         )
         results = retriever.search
         rerank_state = apply_rerank(results)
@@ -71,9 +73,9 @@ module Ai
           requested_mode: @requested_mode,
           degraded_reason: resolution[:degraded_reason],
           embedding_model_id: @embedding_model_id,
-          embedding_provider: @collection.embedding_provider,
+          embedding_provider: @embedding_provider,
           dimensions: @collection.embedding_dimensions,
-          embedded_chunk_count: @collection.embedded_chunk_count(model_id: @embedding_model_id),
+          embedded_chunk_count: @collection.embedded_chunk_count(model_id: @embedding_model_id, provider: @embedding_provider),
           stale_count: retriever.stale_count,
           query: @query,
           adapter_key: selection.key,
@@ -142,9 +144,9 @@ module Ai
           requested_mode: @requested_mode,
           degraded_reason: nil,
           embedding_model_id: @embedding_model_id,
-          embedding_provider: @collection.embedding_provider,
+          embedding_provider: @embedding_provider,
           dimensions: @collection.embedding_dimensions,
-          embedded_chunk_count: @collection.embedded_chunk_count(model_id: @embedding_model_id),
+          embedded_chunk_count: @collection.embedded_chunk_count(model_id: @embedding_model_id, provider: @embedding_provider),
           stale_count: 0,
           query: @query,
           adapter_key: selection.key,
@@ -162,9 +164,10 @@ module Ai
           return degraded("No embedding model is selected for this collection.")
         end
 
-        availability = Ai::Knowledge::EmbeddingCatalog.availability(@embedding_model_id)
+        availability = Ai::Knowledge::EmbeddingCatalog.availability(@embedding_model_id, provider: @embedding_provider)
         return degraded(availability.reason) unless availability.available
-        return degraded("No embeddings are stored for #{@embedding_model_id} yet.") unless @collection.semantic_searchable?(model_id: @embedding_model_id)
+        @embedding_provider = availability.entry.provider
+        return degraded("No embeddings are stored for #{@embedding_model_id} yet.") unless @collection.semantic_searchable?(model_id: @embedding_model_id, provider: @embedding_provider)
 
         { mode: @requested_mode, query_vector: embed_query, degraded_reason: nil }
       rescue Ai::Knowledge::Embedder::Error => error
@@ -176,7 +179,7 @@ module Ai
       end
 
       def embed_query
-        Ai::Knowledge::Embedder.embed_text(@query, model_id: @embedding_model_id, client: @client)
+        Ai::Knowledge::Embedder.embed_text(@query, model_id: @embedding_model_id, provider: @embedding_provider, client: @client)
       end
     end
   end

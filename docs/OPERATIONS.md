@@ -4,7 +4,7 @@ How to run the workbench locally, verify it, and interpret what you see. It
 never stores provider secrets, and it does not present local success as a
 deployment or business result.
 
-Updated: 2026-10-08
+Updated: 2026-10-09
 
 ## Prerequisites
 
@@ -119,18 +119,63 @@ The live suite in `test/live/provider_dogfood_test.rb` is opt-in and skipped by
 default. It needs a configured provider (OpenRouter by default):
 
 ```sh
-bin/dogfood           # free-model scenarios only
-bin/dogfood --paid    # adds hosted web search, transcription and image (a few cents)
+bin/dogfood           # six free-model flow checks; manual items are reported separately
+# Only with deliberate fee-bearing acceptance and explicit model selection:
+bin/dogfood --paid
 ```
 
 `bin/dogfood` runs the scenarios serially, prints a Markdown summary table and
 appends one JSON line per scenario to `tmp/dogfood/<timestamp>.jsonl` (model
-ids, Run ids, tokens and cost only). Override models with `DOGFOOD_*_MODEL`
-variables, for example `DOGFOOD_AGENT_MODEL=openai/gpt-5-nano`. Runs happen in
-the test database and are rolled back. The suite sends its prompts to the
-provider, may cost money, and depends on network and provider availability;
-run it deliberately, for example after each RubyLLM upgrade, and record the
-result in [CAPABILITIES.md](CAPABILITIES.md).
+ids, transient Run ids, statuses, costs and safe diagnostic reasons; no prompt
+or answer text). Override models with `DOGFOOD_*_MODEL` variables. Free mode
+requires explicit OpenRouter `:free` IDs in both the current public catalog
+and RubyLLM registry, with known zero catalog prices. Chat requests disable
+the web plugin and add a zero price ceiling; one-shot embedding/rerank calls
+also receive that ceiling. No model fallback is configured. Transport retries
+are disabled, requests time out after 60 seconds, outputs are capped at 2,048
+tokens, and the process stops allowing calls after 24 POST requests. These
+test-only limits do not alter the interactive workbench.
+
+The six automated checks cover streaming, structured output, tool approval
+and continuation, embeddings/semantic/hybrid/rerank, two-model comparison
+with all intended judgments, and a saved Agent using a local tool. Assertions
+check integration and durable records, without rating answer/retrieval quality.
+Missing models and fee-bearing capabilities stay visible as manual skips.
+Both `LIVE_DOGFOOD` and `LIVE_DOGFOOD_PAID` require the exact value `1`.
+
+Local TTS is pending the owner's API details; no cloud speech call runs as a
+substitute. Hosted web search, transcription and image generation remain
+manual unless deliberately enabled. Transcription also requires a short local
+`DOGFOOD_TRANSCRIPTION_FILE`. The harness does not start a TTS service.
+
+Runs use the test database and roll back. Cost/tokens in the report cover Run
+Attempts; embedding/query/rerank usage is still unowned and is labelled
+unknown, never inferred as zero or summed from per-chunk copies of batch
+usage. A zero known subtotal is not a complete invoice. Free model availability
+and account-enforced plugins remain external constraints; review the
+[OpenRouter plugin settings](https://openrouter.ai/docs/guides/features/plugins/overview)
+if the account forces plugins that requests cannot disable. Record results in
+[CAPABILITIES.md](CAPABILITIES.md) after each intentional run.
+
+## Remaining manual acceptance
+
+Keep the model/voice, date, terminal Run state, linked Artifacts and fee
+coverage with the result. Acceptance concerns the workflow; answer, retrieval,
+voice and image quality are outside this exercise.
+
+| Item | Next action | Flow acceptance |
+| --- | --- | --- |
+| Full two-model comparison | When free capacity is available, run `bin/dogfood --include test_evaluation_comparison_with_judge`; keep both explicit free IDs. | Both case outputs received/schema-valid and both intended judge Runs complete in the same invocation. A partial run stays failed. |
+| Local TTS | Owner supplies loopback endpoint, API protocol, model and voice; implement the adapter before acceptance. | Existing Speech Run → audio Artifact → Active Storage attachment → playback; failure/cancellation/recovery preserve correct state. No cloud fallback. |
+| Hosted web search | Deliberately choose model and fee budget, then run only its scenario with `--paid --include test_agent_with_hosted_web_search`. | Local tool completes, hosted usage is observed, citations/report are stored; do not infer search use from answer text. |
+| Transcription | Provide a short local audio file through `DOGFOOD_TRANSCRIPTION_FILE` and an explicit supported model; intentionally enable only its paid scenario. | Source-audio and nonblank transcript Artifacts persist in a successful Run. Do not rate transcription accuracy. |
+| Image | Deliberately select supported model/budget and run only `test_image_generation` with `--paid`. | Successful Run with attached image Artifact and a valid image MIME type. |
+| OCR / Batch / parallel tools | Choose a supporting provider and explicit scope/budget before a small walkthrough. | OCR provenance, complete Batch reconciliation, or the selected parallel policy respectively; there is no current 2.1 live acceptance claim. |
+| Video | Implement durable job restoration and ledger attribution first. | Submission/polling alone is insufficient to claim recoverable video execution. |
+
+No background service is needed for the live Rails integration tests. Any
+service started for local TTS acceptance must bind loopback and be stopped
+when the task finishes; the harness does not stop an owner-managed service.
 
 ## Upgrading RubyLLM
 
@@ -141,8 +186,9 @@ result in [CAPABILITIES.md](CAPABILITIES.md).
    Batch workflow and native streaming evidence regressions. Remove a patch in
    [CAPABILITIES.md](CAPABILITIES.md#rubyllm-workarounds) that the release
    fixes. Both 2.0 patches are removed on the current 2.1 pin.
-3. Intentionally run `bin/dogfood --paid` with an agreed provider and budget,
-   then update the matrix. Historical live evidence does not certify an upgrade.
+3. Intentionally run `bin/dogfood` using current free models, then update the
+   matrix. Put fee-bearing or unavailable capabilities on the manual list;
+   historical live evidence does not certify an upgrade.
 
 ## Docker
 

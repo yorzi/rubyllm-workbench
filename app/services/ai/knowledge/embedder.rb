@@ -36,7 +36,7 @@ module Ai
       end
 
       def call
-        availability = Ai::Knowledge::EmbeddingCatalog.availability(@model_id)
+        availability = Ai::Knowledge::EmbeddingCatalog.availability(@model_id, provider: @provider)
         raise ConfigurationError, availability.reason unless availability.available
 
         entry = availability.entry
@@ -66,7 +66,7 @@ module Ai
       end
 
       def embed_query(text)
-        availability = Ai::Knowledge::EmbeddingCatalog.availability(@model_id)
+        availability = Ai::Knowledge::EmbeddingCatalog.availability(@model_id, provider: @provider)
         raise ConfigurationError, availability.reason unless availability.available
 
         entry = availability.entry

@@ -8,6 +8,9 @@ before adding more independent labs. Current behavior is in
 [SYSTEM_GUIDE.md](docs/SYSTEM_GUIDE.md), verification in
 [CAPABILITIES.md](docs/CAPABILITIES.md), and the visitor route in
 [SHOWCASE.md](docs/SHOWCASE.md).
+Track RubyLLM/Rails findings in [UPSTREAM_ISSUES.md](docs/UPSTREAM_ISSUES.md),
+with reproduction status and an explicit application/provider boundary before
+an upstream contribution.
 
 ## Current coverage
 
@@ -35,7 +38,10 @@ Complete this before expanding the feature set. Follow
 The isolated read-only synthetic demo now passes local request, database,
 job and desktop/390px browser checks, including a real production-mode
 preview. See [DEMO.md](docs/DEMO.md). Next complete current-version live
-acceptance and Linux/container/hosted CI checks before public hosting.
+acceptance and Linux/container/hosted CI checks before public hosting. Free
+2.1 acceptance now verifies five core flows; the full two-model comparison
+remains partial under provider failures/limits. Its small manual rerun and
+the deferred capability list are in [OPERATIONS.md](docs/OPERATIONS.md#remaining-manual-acceptance).
 
 - [x] Pin RubyLLM 2.1.0, apply its Rails migration, verify Rails is already at
       the latest stable 8.1.4, and remove obsolete patches.
@@ -43,8 +49,12 @@ acceptance and Linux/container/hosted CI checks before public hosting.
 - [x] Add a ten-minute tour, skills-to-code map and source-linked diagrams.
 - [x] MIT license, contribution/security guides, issue/PR templates, blank
       environment example and opt-in provider tests exist.
-- [ ] Run live acceptance on 2.1 with explicit provider/model selection and a
-      cost budget. Retain 2.0 evidence as history.
+- [x] Run bounded free acceptance on 2.1 with explicit models; preserve five
+      passed flows, partial comparison and uncalled manual capabilities in
+      the evidence matrix. Retain 2.0 evidence as history.
+- [ ] Complete the full two-model/one-case comparison when free capacity
+      permits it. Keep hosted search/transcription/image as owner acceptance,
+      and local TTS pending API details and adapter work.
 - [ ] Verify hosted CI for the candidate commit, fresh Debian/Ubuntu setup
       with and without libvips, and the runtime container.
 - [ ] Confirm private vulnerability reporting and review git history and
@@ -62,22 +72,20 @@ Completion: an unfamiliar Rails developer can install from a clean checkout,
 complete the tour without a key, and inspect source/tests behind every claim.
 Public access must not create a model-spending or upload endpoint.
 
-## P1 — one integrated case study with measured quality
+## P1 — complete an understandable integrated workflow
 
 Next, strengthen the existing Knowledge → Agent → Evaluation path. Suggested
 case: answering questions about a small, redistributable Rails application
 from source excerpts, with citations and refusal when evidence is absent.
-The first provider-free development slice is a licensed corpus and labelled
-query set, lexical recall@k/MRR runner, and tests for missing evidence and
-misleading retrieved instructions. Add measured semantic/hybrid/rerank runs
-only after choosing a provider/model and budget. Keep the synthetic tour
-separate from the measured case study.
+Use a tiny licensed corpus and OpenRouter free models to verify the complete
+path, durable evidence and failure behavior. Answer and retrieval quality
+benchmarks are deferred by owner preference; they do not block integration
+acceptance. Keep the synthetic tour separate from real requests.
 
-1. Version a corpus and labelled query set with relevant chunk IDs, missing-
-   answer cases and misleading retrieved instructions. Measure recall@k and
-   reciprocal rank for lexical, semantic, hybrid and reranked retrieval on
-   the same corpus/model/chunk revision. Record sample count, latency, cost
-   and machine. Keep source text separate from tool authority.
+1. Version a small corpus with relevant chunk IDs, missing-answer cases and
+   misleading retrieved instructions. Verify lexical, semantic, hybrid and
+   reranked requests on frozen corpus/model/chunk revisions. Keep source text
+   separate from tool authority; record availability and flow outcomes.
 2. Add a bounded grounded-answer workflow that freezes source IDs, checksums,
    offsets, retrieval options and embedding model into a Run. Validate returned
    citations against the snapshot. Test empty evidence, stale sources,
@@ -85,15 +93,20 @@ separate from the measured case study.
 3. Integrate `RubyLLM::Evaluation` and `RubyLLM::Judge` 2.1 on that case set.
    Keep native evaluation distinct from the immutable application ledger and
    avoid duplicate calls. Compare exact matching with a human-calibrated
-   qualitative rubric; publish disagreements and failures.
+   qualitative rubric when quality study is requested; initially accept that
+   each scheduled output and judgment completes and is stored correctly.
 4. Attribute one-shot embedding, rerank and media usage to an application
    owner. Preserve reported/estimated provenance before serialization when
    public callbacks permit it; never infer it from a ledger total. Reconcile
    retries and hosted-tool fees without counting a request twice.
 
-Completion: a reproducible case study with commands, corpus licence, frozen
-inputs, measured outcomes and a useful failure analysis. Live calls require
-deliberate authorization and a bounded budget.
+5. Connect the owner's local TTS API once endpoint, protocol, model and voice
+   are provided. Reuse Speech Runs, Artifacts, Active Storage and playback;
+   verify errors, cancellation and recovery. No cloud TTS fallback.
+
+Completion: a reproducible workflow with commands, corpus licence, frozen
+inputs, flow outcomes and useful failure evidence. Free calls are the default;
+unavailable or fee-bearing capabilities remain explicit manual acceptance.
 
 ## P2 — RubyLLM 2.1 production integration
 
@@ -110,6 +123,8 @@ Take one slice at a time after the case study.
 
 - Complete live video, OCR, Batch and parallel-tool acceptance on supporting
   providers. Remove experimental labels only for verified scope.
+- Add retrieval recall/MRR and human-calibrated answer/judge quality studies
+  when requested; the current priority is integration with minimal cost.
 - Obtain a public video-job restoration API before promising durable video.
 - Add page-level OCR provenance and measured SQLite corpus/concurrency limits.
   Package the optional vector extension only after measuring it.

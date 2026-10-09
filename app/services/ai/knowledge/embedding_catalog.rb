@@ -25,10 +25,10 @@ module Ai
         matches.first
       end
 
-      def self.availability(model_id, models: nil, config: RubyLLM.config)
+      def self.availability(model_id, provider: nil, models: nil, config: RubyLLM.config)
         return Availability.new(available: false, reason: "No embedding model is selected.", entry: nil) if model_id.blank?
 
-        entry = find(model_id, models: models, config: config)
+        entry = find(model_id, provider: provider, models: models, config: config)
         return Availability.new(available: false, reason: "Embedding model #{model_id} is not in the RubyLLM catalog.", entry: nil) if entry.nil?
         return Availability.new(available: false, reason: "#{entry.provider_name} is not configured.", entry: entry) unless entry.configured
 

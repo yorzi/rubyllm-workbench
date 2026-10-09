@@ -121,9 +121,22 @@ module Ai
 
           dimension = query_vector.length
           table = index_table(dimension)
-          ensure_index!(table: table, dimension: dimension, collection_id: collection.id, model_id: model_id)
+          candidates = candidates.select do |candidate|
+            blob = candidate.vector.to_s
+            next false unless blob.bytesize == dimension * 4
 
-          rows = scan(table: table, query_vector: query_vector, collection_id: collection.id, model_id: model_id, limit: limit)
+            vector = decode(blob)
+            vector.length == dimension && vector.any? { |value| !value.zero? }
+          end
+          return [] if candidates.empty?
+
+          # The caller has already filtered provider and content freshness.
+          # Rebuild from those exact IDs: counts cannot detect replaced vectors,
+          # and excluded rows must not consume the native scan's result limit.
+          rows = connection.transaction do
+            ensure_index!(table: table, dimension: dimension, collection_id: collection.id, model_id: model_id, candidates: candidates)
+            scan(table: table, query_vector: query_vector, collection_id: collection.id, model_id: model_id, limit: limit)
+          end
           by_id = candidates.index_by(&:id)
 
           rows.filter_map do |row|
@@ -143,7 +156,7 @@ module Ai
 
         private
 
-        def ensure_index!(table:, dimension:, collection_id:, model_id:)
+        def ensure_index!(table:, dimension:, collection_id:, model_id:, candidates:)
           quoted_table = connection.quote_table_name(table)
           connection.execute(<<~SQL)
             CREATE TABLE IF NOT EXISTS #{quoted_table} (
@@ -154,32 +167,24 @@ module Ai
             )
           SQL
 
-          if indexed_count(table, collection_id, model_id) != source_count(collection_id, model_id, dimension)
-            rebuild_index!(table: table, dimension: dimension, collection_id: collection_id, model_id: model_id)
-          end
+          rebuild_index!(table: table, collection_id: collection_id, model_id: model_id, candidates: candidates)
 
           initialize_column!(table, dimension)
         end
 
-        def rebuild_index!(table:, dimension:, collection_id:, model_id:)
+        def rebuild_index!(table:, collection_id:, model_id:, candidates:)
           quoted_table = connection.quote_table_name(table)
           connection.transaction do
             execute_sql(
               "DELETE FROM #{quoted_table} WHERE knowledge_collection_id = ? AND model_id = ?",
               [ collection_id, model_id.to_s ]
             )
-            execute_sql(<<~SQL, [ collection_id, model_id.to_s, dimension ])
-              INSERT INTO #{quoted_table} (knowledge_embedding_id, knowledge_collection_id, model_id, vector)
-              SELECT knowledge_embeddings.id, knowledge_items.knowledge_collection_id, knowledge_embeddings.model_id, knowledge_embeddings.vector
-              FROM knowledge_embeddings
-              JOIN knowledge_chunks ON knowledge_chunks.id = knowledge_embeddings.knowledge_chunk_id
-              JOIN knowledge_items ON knowledge_items.id = knowledge_chunks.knowledge_item_id
-              WHERE knowledge_items.knowledge_collection_id = ?
-                AND knowledge_embeddings.model_id = ?
-                AND knowledge_embeddings.status = 'ready'
-                AND knowledge_embeddings.dimensions = ?
-                AND knowledge_items.ingestion_status = 'ready'
-            SQL
+            candidates.each do |candidate|
+              execute_sql(
+                "INSERT INTO #{quoted_table} (knowledge_embedding_id, knowledge_collection_id, model_id, vector) VALUES (?, ?, ?, ?)",
+                [ candidate.id, collection_id, model_id.to_s, SQLite3::Blob.new(candidate.vector.to_s) ]
+              )
+            end
           end
         end
 
@@ -215,28 +220,6 @@ module Ai
           (1.0 - distance.to_f).clamp(-1.0, 1.0).round(6)
         end
 
-        def indexed_count(table, collection_id, model_id)
-          quoted_table = connection.quote_table_name(table)
-          scalar(
-            "SELECT COUNT(*) FROM #{quoted_table} WHERE knowledge_collection_id = ? AND model_id = ?",
-            [ collection_id, model_id.to_s ]
-          ).to_i
-        end
-
-        def source_count(collection_id, model_id, dimension)
-          scalar(<<~SQL, [ collection_id, model_id.to_s, dimension ]).to_i
-            SELECT COUNT(*)
-            FROM knowledge_embeddings
-            JOIN knowledge_chunks ON knowledge_chunks.id = knowledge_embeddings.knowledge_chunk_id
-            JOIN knowledge_items ON knowledge_items.id = knowledge_chunks.knowledge_item_id
-            WHERE knowledge_items.knowledge_collection_id = ?
-              AND knowledge_embeddings.model_id = ?
-              AND knowledge_embeddings.dimensions = ?
-              AND knowledge_embeddings.status = 'ready'
-              AND knowledge_items.ingestion_status = 'ready'
-          SQL
-        end
-
         # ActiveRecord's execute ignores bare array binds, and the extension
         # needs Blobs bound as Blobs, so index maintenance and scans go through
         # prepared statements on the underlying SQLite3 connection.
@@ -245,11 +228,6 @@ module Ai
           statement.execute(binds).to_a
         ensure
           statement&.close
-        end
-
-        def scalar(sql, binds = [])
-          row = execute_sql(sql, binds).first
-          row.is_a?(Hash) ? row.values.first : row&.first
         end
 
         def load_extension!

@@ -189,7 +189,7 @@ module Ai
     end
 
     def event_status
-      return "failed" if @payload[:error].present?
+      return "failed" if %i[error exception_object exception].any? { |key| @payload[key].present? }
       return "submitted" if @name == "video_job.ruby_llm"
 
       "succeeded"
@@ -205,10 +205,17 @@ module Ai
     end
 
     def error_class
-      error = @payload[:error]
-      return nil if error.blank?
+      error = @payload[:error].presence
+      error ||= @payload[:exception_object] if @payload[:exception_object].is_a?(Exception)
+      return error.is_a?(Class) ? error.name : error.class.name if error
 
-      error.is_a?(Class) ? error.name : error.class.name
+      # Notifications can expose only [class name, message]. Keep the class
+      # scalar without resolving a constant or retaining the message tuple.
+      tuple = @payload[:exception]
+      name = tuple.first if tuple.is_a?(Array)
+      return unless name.is_a?(String) && name.length <= 200
+
+      name if name.match?(/\A[A-Z]\w*(?:::[A-Z]\w*)*\z/)
     end
 
     def string_value(value)

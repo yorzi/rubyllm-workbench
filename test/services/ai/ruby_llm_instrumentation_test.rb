@@ -1,6 +1,8 @@
 require "test_helper"
 
 class Ai::RubyLlmInstrumentationTest < ActiveSupport::TestCase
+  class SyntheticProviderError < StandardError; end
+
   setup do
     @project = create_project(name: "Instrumentation project")
     @chat = create_chat(@project)
@@ -64,6 +66,62 @@ class Ai::RubyLlmInstrumentationTest < ActiveSupport::TestCase
     assert_equal "failed", event.payload["status"]
     assert_equal "RubyLLM::Error", event.payload["error_class"]
     assert_nil event.payload["chat"]
+  end
+
+  test "a raised notification exception records failed transport without persisting its content" do
+    Ai::RubyLlmInstrumentation.subscribe!
+    secret = "synthetic-provider-secret-and-generated-content"
+
+    assert_raises(SyntheticProviderError) do
+      Ai::ExecutionContext.with(run_id: @run.id, attempt_id: @attempt.id) do
+        ActiveSupport::Notifications.instrument("chat.ruby_llm", {
+          chat: Object.new, provider: "openrouter", model: @chat.model_id
+        }) do
+          raise SyntheticProviderError, secret
+        end
+      end
+    end
+
+    event = LifecycleEvent.find_by!(name: "ai.provider.chat", run_id: @run.id)
+    assert_equal @attempt.id, event.attempt_id
+    assert_equal "failed", event.payload.fetch("status")
+    assert_equal SyntheticProviderError.name, event.payload.fetch("error_class")
+    assert_equal "failed", Ai::EvaluationCaseOutcome.call(@run.reload).transport_status
+    %w[error exception exception_object error_message message chat].each do |key|
+      assert_not event.payload.key?(key), "raw #{key} must not be persisted"
+    end
+    assert_not_includes event.to_json, secret
+  end
+
+  test "exception tuples retain only a safe class name when the exception object is unavailable" do
+    secret = "synthetic-exception-message-and-secret"
+    Ai::ExecutionContext.with(run_id: @run.id, attempt_id: @attempt.id) do
+      record_event("chat.ruby_llm", { exception: [ "RubyLLM::BadRequestError", secret ] })
+    end
+
+    event = LifecycleEvent.find_by!(name: "ai.provider.chat", run_id: @run.id)
+    assert_equal "failed", event.payload.fetch("status")
+    assert_equal "RubyLLM::BadRequestError", event.payload.fetch("error_class")
+    assert_equal "failed", Ai::EvaluationCaseOutcome.call(@run.reload).transport_status
+    assert_not event.payload.key?("exception")
+    assert_not_includes event.to_json, secret
+  end
+
+  test "malformed exception tuples never become persisted error class content" do
+    [ "not a class; synthetic secret", "S" * 201, Object.new ].each do |name|
+      Ai::ExecutionContext.with(run_id: @run.id, attempt_id: @attempt.id) do
+        record_event("chat.ruby_llm", { exception: [ name, "synthetic message" ] })
+      end
+    end
+
+    events = LifecycleEvent.where(name: "ai.provider.chat", run_id: @run.id)
+    assert_equal 3, events.count
+    events.each do |event|
+      assert_equal "failed", event.payload.fetch("status")
+      assert_not event.payload.key?("error_class")
+      assert_not event.payload.key?("exception")
+      assert_not_includes event.to_json, "synthetic"
+    end
   end
 
   test "persists video provider job references as submitted support evidence" do

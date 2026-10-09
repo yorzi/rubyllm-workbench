@@ -2,7 +2,7 @@
 # Runs the opt-in live provider dogfood suite and prints a summary table.
 #
 #   bin/dogfood           free-model scenarios only
-#   bin/dogfood --paid    also run scenarios that cost money (a few cents)
+#   bin/dogfood --paid    deliberately allow fee-bearing/manual scenarios
 #
 # Needs a configured provider (OpenRouter by default; see
 # test/live/provider_dogfood_test.rb for model overrides). Results are appended
@@ -30,14 +30,23 @@ status = $?.exitstatus
 rows = File.exist?(report) ? File.readlines(report).map { |line| JSON.parse(line) } : []
 abort "No dogfood results were recorded." if rows.empty?
 
-puts "\n| Scenario | Result | Models | Runs | Tokens in/out | Cost (reported / recorded / estimated) | Notes |"
-puts "| --- | --- | --- | --- | --- | --- | --- |"
+display = ->(value) { value.nil? ? "unknown" : value }
+puts "\n| Scenario | Result | Models | Runs | POST requests | Tokens in/out (Runs only) | Known Run cost (USD) | Coverage | Notes |"
+puts "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"
 rows.sort_by { |row| row["scenario"] }.each do |row|
-  notes = [ row["failure"], *row["notes"] ].compact.join("; ").gsub("|", "\\|")
+  notes = [ row["skip_reason"], row["failure"], *row["notes"] ].compact.uniq.join("; ").gsub("|", "\\|")
+  coverage = if row["result"] == "skip" && row["run_ids"].empty?
+    "not called"
+  elsif row["cost_complete"]
+    "Run attempts complete"
+  else
+    "incomplete: #{row['unknown_cost_attempts']} unknown Attempts; #{row['untracked_cost_operations'].join(', ')}"
+  end
   puts "| #{row['scenario']} | #{row['result']} | #{row['models'].join(', ')} | #{row['run_ids'].join(', ')} | " \
-       "#{row['input_tokens']}/#{row['output_tokens']} | $#{row['reported_cost']} / $#{row['recorded_cost'] || 0} / $#{row['estimated_cost']} | #{notes} |"
+       "#{display.call(row['http_post_requests'])} | #{display.call(row['input_tokens'])}/#{display.call(row['output_tokens'])} | #{display.call(row['known_cost'])} | #{coverage} | #{notes} |"
 end
-total = rows.sum { |row| %w[reported_cost recorded_cost estimated_cost].sum { |key| row[key].to_f } }
-puts "\nRubyLLM #{rows.first['ruby_llm']} · #{rows.count { |row| row['result'] == 'pass' }}/#{rows.size} passed · " \
-     "known cost subtotal $#{total.round(4)} (unknown costs excluded) · #{report}"
+total = rows.sum { |row| row["known_cost"].to_f }
+puts "\nRubyLLM #{rows.first['ruby_llm']} · #{rows.count { |row| row['result'] == 'pass' }} passed · " \
+     "#{rows.count { |row| row['result'] == 'fail' }} failed · #{rows.count { |row| row['result'] == 'skip' }} manual/skipped · " \
+     "known Run cost subtotal $#{total.round(6)} (unknown costs excluded) · #{report}"
 exit status
