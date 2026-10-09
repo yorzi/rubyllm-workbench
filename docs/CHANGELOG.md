@@ -6,6 +6,16 @@ before the public-release cleanup are preserved in git history (see this file
 at commit `8bd33c8`), together with the milestone gate records formerly in
 `TODO.md` (commit `e9c9faf`).
 
+## Unreleased
+
+- Update Selenium WebDriver to 4.50.0 and its RubyZip dependency to 3.7.0
+  ([#9](https://github.com/yorzi/rubyllm-workbench/pull/9)).
+- Update image_processing to 2.2.0 while retaining lazy libvips loading
+  ([#10](https://github.com/yorzi/rubyllm-workbench/pull/10)).
+- Update Vite to 8.3.3 and vite-plugin-ruby to 5.2.5
+  ([#11](https://github.com/yorzi/rubyllm-workbench/pull/11),
+  [#12](https://github.com/yorzi/rubyllm-workbench/pull/12)).
+
 ## v0.1.0 (2026-10-09)
 
 First public release of the Rails 8.1.4 / RubyLLM 2.1.0 reference app. See
