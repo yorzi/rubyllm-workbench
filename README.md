@@ -17,6 +17,10 @@ teams, billing or tenant isolation.
 This is an independent project and is not affiliated with the RubyLLM
 maintainers.
 
+[v0.1.0 release notes](docs/releases/v0.1.0.md) describe the supported scope,
+installation and remaining manual acceptance. Download source and checksums
+from the [Release page](https://github.com/yorzi/rubyllm-workbench/releases/tag/v0.1.0).
+
 ## What you can do
 
 - **Chat** with any configured model, with streaming and optional provider web

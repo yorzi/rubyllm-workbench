@@ -34,7 +34,9 @@ with those same environment flags plus `WORKBENCH_DEMO=1`. The dummy Rails
 secret supports this unauthenticated synthetic viewer; it is unsuitable for
 an authenticated workbench. Build a dedicated runtime without developer
 environment files, keys, credentials, private databases or uploads.
-Container/Linux checks are still required before deployment.
+The v0.1 source candidate passed clean Ubuntu setup and production/read-only
+container runtime checks; see [verification](CAPABILITIES.md#verification-snapshot).
+Public hosting still requires the deployment checks below.
 
 ## What visitors can do
 

@@ -283,6 +283,32 @@ verification of the released fixes.
 
 ## Verification snapshot
 
+### v0.1.0 release preparation — 2026-10-09
+
+Pinned Ruby 4.0.2, Node.js 24.21.0, Rails 8.1.4 and RubyLLM 2.1.0.
+The release source candidate is `8b523d7`; the tagged tree also includes the
+release documentation. Its hosted checks are recorded in
+[GitHub Actions](https://github.com/yorzi/rubyllm-workbench/actions/runs/37905430146).
+
+| Check | Result |
+| --- | --- |
+| Local Rails suite | 509 runs, 4,389 assertions, 0 failures/errors, 13 opt-in live skips; macOS arm64, single worker because sandboxed parallel workers cannot create their DRb socket |
+| Browser suite | 6 runs, 82 assertions, 0 failures/errors; CI-mode built assets, including a controlled slow source-answer redirect |
+| Hosted CI | All eight jobs passed on the source candidate: Rails tests, browser tests, Ruby security/advisory scans, lint/Zeitwerk, frontend audit/assets, both clean-install variants and Docker build/runtime. Ordinary tests use no provider secrets. |
+| Clean Linux setup | Fresh Ubuntu checkouts with cached gems and fresh npm install, both with and without native libvips; setup, isolated demo subprocess, idempotent original corpus import and production asset compilation passed |
+| Docker runtime | Production image boot and pages, persisted records after restart, isolated read-only demo, rejected mutation/Active Storage/Cable requests, read-only SQLite and disabled jobs passed. Provider transport attempts were zero. The script stops/removes its containers, volume and temporary environment file. |
+| Secret scanning | Candidate redacted Gitleaks raw all-ref history scan: 62 commits, no detected leaks; text conversion and external diff disabled. Tracked archive paths exclude credentials, keys, logs, databases, uploads and installed dependencies. |
+| Public contribution / security channel | Repository public, Issues enabled, private vulnerability reporting enabled; API configuration and unauthenticated report-link visibility verified. No vulnerability report submitted or separate-account contributor acceptance performed. |
+| Provider / deployment boundary | No provider requests in release checks. Earlier current-version free acceptance remains separately dated above. No public demo deployment or external TLS/host acceptance. |
+
+Source publication was authorized by the owner. Pattern scans do not certify
+every possible secret; distribute the tagged tracked-source archive and its
+checksum rather than a workspace zip. All local test-owned services were
+stopped. Public-demo hosting and the listed manual provider capabilities remain
+separate follow-ups.
+
+### Earlier open-source preflight (historical)
+
 2026-10-09 open-source preflight, source baseline `8dbd787`, plus the request
 privacy correction below:
 

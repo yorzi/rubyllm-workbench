@@ -24,7 +24,7 @@ an upstream contribution.
 | Evaluation datasets, comparisons, reviews, judge, Batch | Implemented locally; judge experimental | Live Batch, native typed Judge live acceptance and calibration. |
 | Exports, lifecycle evidence, upstream drafts | Implemented; drafts experimental | Native OpenTelemetry export and an inspectable trace example. |
 | Source-anchored learning | Implemented, including Agent/evaluation/retrieval maps | Extend explanations alongside each new native integration. |
-| Read-only synthetic demo | Implemented and locally verified | Public hosting, TLS/host checks and external acceptance remain. The full workbench still requires trusted access. |
+| Read-only synthetic demo | Implemented; local and Linux container checks passed | Public hosting, TLS/host checks and external acceptance remain. The full workbench still requires trusted access. |
 
 The old milestone gate records remain in git history (`TODO.md` at `e9c9faf`).
 Both RubyLLM 2.0 production patches were removed after verifying released 2.1
@@ -62,8 +62,9 @@ the deferred capability list are in [OPERATIONS.md](docs/OPERATIONS.md#remaining
 - [ ] Complete the full two-model/one-case comparison when free capacity
       permits it. Keep hosted search/transcription/image as owner acceptance,
       and optional local TTS adapter deferred by owner choice.
-- [ ] Verify hosted CI for the candidate commit, fresh Debian/Ubuntu setup
-      with and without libvips, and the runtime container.
+- [x] Verify hosted CI for the source candidate, fresh Ubuntu setup
+      with and without libvips, and the Debian-based runtime container.
+      The accepted checks are recorded in the capability matrix.
 - [x] Enable private vulnerability reporting, verify the public report link,
       and review raw Git history and synthetic screenshots.
 - Publish the accepted candidate as `v0.1.0`; the

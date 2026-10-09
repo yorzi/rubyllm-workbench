@@ -112,7 +112,12 @@ RAILS_ENV=production SECRET_KEY_BASE_DUMMY=1 bin/rails assets:precompile
 
 If the environment cannot start parallel test workers, `PARALLEL_WORKERS=1
 bin/rails test` runs the suite in one process. CI runs all of the above plus a
-Docker image build on every push to `main`.
+Docker image build, production/demo runtime checks and a clean Ubuntu setup
+matrix with and without libvips on every push to `main`. The runtime checks
+verify persisted synthetic records after a container restart, read-only demo
+isolation and rejected mutation/upload/Cable requests. They use no provider
+credentials and reject provider HTTP attempts. These checks do not certify a
+public deployment.
 
 For the browser suite, `CI=1` makes Vite serve the built test assets rather
 than probing for a development server. The tests wait for Turbo before

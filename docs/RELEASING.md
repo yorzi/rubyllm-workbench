@@ -82,7 +82,18 @@ New 2.1 usage-operation rows must not be loaded by an old schema.
 [CAPABILITIES.md](CAPABILITIES.md#verification-snapshot) records accepted
 release checks, and [ROADMAP.md](../ROADMAP.md) defines public demo acceptance.
 The implemented [read-only mode](DEMO.md) has a separate synthetic snapshot;
-hosting/TLS/host checks and external verification remain release tasks.
+hosting/TLS/host checks and external verification remain public-demo tasks.
+
+Build the release source from the accepted tag, without ignored workspace files:
+
+```sh
+git archive --format=tar --prefix=rubyllm-workbench-0.1.0/ v0.1.0 | gzip -n > rubyllm-workbench-0.1.0.tar.gz
+shasum -a 256 rubyllm-workbench-0.1.0.tar.gz > SHA256SUMS
+shasum -a 256 -c SHA256SUMS
+```
+
+Review archive paths and scan the extracted tracked source before uploading
+the archive and `SHA256SUMS`. Downloads can verify the same checksum locally.
 
 ## Release notes
 

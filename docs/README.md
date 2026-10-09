@@ -33,7 +33,8 @@ maps the synthetic tour to engineering decisions, source and verification.
 | `UPSTREAM_ISSUES.md` | Which RubyLLM/Rails findings are confirmed, excluded or still awaiting reproduction? |
 | `LEARNING.md` | How does the in-page, source-anchored explanation layer work? |
 | `SHOWCASE.md` | What engineering skills can a visitor inspect in ten minutes? |
-| `RELEASING.md` | What still needs verification and authorization before publication? |
+| `RELEASING.md` | How do I verify, package and publish a reviewed candidate? |
+| `releases/v0.1.0.md` | What does v0.1 include, how do I install it, and what remains manual? |
 | `UPGRADE_REVIEW_2026-10-08.md` | The RubyLLM 2.1 upgrade and current project audit |
 | `CHANGELOG.md` | What changed, and why? |
 | `UPGRADE_REVIEW_2026-09-26.md` | The Rails 8.1.4 upgrade review and the defects it found |
