@@ -1,7 +1,7 @@
 source "https://rubygems.org"
 
 # Bundle edge Rails instead: gem "rails", github: "rails/rails", branch: "main"
-gem "rails", "~> 8.1.4"
+gem "rails", "~> 8.1.4.1"
 # The modern asset pipeline for Rails [https://github.com/rails/propshaft]
 gem "propshaft"
 # Use sqlite3 as the database for Active Record
@@ -15,7 +15,7 @@ gem "vite_rails"
 # Use Turbo for Rails-native navigation and streaming updates.
 gem "turbo-rails"
 # RubyLLM is the sole provider abstraction for AI operations.
-gem "ruby_llm", "2.1.0"
+gem "ruby_llm", "2.2.0"
 # CSV attachment validation uses the extracted Ruby standard library.
 gem "csv", "~> 3.3"
 # Build JSON APIs with ease [https://github.com/rails/jbuilder]
@@ -68,7 +68,7 @@ end
 
 group :test do
   # Deny external HTTP by default; deliberate live tests allow OpenRouter only.
-  gem "webmock", "~> 3.26", require: false
+  gem "webmock", "~> 3.34", require: false
   # Use system testing [https://guides.rubyonrails.org/testing.html#system-testing]
   gem "capybara"
   gem "selenium-webdriver"

@@ -116,7 +116,7 @@ class RunTest < ActiveSupport::TestCase
       arguments: { "query" => "important search" },
       remote: true
     )
-    @chat.approve(tool_call.tool_call_id)
+    Ai::RubyLlmInternals.record_tool_call_decision(@chat, tool_call.tool_call_id, "approved")
     Ai::ToolInvocationRecorder.new(run:, chat: @chat, attempt:).sync!
     invocation = run.tool_invocations.find_by!(tool_call_id: tool_call.tool_call_id)
     approval = invocation.approval
@@ -159,7 +159,7 @@ class RunTest < ActiveSupport::TestCase
       arguments: { "query" => "important search" },
       remote: true
     )
-    @chat.approve(tool_call.tool_call_id)
+    Ai::RubyLlmInternals.record_tool_call_decision(@chat, tool_call.tool_call_id, "approved")
     Ai::ToolInvocationRecorder.new(run:, chat: @chat, attempt:).sync!
     invocation = run.tool_invocations.find_by!(tool_call_id: tool_call.tool_call_id)
     invocation.update!(status: :running, started_at: 1.minute.ago)

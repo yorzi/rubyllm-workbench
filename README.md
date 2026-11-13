@@ -47,9 +47,8 @@ from the [Release page](https://github.com/yorzi/rubyllm-workbench/releases/tag/
 Each feature's admission rules and evidence, local and live, are in the
 [capability matrix](docs/CAPABILITIES.md). The historical RubyLLM 2.0 live run passed chat,
 structured output, tools, an Agent with web search, embeddings, an evaluation,
-speech, transcription and image generation against OpenRouter. The current
-RubyLLM 2.1 flows have separate local and free-provider evidence, with partial
-and deferred acceptance recorded in that matrix.
+speech, transcription and image generation against OpenRouter. RubyLLM 2.1
+has separate free-provider evidence. See the matrix for verification on 2.2.
 
 ## Explore the engineering
 
@@ -74,8 +73,8 @@ boundaries are recorded in the capability matrix.
 
 ## Quickstart
 
-Requires Ruby 4.0.2 and Node.js 24.21.0 (`.ruby-version`, `.nvmrc`). Uses
-Rails 8.1.4 and RubyLLM 2.1.0.
+Requires Ruby 4.0.9 and Node.js 26.13.1 LTS (`.ruby-version`, `.nvmrc`). Uses
+Rails 8.1.4.1 and RubyLLM 2.2.0.
 
 ```sh
 nvm install && nvm use

@@ -4,7 +4,7 @@ class SemanticGroundedAnswerFlowTest < ActionDispatch::IntegrationTest
   include ActiveJob::TestHelper
 
   EMBEDDING = "openai/text-embedding-3-small"
-  RERANK = "voyageai/rerank-2.5-lite"
+  RERANK = "mongodb/rerank-2.5-lite"
 
   setup do
     @project = create_project(name: "Owned semantic source answers")

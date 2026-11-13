@@ -8,6 +8,12 @@ at commit `8bd33c8`), together with the milestone gate records formerly in
 
 ## Unreleased
 
+- Update Ruby to 4.0.9, Rails to 8.1.4.1, RubyLLM to 2.2.0, Bundler to
+  4.0.24, Node.js to 26.13.1 LTS, Vite to 8.3.8, and refresh both lockfiles
+  and GitHub Actions. Existing databases require the 2.2 migration.
+- Adapt persisted tool approvals, local tool error results, Agent usage
+  fencing and missing-cost handling to RubyLLM 2.2.
+
 - Update Selenium WebDriver to 4.50.0 and its RubyZip dependency to 3.7.0
   ([#9](https://github.com/yorzi/rubyllm-workbench/pull/9)).
 - Update image_processing to 2.2.0 while retaining lazy libvips loading

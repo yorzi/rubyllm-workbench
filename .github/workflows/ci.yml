@@ -17,15 +17,15 @@ jobs:
         run: sudo apt-get update && sudo apt-get install --no-install-recommends -y libvips
 
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@v1.338.0
         with:
           bundler-cache: true
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -47,7 +47,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Build the production container image
         run: docker build --tag rubyllm-workbench:ci .
@@ -64,15 +64,15 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@v1.338.0
         with:
           bundler-cache: true
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -104,10 +104,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@v1.338.0
         with:
           bundler-cache: true
 
@@ -123,15 +123,15 @@ jobs:
       RUBOCOP_CACHE_ROOT: tmp/rubocop
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@v1.338.0
         with:
           bundler-cache: true
 
       - name: Prepare RuboCop cache
-        uses: actions/cache@v6
+        uses: actions/cache@v6.1.0
         env:
           DEPENDENCIES_HASH: ${{ hashFiles('.ruby-version', '**/.rubocop.yml', '**/.rubocop_todo.yml', 'Gemfile.lock') }}
         with:
@@ -160,15 +160,15 @@ jobs:
         run: sudo apt-get update && sudo apt-get install --no-install-recommends -y libvips
 
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@v1.338.0
         with:
           bundler-cache: true
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -201,15 +201,15 @@ jobs:
         run: sudo apt-get update && sudo apt-get install --no-install-recommends -y libvips
 
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@v1.338.0
         with:
           bundler-cache: true
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -228,7 +228,7 @@ jobs:
         run: bin/rails db:test:prepare test:system
 
       - name: Keep screenshots from failed system tests
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         if: failure()
         with:
           name: screenshots

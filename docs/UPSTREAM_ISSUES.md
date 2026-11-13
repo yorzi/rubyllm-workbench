@@ -1,6 +1,6 @@
 # RubyLLM / Rails 问题与贡献候选
 
-更新：2026-10-09 · Ruby 4.0.2 · RubyLLM 2.1.0 · Rails 8.1.4
+更新：2026-11-13 · Ruby 4.0.9 · RubyLLM 2.2.0 · Rails 8.1.4.1
 
 只记录可检查的事实，区分框架缺陷候选、改进建议、项目自身问题和
 provider 行为。当前没有已确认的 RubyLLM 或 Rails 自身 bug；没有向
@@ -30,6 +30,12 @@ upstream 提交 Issue 或 PR。下面的候选仍需要你进一步求证。
 
 ### RLLM-003 — usage 缺失时默认 cache zero 可能制造零成本
 
+- 2.2.0 复验：原生 Evaluation reviewer 的缺失 usage 测试现在得到未知成本。
+  另一个路径中，公开 RubyLLM OpenRouter embedding API 收到模拟 HTTP 503 时，
+  2.2.0 的失败账本行仍记录 input/output/cost 为零。Workbench 保留原生值，
+  将这类缺少实际计量的失败请求标为 unknown。复现见
+  [重试账本测试](../test/services/ai/knowledge/provider_call_test.rb)。
+  零真实请求。若向上游提交，先单独验证失败请求记账的约定。
 - 发现：2026-10-09。状态：**已在锁定 RubyLLM 2.1.0 复现，未验证 upstream main**。
   类型：缺失用量/成本边界缺陷候选；还不能称已确认的上游 bug。
 - 公开 API：`RubyLLM.chat(model: "liquid/lfm-2.5-2.6b:free", provider: :openrouter).ask(...)`。

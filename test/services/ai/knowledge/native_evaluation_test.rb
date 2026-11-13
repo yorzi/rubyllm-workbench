@@ -155,9 +155,7 @@ class Ai::Knowledge::NativeEvaluationTest < ActiveSupport::TestCase
       assert_nil evaluation.total_cost
       report = evaluation.artifacts.sole.content_json
       assert_nil report.dig("trials", 0, "evaluator_tokens", "input_tokens")
-      # Retain the gem's original numeric mirror for diagnosis. The application
-      # ledger and coverage marker prevent treating it as a known bill.
-      assert_equal 0.0, report.dig("trials", 0, "evaluator_cost", "total")
+      assert_nil report.dig("trials", 0, "evaluator_cost", "total")
       assert_equal "incomplete", evaluation.result_summary.dig("accounting", "usage_coverage")
       assert_requested request, times: 1
     end

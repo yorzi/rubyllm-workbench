@@ -1,7 +1,7 @@
 # Rails source answers and native evaluation
 
 This case study connects original MIT Rails fragments to owned retrieval,
-inspectable cited answers and RubyLLM 2.1 native evaluation. Acceptance concerns
+inspectable cited answers and RubyLLM native evaluation. Acceptance concerns
 requests, storage and execution boundaries. It does not certify answer,
 retrieval, reviewer or voice quality.
 

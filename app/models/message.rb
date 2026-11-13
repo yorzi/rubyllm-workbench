@@ -5,8 +5,6 @@ class Message < ApplicationRecord
 
   attr_accessor :web_search
 
-  has_many_attached :attachments
-
   broadcasts_to ->(message) { message.chat.stream_key }, inserts_by: :append
 
   def broadcast_append_chunk(content)

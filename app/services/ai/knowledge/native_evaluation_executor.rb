@@ -46,7 +46,7 @@ module Ai
         return @run unless @run.reload.running?
 
         report = Ai::ExecutionContext.with(run_id: @run.id, attempt_id: @run.attempts.first&.id) do
-          RubyLLM.with_usage_owner(@attempt) do
+          RubyLLM.with_owner(@attempt) do
             evaluation_class(snapshot).run(dataset: [ native_case(snapshot) ], id: "run-#{@run.id}", repetitions: 1)
           end
         end

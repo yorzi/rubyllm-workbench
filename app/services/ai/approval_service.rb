@@ -16,7 +16,6 @@ module Ai
       raise ArgumentError, "Unknown approval decision." unless VALID_DECISIONS.include?(@decision)
 
       run = @invocation.run
-      chat = run.chat
       run.with_lock do
         run.reload
         raise ArgumentError, "This Run can no longer be resumed." if run.terminal? || !run.waiting_for_approval?
@@ -26,10 +25,9 @@ module Ai
           raise ArgumentError, "This tool call is no longer awaiting approval." unless @invocation.approval_pending?
 
           chat = run.chat
-          if @decision == "approved"
-            chat.approve(@invocation.tool_call_id)
-          else
-            chat.deny(@invocation.tool_call_id)
+          tool_call = Ai::RubyLlmInternals.record_tool_call_decision(chat, @invocation.tool_call_id, @decision)
+          unless tool_call.reload.approval == @decision && tool_call.result_id.nil?
+            raise ArgumentError, "This tool call is no longer awaiting approval."
           end
 
           approval = @invocation.approval

@@ -7,16 +7,13 @@ module Ai
     end
 
     def call
-      return unless @chat.respond_to?(:add_message)
+      return unless @chat.respond_to?(:record_local_tool_error!)
 
       unresolved_tool_calls.each do |tool_call|
-        @chat.add_message(
-          role: :tool,
-          content: JSON.generate(
-            "error" => "Local tool execution failed: #{safe_error_message}",
-            "error_class" => @error.class.name
-          ),
-          tool_call_id: tool_call.tool_call_id
+        @chat.record_local_tool_error!(
+          tool_call,
+          error: "Local tool execution failed: #{safe_error_message}",
+          error_class: @error.class.name
         )
       end
     rescue StandardError => error

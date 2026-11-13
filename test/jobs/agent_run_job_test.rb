@@ -20,7 +20,7 @@ class AgentRunJobTest < ActiveSupport::TestCase
       @chat.messages.create!(role: "user", content: prompt)
     end
 
-    def awaiting_approval?
+    def waiting?
       false
     end
 
@@ -84,7 +84,7 @@ class AgentRunJobTest < ActiveSupport::TestCase
       @chat.messages.create!(role: "user", content: prompt)
     end
 
-    def awaiting_approval?
+    def waiting?
       false
     end
 
@@ -118,7 +118,7 @@ class AgentRunJobTest < ActiveSupport::TestCase
       @chat.messages.create!(role: "user", content: prompt)
     end
 
-    def awaiting_approval?
+    def waiting?
       false
     end
 
@@ -153,7 +153,7 @@ class AgentRunJobTest < ActiveSupport::TestCase
       @chat.messages.create!(role: "user", content: prompt)
     end
 
-    def awaiting_approval?
+    def waiting?
       @run.tool_invocations.waiting_for_approval.exists?
     end
 
@@ -235,7 +235,7 @@ class AgentRunJobTest < ActiveSupport::TestCase
       @chat.messages.create!(role: "user", content: prompt)
     end
 
-    def awaiting_approval?
+    def waiting?
       @run.tool_invocations.waiting_for_approval.exists?
     end
 
@@ -293,7 +293,7 @@ class AgentRunJobTest < ActiveSupport::TestCase
       @chat.messages.create!(role: "user", content: prompt)
     end
 
-    def awaiting_approval?
+    def waiting?
       false
     end
 
@@ -337,7 +337,7 @@ class AgentRunJobTest < ActiveSupport::TestCase
   end
 
   AgentStub = Struct.new(:approval_pending) do
-    def awaiting_approval?
+    def waiting?
       approval_pending
     end
   end

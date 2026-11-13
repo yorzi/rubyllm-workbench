@@ -41,11 +41,13 @@ class Ai::ToolInvocationRecorderTest < ActiveSupport::TestCase
 
   test "records a tool result as a successful invocation" do
     call = create_tool_call(arguments: { "note" => "remember this" })
-    result = @chat.add_message(
-      role: :tool,
-      content: JSON.generate("status" => "saved", "artifact_id" => 12),
-      tool_call_id: call.tool_call_id
-    )
+    result = with_configured_provider(@chat) do
+      @chat.add_message(
+        role: :tool,
+        content: JSON.generate("status" => "saved", "artifact_id" => 12),
+        tool_call_id: call.tool_call_id
+      )
+    end
 
     Ai::ToolInvocationRecorder.new(run: @run, chat: @chat, attempt: @attempt).sync!
 
@@ -58,16 +60,20 @@ class Ai::ToolInvocationRecorderTest < ActiveSupport::TestCase
   test "keeps multiple tool calls independently inspectable" do
     first_call = create_tool_call(arguments: {}, tool_call_id: "call-parallel-1", name: "project_snapshot")
     second_call = create_tool_call(arguments: {}, tool_call_id: "call-parallel-2", name: "project_snapshot")
-    first_result = @chat.add_message(
-      role: :tool,
-      content: JSON.generate("call" => first_call.tool_call_id, "status" => "ok"),
-      tool_call_id: first_call.tool_call_id
-    )
-    second_result = @chat.add_message(
-      role: :tool,
-      content: JSON.generate("call" => second_call.tool_call_id, "status" => "ok"),
-      tool_call_id: second_call.tool_call_id
-    )
+    first_result = with_configured_provider(@chat) do
+      @chat.add_message(
+        role: :tool,
+        content: JSON.generate("call" => first_call.tool_call_id, "status" => "ok"),
+        tool_call_id: first_call.tool_call_id
+      )
+    end
+    second_result = with_configured_provider(@chat) do
+      @chat.add_message(
+        role: :tool,
+        content: JSON.generate("call" => second_call.tool_call_id, "status" => "ok"),
+        tool_call_id: second_call.tool_call_id
+      )
+    end
 
     Ai::ToolInvocationRecorder.new(run: @run, chat: @chat, attempt: @attempt).sync!
 

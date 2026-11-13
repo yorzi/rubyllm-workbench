@@ -10,7 +10,7 @@
 # For a containerized dev environment, see Dev Containers: https://guides.rubyonrails.org/getting_started_with_devcontainer.html
 
 # Make sure RUBY_VERSION matches the Ruby version in .ruby-version
-ARG RUBY_VERSION=4.0.2
+ARG RUBY_VERSION=4.0.9
 FROM docker.io/library/ruby:$RUBY_VERSION-slim AS base
 
 # Rails app lives here
@@ -30,7 +30,7 @@ ENV RAILS_ENV="production" \
     LD_PRELOAD="/usr/local/lib/libjemalloc.so"
 
 # Use the pinned Node LTS from .nvmrc for Vite/Rails asset compilation.
-FROM node:24.21.0-bookworm-slim AS node
+FROM node:26.13.1-bookworm-slim AS node
 
 # Throw-away build stage to reduce size of final image
 FROM base AS build

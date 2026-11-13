@@ -105,7 +105,7 @@ class ToolApprovalFlowTest < ActionDispatch::IntegrationTest
       arguments: { "query" => "search" },
       remote: true
     )
-    chat.approve(remote_call.tool_call_id)
+    Ai::RubyLlmInternals.record_tool_call_decision(chat, remote_call.tool_call_id, "approved")
     Ai::ToolInvocationRecorder.new(run:, chat:, attempt:).sync!
     invocation = run.tool_invocations.find_by!(tool_call_id: remote_call.tool_call_id)
     run.fail!(RuntimeError.new("provider response was lost"))

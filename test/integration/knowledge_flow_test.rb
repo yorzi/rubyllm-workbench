@@ -2,7 +2,7 @@ require "test_helper"
 
 class KnowledgeFlowTest < ActionDispatch::IntegrationTest
   EMBEDDING_MODEL_ID = "openai/text-embedding-3-small"
-  RERANK_MODEL_ID = "voyageai/rerank-2.5-lite"
+  RERANK_MODEL_ID = "mongodb/rerank-2.5-lite"
 
   test "creates a collection, ingests text, and searches inspectable evidence" do
     post projects_path, params: { project: { name: "Knowledge flow project", description: "Test" } }

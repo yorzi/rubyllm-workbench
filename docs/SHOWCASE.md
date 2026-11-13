@@ -1,6 +1,6 @@
 # Showcase guide
 
-Updated: 2026-10-09 · Rails 8.1.4 · RubyLLM 2.1.0
+Updated: 2026-11-13 · Rails 8.1.4.1 · RubyLLM 2.2.0
 
 This project demonstrates how AI work becomes reliable Rails application
 state. Its strongest evidence is the implementation of snapshots, approvals,

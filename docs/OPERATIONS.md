@@ -4,12 +4,12 @@ How to run the workbench locally, verify it, and interpret what you see. It
 never stores provider secrets, and it does not present local success as a
 deployment or business result.
 
-Updated: 2026-10-09
+Updated: 2026-11-13
 
 ## Prerequisites
 
-- Ruby `4.0.2`, Node.js `24.21.0` (see `.ruby-version` and `.nvmrc`)
-- Rails `8.1.4`, RubyLLM `2.1.0`, SQLite, Tailwind, Vite, Hotwire, Solid Queue
+- Ruby `4.0.9`, Bundler `4.0.24`, Node.js `26.13.1` LTS (npm `11.20.0` from Node)
+- Rails `8.1.4.1`, RubyLLM `2.2.0`, SQLite, Tailwind, Vite, Hotwire, Solid Queue
 - Optional: the native `libvips` library, needed only for Active Storage image
   variants
 
@@ -224,13 +224,19 @@ when the task finishes; the harness does not stop an owner-managed service.
 
 ## Upgrading RubyLLM
 
+For an existing 2.1 installation, back up the SQLite databases and uploads,
+stop the web and worker processes, then install the updated lockfiles and run
+`bin/rails db:migrate` in the installation's Rails environment. Start web and
+workers on 2.2 together so persisted chat claims cover every process.
+[RubyLLM 2.2 upgrade guide](https://rubyllm.com/upgrading/)
+
 1. Read the release's upgrade guide, back up persistent data, update the gem
    conservatively and review the lockfile. Schema changes need the framework
    generator and a committed migration; see [RELEASING.md](RELEASING.md).
 2. Run the full suite, especially `test/services/ai/ruby_llm_internals_test.rb`,
    Batch workflow and native streaming evidence regressions. Remove a patch in
    [CAPABILITIES.md](CAPABILITIES.md#rubyllm-workarounds) that the release
-   fixes. Both 2.0 patches are removed on the current 2.1 pin.
+   fixes. Both 2.0 patches were removed in the 2.1 upgrade.
 3. Intentionally run `bin/dogfood` using current free models, then update the
    matrix. Put fee-bearing or unavailable capabilities on the manual list;
    historical live evidence does not certify an upgrade.

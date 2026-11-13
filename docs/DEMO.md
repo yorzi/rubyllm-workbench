@@ -1,7 +1,7 @@
 # Read-only synthetic demo
 
 This mode lets visitors inspect the application without executing AI work.
-It uses Rails 8.1.4 and RubyLLM 2.1.0. All responses, tokens, costs and timings
+It uses the Rails and RubyLLM versions in the project lockfile. All responses, tokens, costs and timings
 are invented examples, not model benchmarks or current provider measurements.
 The editable local workbench remains the place to run real workflows.
 

@@ -23,10 +23,11 @@ module Ai
       # estimated. Preserve it without repricing history or inventing provenance.
       if @value.respond_to?(:total_cost)
         total = @value.total_cost
-        # RubyLLM 2.1 may manufacture a zero cache count when chat usage is
-        # absent. The native row loses reported/estimated provenance; this
-        # ambiguous zero cannot establish a free request. Keep its raw ledger.
-        total = nil if total == 0 && unmeasured?(tokens)
+        # RubyLLM can record zero counters for an unsuccessful request without
+        # usage. Keep the raw row, but only count zero when it has evidence.
+        if total == 0 && (unmeasured?(tokens) || (failed_usage? && zero_counters?(tokens)))
+          total = nil
+        end
         return { recorded_cost: total, reported_cost: nil, estimated_cost: nil,
           cost_status: total.nil? ? "unknown" : "recorded", currency: "USD" }
       end
@@ -42,7 +43,15 @@ module Ai
     private
 
     def unmeasured?(tokens)
-      tokens.input.nil? && tokens.output.nil? && tokens.to_h.values.all? { |value| value.nil? || value == 0 }
+      tokens.input.nil? && tokens.output.nil? && zero_counters?(tokens)
+    end
+
+    def zero_counters?(tokens)
+      tokens.to_h.values.all? { |value| value == 0 || (value.respond_to?(:empty?) && value.empty?) }
+    end
+
+    def failed_usage?
+      @value.respond_to?(:status) && @value.status == "failed"
     end
 
     def reported_cost?(cost, tokens)

@@ -138,8 +138,7 @@ class AgentRunJob < ApplicationJob
       tool_definitions.find { |definition| definition.key == key }&.tool_instance(run: @run)
     end
 
-    agent_class = Class.new(RubyLLM::Agent)
-    agent_class.chat_model Chat
+    agent_class = Class.new(ApplicationAgent)
     agent_class.model(snapshot.fetch("model_id"), provider: snapshot.fetch("provider").to_sym)
     agent_class.instructions(snapshot.fetch("instructions"), persist: false)
     agent_class.inputs :tool_instances
@@ -179,7 +178,7 @@ class AgentRunJob < ApplicationJob
       @run.reload
       return if @run.terminal?
 
-      if @agent.awaiting_approval?
+      if @agent.waiting?
         if reconcile_interrupted_attempt == :retry
           continuation_step.checkpoint!
           next
@@ -274,7 +273,7 @@ class AgentRunJob < ApplicationJob
       ).call
       @attempt_recorder.finish_step!(response, usage_ids_before: @usage_ids_before)
       save_step_summary(step_number, response, source_message_id, citation_artifact)
-      status = @agent.awaiting_approval? ? "awaiting_approval" : "completed"
+      status = @agent.waiting? ? "awaiting_approval" : "completed"
       emit_step_event(step_number, attempt, status)
     end
     @attempt_recorder = nil
@@ -406,7 +405,7 @@ class AgentRunJob < ApplicationJob
     summary["agent_step_count"] = step_number
     summary["last_agent_step"] = {
       "step_number" => step_number,
-      "status" => @agent.awaiting_approval? ? "awaiting_approval" : "completed",
+      "status" => @agent.waiting? ? "awaiting_approval" : "completed",
       "message_id" => (response.id if response.respond_to?(:id))
     }.compact
     summary["source_message_id"] = source_message_id if source_message_id
@@ -537,7 +536,7 @@ class AgentRunJob < ApplicationJob
   def fence_usage_persistence!
     token = @lease_token
     generation = @lease_generation
-    Ai::RubyLlmInternals.wrap_usage_recorder(@run.chat.to_llm) do |entry, recorder|
+    Ai::RubyLlmInternals.wrap_usage_recorder(@run.chat) do |entry, recorder|
       @run.with_lock do
         @run.reload
         @run.assert_agent_execution_lease!(token:, generation:)

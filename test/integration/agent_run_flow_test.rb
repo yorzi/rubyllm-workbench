@@ -20,7 +20,7 @@ class AgentRunFlowTest < ActionDispatch::IntegrationTest
       @chat.messages.create!(role: "user", content: prompt)
     end
 
-    def awaiting_approval?
+    def waiting?
       false
     end
 

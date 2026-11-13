@@ -31,7 +31,7 @@ module Ai
       citation_artifact = Ai::CitationSetRecorder.new(run: @run, attempt:, response:, source_message_id:).call
       result_summary = provider_result_summary(response, citation_artifact, source_message_id)
 
-      if @chat.awaiting_approval?
+      if @chat.waiting?
         pending_result_summary = {
           "pending_tool_calls" => @run.tool_invocations.waiting_for_approval.pluck(:tool_key)
         }.merge(result_summary)

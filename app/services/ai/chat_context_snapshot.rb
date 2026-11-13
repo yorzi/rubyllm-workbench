@@ -38,7 +38,7 @@ module Ai
         "thinking_signature" => message.thinking&.signature,
         "citations" => message.citations.map(&:to_h),
         "tool_call_id" => message.tool_call_id,
-        "tool_calls" => message.tool_calls&.values&.map(&:to_h),
+        "tool_calls" => message.tool_calls.map(&:to_h),
         "server_tool_calls" => message.server_tool_calls.map(&:to_h),
         "raw_content" => message.raw_content,
         "raw_reasoning" => message.raw_reasoning,

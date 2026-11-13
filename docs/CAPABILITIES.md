@@ -1,6 +1,6 @@
 # Capability matrix
 
-Updated: 2026-10-09 · Rails 8.1.4 · RubyLLM 2.1.0
+Updated: 2026-11-13 · Rails 8.1.4.1 · RubyLLM 2.2.0
 
 This is the single place where Workbench records **what each operation
 admits** and **what evidence exists for it**. Other documents link here rather
@@ -278,10 +278,22 @@ verification of the released fixes.
 | Private Batch index-validation override | RubyLLM validates indices; `Ai::EvaluationBatchResults` checks the public chat manifest against frozen cases before collection. | Batch result/workflow tests and `script/diagnostics/ruby_llm_batch_indices.rb`. |
 | OpenRouter streaming parser prepend | Native RubyLLM 2.1 chunks preserve citations, tool usage and reported cost. | `test/lib/openrouter_stream_evidence_test.rb` and the diagnostic script. |
 
-`Ai::RubyLlmInternals` lists every private RubyLLM seam Workbench relies on, and
-`test/services/ai/ruby_llm_internals_test.rb` fails when one moves.
+`Ai::RubyLlmInternals` isolates the persisted usage write hook and the
+provider-independent approval decision. Offline contract and approval flow
+tests exercise these paths.
 
 ## Verification snapshot
+
+### Dependency upgrade — 2026-11-13
+
+Ruby 4.0.9, Bundler 4.0.24, Node.js 26.13.1 LTS, Rails 8.1.4.1 and
+RubyLLM 2.2.0. The SQLite upgrade ran on the existing test database.
+Local Rails tests finished with 507 runs, 4,386 assertions, zero failures
+or errors, and 13 opt-in live skips. Chrome system tests passed all six
+scenarios with 82 assertions. Production asset compilation, Zeitwerk,
+RuboCop, Brakeman, Bundler Audit and npm audit passed. The upgrade made
+zero live AI requests. The dated provider evidence below covers its
+recorded versions and models.
 
 ### v0.1.0 release preparation — 2026-10-09
 

@@ -18,7 +18,7 @@ class AgentRunWorkerReplayTest < ActiveSupport::TestCase
       @chat.messages.create!(role: "user", content: prompt)
     end
 
-    def awaiting_approval?
+    def waiting?
       @run.tool_invocations.find_by(tool_key: "save_run_note")&.approval_pending? || false
     end
 

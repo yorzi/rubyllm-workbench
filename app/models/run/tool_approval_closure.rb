@@ -14,10 +14,6 @@ module Run::ToolApprovalClosure
       .order(:id)
       .each do |invocation|
         approval = invocation.approval
-        if invocation.status.in?(%w[requested waiting_for_approval approved])
-          chat.deny(invocation.tool_call_id)
-        end
-
         if approval&.pending?
           approval.update!(
             status: :expired,
@@ -149,9 +145,9 @@ module Run::ToolApprovalClosure
   def finalize_failed_tool_call!(invocation, tool_call)
     return unless tool_call
 
-    chat.deny(invocation.tool_call_id) unless tool_call.approval == "denied"
     return if tool_call.result
 
+    Ai::RubyLlmInternals.record_tool_call_decision(chat, invocation.tool_call_id, "denied")
     if invocation.remote?
       llm_chat = chat.to_llm
       response = llm_chat.provider.tool_approval_response(
@@ -161,10 +157,8 @@ module Run::ToolApprovalClosure
       )
       chat.add_message(response)
     else
-      chat.add_message(
-        role: :tool,
-        content: { error: "The Run failed before this tool call was executed." }.to_json,
-        tool_call_id: invocation.tool_call_id
+      chat.record_local_tool_error!(
+        tool_call, error: "The Run failed before this tool call was executed."
       )
     end
   rescue StandardError => error
@@ -216,14 +210,10 @@ module Run::ToolApprovalClosure
 
   def resolve_pending_tool_approvals!(pending_invocations)
     pending_invocations.each do |invocation|
-      chat.deny(invocation.tool_call_id)
+      tool_call = Ai::RubyLlmInternals.record_tool_call_decision(chat, invocation.tool_call_id, "denied")
       next if invocation.remote?
 
-      chat.add_message(
-        role: :tool,
-        content: { error: "The Run was cancelled before this tool call started." }.to_json,
-        tool_call_id: invocation.tool_call_id
-      )
+      chat.record_local_tool_error!(tool_call, error: "The Run was cancelled before this tool call started.")
     end
 
     return unless pending_invocations.any?(&:remote?)

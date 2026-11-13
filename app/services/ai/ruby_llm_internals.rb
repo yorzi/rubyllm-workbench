@@ -3,21 +3,21 @@ module Ai
   # or are listed here. Re-check each one on every RubyLLM upgrade;
   # test/services/ai/ruby_llm_internals_test.rb fails if any of them moves.
   #
-  # 1. RubyLLM::Chat#usage_recorder= (:nodoc:) and the @usage_recorder that
-  #    RubyLLM's ActiveRecord layer installs. Agent Runs wrap it so every
-  #    ruby_llm_usages write is fenced by the Run's execution lease.
+  # RubyLLM's Active Record chat delegates usage writes to #persist_usage_entry.
+  # Its private #record_tool_call_decision records a decision without loading
+  # the provider, and respects the gem's persisted tool claims.
   module RubyLlmInternals
     module_function
 
-    # Replaces the chat's usage recorder with one that yields each usage entry
-    # and the original recorder to the block. Returns false when RubyLLM has
-    # installed no recorder (a plain, non-persisted chat).
-    def wrap_usage_recorder(llm_chat)
-      original = llm_chat.instance_variable_get(:@usage_recorder)
-      return false unless original
+    def wrap_usage_recorder(chat)
+      original = chat.method(:persist_usage_entry)
+      chat.define_singleton_method(:persist_usage_entry) do |entry|
+        yield(entry, original)
+      end
+    end
 
-      llm_chat.usage_recorder = ->(entry) { yield(entry, original) }
-      true
+    def record_tool_call_decision(chat, id, decision)
+      chat.send(:record_tool_call_decision, id, decision)
     end
   end
 end

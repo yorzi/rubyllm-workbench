@@ -193,7 +193,7 @@ flowchart TB
 
 ```bash
 # 新项目参考，版本变更前先核对官方稳定版
-bundle add ruby_llm --version 2.1.0
+bundle add ruby_llm --version 2.2.0
 
 # 如尚未安装测试依赖
 bundle add webmock --group test # 当前仓库已锁定；Rails 提供 Minitest

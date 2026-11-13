@@ -21,4 +21,13 @@ class Chat < ApplicationRecord
   def remote_tool_outcome_unknown?
     tool_invocations.where(remote: true, error_code: "remote_tool_outcome_unknown").exists?
   end
+
+  def record_local_tool_error!(tool_call, **details)
+    tool_call.with_lock do
+      next if tool_call.result_id
+
+      message = messages.create!(role: "tool", content: details.to_json)
+      tool_call.update!(result: message)
+    end
+  end
 end

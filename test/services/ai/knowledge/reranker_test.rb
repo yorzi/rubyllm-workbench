@@ -1,7 +1,7 @@
 require "test_helper"
 
 class Ai::Knowledge::RerankerTest < ActiveSupport::TestCase
-  MODEL_ID = "voyageai/rerank-2.5-lite"
+  MODEL_ID = "mongodb/rerank-2.5-lite"
 
   setup do
     @project = create_project(name: "Rerank project")

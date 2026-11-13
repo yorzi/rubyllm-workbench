@@ -30,7 +30,7 @@ class Ai::ChatExecutorTest < ActiveSupport::TestCase
       @chat.ruby_llm_usages
     end
 
-    def awaiting_approval?
+    def waiting?
       false
     end
 

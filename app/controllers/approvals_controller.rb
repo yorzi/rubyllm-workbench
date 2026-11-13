@@ -10,7 +10,7 @@ class ApprovalsController < ApplicationController
       note: approval_params[:note]
     )
     redirect_to project_chat_path(@project, @chat), notice: "Tool decision recorded; Run ##{@invocation.run_id} queued to continue.", status: :see_other
-  rescue ActiveRecord::RecordNotFound, ArgumentError => error
+  rescue ActiveRecord::RecordNotFound, ArgumentError, RubyLLM::ToolCallRunningError => error
     redirect_to project_chat_path(@project, @chat), alert: error.message
   end
 

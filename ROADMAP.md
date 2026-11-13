@@ -1,6 +1,6 @@
 # Roadmap
 
-Updated: 2026-10-09 · Rails 8.1.4 · RubyLLM 2.1.0
+Updated: 2026-11-13 · Rails 8.1.4.1 · RubyLLM 2.2.0
 
 The objective is a readable, reproducible Rails reference application that
 demonstrates deep RubyLLM integration. Strengthen evidence visitors can inspect
@@ -47,6 +47,8 @@ the deferred capability list are in [OPERATIONS.md](docs/OPERATIONS.md#remaining
 
 - [x] Pin RubyLLM 2.1.0, apply its Rails migration, verify Rails is already at
       the latest stable 8.1.4, and remove obsolete patches.
+- [x] Upgrade to Ruby 4.0.9, Rails 8.1.4.1 and RubyLLM 2.2.0, including the
+      SQLite migration and persisted approval and accounting compatibility.
 - [x] Preserve ledger costs and exclude encrypted credentials from Docker.
 - [x] Add a ten-minute tour, skills-to-code map and source-linked diagrams.
 - [x] MIT license, contribution/security guides, issue/PR templates, blank
