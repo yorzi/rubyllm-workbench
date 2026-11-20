@@ -284,6 +284,10 @@ tests exercise these paths.
 
 ## Verification snapshot
 
+### Ruby 4.0.10 — 2026-11-20
+
+The local Rails suite passed with Ruby 4.0.10 and the existing lockfile: 507 tests, 4,386 assertions, no failures or errors, and 13 opt-in live skips. Native gems in the local bundle were rebuilt against Ruby 4.0.10. No live providers were called.
+
 ### Dependency upgrade — 2026-11-13
 
 Ruby 4.0.9, Bundler 4.0.24, Node.js 26.13.1 LTS, Rails 8.1.4.1 and

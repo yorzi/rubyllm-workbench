@@ -73,7 +73,7 @@ boundaries are recorded in the capability matrix.
 
 ## Quickstart
 
-Requires Ruby 4.0.9 and Node.js 26.13.1 LTS (`.ruby-version`, `.nvmrc`). Uses
+Requires Ruby 4.0.10 and Node.js 26.13.1 LTS (`.ruby-version`, `.nvmrc`). Uses
 Rails 8.1.4.1 and RubyLLM 2.2.0.
 
 ```sh

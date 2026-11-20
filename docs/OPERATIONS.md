@@ -8,7 +8,7 @@ Updated: 2026-11-13
 
 ## Prerequisites
 
-- Ruby `4.0.9`, Bundler `4.0.24`, Node.js `26.13.1` LTS (npm `11.20.0` from Node)
+- Ruby `4.0.10`, Bundler `4.0.24`, Node.js `26.13.1` LTS (npm `11.20.0` from Node)
 - Rails `8.1.4.1`, RubyLLM `2.2.0`, SQLite, Tailwind, Vite, Hotwire, Solid Queue
 - Optional: the native `libvips` library, needed only for Active Storage image
   variants
